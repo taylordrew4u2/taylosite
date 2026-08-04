@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin — Taylor Drew</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 fill=%22%23ef4123%22/></svg>">
+<link rel="stylesheet" href="/assets/css/admin.css">
+</head>
+<body>
+
+<!-- Sign in ------------------------------------------------------------- -->
+<div id="login" class="login" hidden>
+  <form class="login-card" id="login-form" autocomplete="on">
+    <p class="login-kicker">Taylor Drew</p>
+    <h1 class="login-title">Admin</h1>
+    <div class="login-rule"></div>
+    <label class="label" for="password">Password</label>
+    <input class="input" type="password" id="password" name="password" autocomplete="current-password" required autofocus>
+    <p class="login-error" id="login-error" role="alert" hidden></p>
+    <button class="btn btn-accent btn-block" type="submit" id="login-submit">Sign in</button>
+  </form>
+</div>
+
+<!-- Panel ---------------------------------------------------------------- -->
+<div id="app" class="app" hidden>
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <span class="sidebar-logo">Taylor Drew</span>
+      <span class="sidebar-sub">Control panel</span>
+    </div>
+    <nav class="sidebar-nav" id="sidebar-nav" aria-label="Admin sections"></nav>
+    <div class="sidebar-foot">
+      <a class="sidebar-link" href="/" target="_blank" rel="noopener">View site &nearr;</a>
+      <button class="sidebar-link" type="button" id="sign-out">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar">
+      <button class="icon-btn nav-toggle" type="button" id="nav-toggle" aria-label="Sections">☰</button>
+      <div class="topbar-title">
+        <h1 id="section-title">Overview</h1>
+        <p id="section-hint" class="topbar-hint"></p>
+      </div>
+      <div class="topbar-actions">
+        <span class="save-state" id="save-state">Saved</span>
+        <button class="btn btn-ghost" type="button" id="preview-toggle">Preview</button>
+        <button class="btn btn-ghost" type="button" id="revert">Discard</button>
+        <button class="btn btn-accent" type="button" id="save">Save changes</button>
+      </div>
+    </header>
+
+    <div class="workspace-body">
+      <main class="panel" id="panel"></main>
+      <aside class="preview" id="preview" hidden>
+        <div class="preview-head">
+          <div class="preview-tabs" id="preview-tabs">
+            <button class="preview-tab is-active" type="button" data-preview="/">Home</button>
+            <button class="preview-tab" type="button" data-preview="/about">About</button>
+            <button class="preview-tab" type="button" data-preview="/links">Links</button>
+          </div>
+          <button class="icon-btn" type="button" id="preview-reload" title="Reload preview">⟳</button>
+        </div>
+        <iframe class="preview-frame" id="preview-frame" title="Site preview" src="/"></iframe>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- Media picker --------------------------------------------------------- -->
+<div class="modal" id="media-modal" hidden>
+  <div class="modal-card">
+    <header class="modal-head">
+      <h2>Media library</h2>
+      <button class="icon-btn" type="button" data-close-modal aria-label="Close">✕</button>
+    </header>
+    <div class="modal-body">
+      <label class="upload-drop" id="modal-upload">
+        <input type="file" accept="image/*" multiple hidden id="modal-upload-input">
+        <span>Drop images here or click to upload</span>
+        <small>PNG, JPG, WebP, GIF, AVIF or SVG · up to 8 MB</small>
+      </label>
+      <div class="media-grid" id="modal-media-grid"></div>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn btn-ghost" type="button" data-close-modal>Cancel</button>
+      <button class="btn btn-ghost" type="button" id="media-clear">Remove image</button>
+    </footer>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="/assets/js/admin.js" defer></script>
+</body>
+</html>

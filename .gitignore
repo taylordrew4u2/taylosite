@@ -1,0 +1,12 @@
+node_modules/
+npm-debug.log*
+
+# Live site content — created at runtime, never committed
+data/site.json
+data/sessions.json
+data/backups/
+data/uploads/*
+!data/uploads/.gitkeep
+
+.DS_Store
+*.tmp
