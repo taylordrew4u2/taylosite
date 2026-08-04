@@ -38,8 +38,11 @@ PORT=8080 npm start
 Editing notes:
 
 - Changes are held locally until **Save changes** (or `⌘/Ctrl+S`); the tab warns
-  before you navigate away with unsaved work.
+  before you navigate away with unsaved work. The sidebar marks which sections
+  have unsaved edits, and edits you undo by hand clear themselves.
 - **Preview** opens a live pane of the real pages beside the form.
+- Media items show where they are in use, and deleting one that is in use says
+  so before it goes.
 - A headline of one or two words stacks one word per line like `TAYLOR / DREW`;
   longer headings wrap at a smaller size instead.
 - Links pointing at `http(s)` go through `/go/<id>` so clicks are counted; the
@@ -64,6 +67,17 @@ data/                site.json, sessions, snapshots, uploads (git-ignored)
 Pages are rendered on the server, so the site works with JavaScript disabled and
 reads correctly to search engines and link previews. The admin panel is a
 single-page app that talks to the JSON API.
+
+### Findability and accessibility
+
+Every page carries canonical, Open Graph and Twitter card tags built from the
+admin content, plus `schema.org` structured data — a `Person` for Taylor and an
+`Event` for each upcoming show, so dates can surface directly in search results.
+`/sitemap.xml` and `/robots.txt` are generated from the live content.
+
+There is a skip link, `aria-current` on the active nav item, real `<time>`
+elements on show dates, visible focus rings, a keyboard-closable mobile menu,
+and a `prefers-reduced-motion` opt-out.
 
 ### Security
 

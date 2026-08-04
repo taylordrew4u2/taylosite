@@ -21,19 +21,41 @@
     mediaTarget: null
   };
 
+  function icon(paths) {
+    return (
+      '<svg class="side-icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>'
+    );
+  }
+
+  var ICONS = {
+    overview: '<rect x="1.5" y="1.5" width="5.5" height="5.5"/><rect x="9" y="1.5" width="5.5" height="5.5"/><rect x="1.5" y="9" width="5.5" height="5.5"/><rect x="9" y="9" width="5.5" height="5.5"/>',
+    brand: '<path d="M8 1.5 9.7 6.3 14.5 8 9.7 9.7 8 14.5 6.3 9.7 1.5 8 6.3 6.3Z"/>',
+    home: '<path d="M2 7 8 2l6 5"/><path d="M3.5 6.5V14h9V6.5"/>',
+    links: '<path d="M6.5 9.5a3 3 0 0 0 4.3 0l2-2a3 3 0 0 0-4.3-4.3l-1 1"/><path d="M9.5 6.5a3 3 0 0 0-4.3 0l-2 2a3 3 0 0 0 4.3 4.3l1-1"/>',
+    shows: '<rect x="1.5" y="3" width="13" height="11.5"/><path d="M1.5 6.5h13M5 1.5v3M11 1.5v3"/>',
+    about: '<circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14.5a5.5 5.5 0 0 1 11 0"/>',
+    nav: '<path d="M2 4h12M2 8h12M2 12h12"/>',
+    themes: '<circle cx="8" cy="8" r="6.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13Z" fill="currentColor" stroke="none"/>',
+    footer: '<rect x="1.5" y="1.5" width="13" height="13"/><path d="M1.5 11h13"/>',
+    media: '<rect x="1.5" y="2.5" width="13" height="11"/><circle cx="5.5" cy="6" r="1.2"/><path d="M2 12l3.5-3.5 3 3L11 8l3 3.5"/>',
+    data: '<path d="M2 5h9l-2-2M14 11H5l2 2"/><path d="M2 5l2-2M14 11l-2 2"/>',
+    security: '<rect x="3" y="7" width="10" height="7.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>'
+  };
+
   var SECTIONS = [
-    { id: 'overview', label: 'Overview', icon: '▣', hint: 'Everything at a glance.' },
-    { id: 'brand', label: 'Brand & SEO', icon: '✦', hint: 'Name, contact details and search listing.' },
-    { id: 'home', label: 'Home page', icon: '⌂', hint: 'The hero, the photo and the upcoming block.' },
-    { id: 'links', label: 'Links', icon: '⛓', hint: 'Every link, in the order they appear.' },
-    { id: 'shows', label: 'Shows', icon: '★', hint: 'Tour dates shown on the home and links pages.' },
-    { id: 'about', label: 'About page', icon: '☺', hint: 'Bio, facts and press quotes.' },
-    { id: 'nav', label: 'Navigation', icon: '≡', hint: 'The menu in the header.' },
-    { id: 'themes', label: 'Themes', icon: '◐', hint: 'The A / B / C colour schemes.' },
-    { id: 'footer', label: 'Footer', icon: '▁', hint: 'The line at the bottom of every page.' },
-    { id: 'media', label: 'Media', icon: '▤', hint: 'Uploaded images.' },
-    { id: 'data', label: 'Backups & data', icon: '⇄', hint: 'Snapshots, export, import and reset.' },
-    { id: 'security', label: 'Security', icon: '🔒', hint: 'Password and signed-in devices.' }
+    { id: 'overview', label: 'Overview', hint: 'Everything at a glance.' },
+    { id: 'brand', label: 'Brand & SEO', hint: 'Name, contact details and search listing.', keys: ['brand', 'seo'] },
+    { id: 'home', label: 'Home page', hint: 'The hero, the photo and the upcoming block.', keys: ['home'] },
+    { id: 'links', label: 'Links', hint: 'Every link, in the order they appear.', keys: ['links'] },
+    { id: 'shows', label: 'Shows', hint: 'Tour dates shown on the home and links pages.', keys: ['shows'] },
+    { id: 'about', label: 'About page', hint: 'Bio, facts and press quotes.', keys: ['about'] },
+    { id: 'nav', label: 'Navigation', hint: 'The menu in the header.', keys: ['nav'] },
+    { id: 'themes', label: 'Themes', hint: 'The A / B / C colour schemes.', keys: ['themes'] },
+    { id: 'footer', label: 'Footer', hint: 'The line at the bottom of every page.', keys: ['footer'] },
+    { id: 'media', label: 'Media', hint: 'Uploaded images.' },
+    { id: 'data', label: 'Backups & data', hint: 'Snapshots, export, import and reset.' },
+    { id: 'security', label: 'Security', hint: 'Password and signed-in devices.' }
   ];
 
   var el = {
@@ -137,6 +159,19 @@
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  function relativeTime(iso) {
+    if (!iso) return 'never';
+    var seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+    if (!isFinite(seconds)) return 'never';
+    if (seconds < 45) return 'just now';
+    if (seconds < 90) return 'a minute ago';
+    if (seconds < 3600) return Math.round(seconds / 60) + ' min ago';
+    if (seconds < 7200) return 'an hour ago';
+    if (seconds < 86400) return Math.round(seconds / 3600) + ' hours ago';
+    if (seconds < 172800) return 'yesterday';
+    return Math.round(seconds / 86400) + ' days ago';
   }
 
   function formatSize(bytes) {
@@ -639,11 +674,31 @@
     );
   }
 
+  /** Where an uploaded image is currently used, so nothing vanishes by surprise. */
+  var MEDIA_SLOTS = [
+    { path: 'home.photo', label: 'Hero photo' },
+    { path: 'about.photo', label: 'About photo' },
+    { path: 'seo.ogImage', label: 'Share image' },
+    { path: 'seo.favicon', label: 'Favicon' }
+  ];
+
+  function mediaUsage(url) {
+    if (!state.site) return [];
+    return MEDIA_SLOTS.filter(function (slot) {
+      return getPath(state.site, slot.path) === url;
+    }).map(function (slot) {
+      return slot.label;
+    });
+  }
+
   function mediaCard(file, withPick) {
+    var usedIn = mediaUsage(file.url);
     return (
-      '<div class="media-item">' +
+      '<div class="media-item' + (usedIn.length ? ' is-used' : '') + '">' +
       '<div class="media-thumb" style="background-image:url(' + esc(file.url) + ')" data-action="' + (withPick ? 'choose-media' : 'copy-media') + '" data-url="' + esc(file.url) + '"></div>' +
-      '<div class="media-meta">' + esc(file.name) + '<br>' + esc(formatSize(file.size)) + '</div>' +
+      '<div class="media-meta">' +
+      (usedIn.length ? '<span class="media-badge">' + esc(usedIn.join(' · ')) + '</span>' : '') +
+      esc(file.name) + '<br>' + esc(formatSize(file.size)) + '</div>' +
       '<div class="media-actions">' +
       (withPick
         ? '<button class="btn btn-sm btn-accent" type="button" data-action="choose-media" data-url="' + esc(file.url) + '">Use</button>'
@@ -749,6 +804,20 @@
 
   // -------------------------------------------------------------- rendering
 
+  /** Which sections differ from what is on the server right now. */
+  function changedSections() {
+    var changed = {};
+    if (!state.saved || !state.site) return changed;
+    var saved = JSON.parse(state.saved);
+    SECTIONS.forEach(function (section) {
+      if (!section.keys) return;
+      changed[section.id] = section.keys.some(function (key) {
+        return JSON.stringify(state.site[key]) !== JSON.stringify(saved[key]);
+      });
+    });
+    return changed;
+  }
+
   function renderSidebar() {
     var counts = {
       links: (state.site.links.items || []).length,
@@ -756,10 +825,14 @@
       nav: (state.site.nav || []).length,
       media: state.media.length
     };
+    var changed = changedSections();
     el.nav.innerHTML = SECTIONS.map(function (s) {
       return (
-        '<button class="side-item' + (s.id === state.section ? ' is-active' : '') + '" type="button" data-section="' + s.id + '">' +
-        '<span class="side-icon">' + s.icon + '</span><span>' + esc(s.label) + '</span>' +
+        '<button class="side-item' + (s.id === state.section ? ' is-active' : '') +
+        (changed[s.id] ? ' is-changed' : '') + '" type="button" data-section="' + s.id + '"' +
+        (changed[s.id] ? ' title="Unsaved changes in this section"' : '') + '>' +
+        icon(ICONS[s.id]) + '<span>' + esc(s.label) + '</span>' +
+        (changed[s.id] ? '<span class="side-dot" aria-label="unsaved changes"></span>' : '') +
         (counts[s.id] != null ? '<span class="side-count">' + counts[s.id] + '</span>' : '') +
         '</button>'
       );
@@ -806,17 +879,36 @@
     el.panel.scrollTop = 0;
   }
 
+  /**
+   * Dirty state is derived by comparing against the last server response, so
+   * typing something and typing it back leaves the panel clean.
+   */
+  function refreshDirty() {
+    if (!state.site) return;
+    state.dirty = JSON.stringify(state.site) !== state.saved;
+    if (state.saving) return;
+    el.saveState.textContent = state.dirty
+      ? 'Unsaved changes'
+      : 'Saved ' + relativeTime(state.stats && state.stats.updatedAt);
+    el.saveState.className = 'save-state' + (state.dirty ? ' is-dirty' : '');
+    el.save.disabled = !state.dirty;
+    el.revert.disabled = !state.dirty;
+  }
+
   function markDirty() {
-    state.dirty = true;
-    el.saveState.textContent = 'Unsaved changes';
-    el.saveState.className = 'save-state is-dirty';
+    refreshDirty();
+    renderSidebar();
   }
 
   function markClean() {
-    state.dirty = false;
-    el.saveState.textContent = 'Saved';
-    el.saveState.className = 'save-state';
+    state.saved = JSON.stringify(state.site);
+    refreshDirty();
   }
+
+  // Keep the "saved 3 min ago" label honest without re-rendering the panel.
+  setInterval(function () {
+    if (state.site && !state.dirty && !state.saving) refreshDirty();
+  }, 30000);
 
   // ------------------------------------------------------------- list ops
 
@@ -897,6 +989,7 @@
     el.saveState.textContent = 'Saving…';
     el.saveState.className = 'save-state is-saving';
     el.save.disabled = true;
+    el.revert.disabled = true;
     return api('/admin/site', { method: 'PUT', body: { site: state.site, expectedUpdatedAt: state.baseline } })
       .then(function (data) {
         state.site = data.site;
@@ -910,12 +1003,11 @@
         });
       })
       .catch(function (err) {
-        markDirty();
         toast(err.message, 'error');
       })
       .then(function () {
         state.saving = false;
-        el.save.disabled = false;
+        markDirty();
       });
   }
 
@@ -1121,7 +1213,11 @@
       return toast('URL copied: ' + trigger.dataset.url, 'ok');
     }
     if (action === 'delete-media') {
-      if (!confirm('Delete ' + trigger.dataset.name + '? Pages using it will fall back to the placeholder.')) return;
+      var inUse = mediaUsage('/uploads/' + trigger.dataset.name);
+      var warning = inUse.length
+        ? 'This image is in use as: ' + inUse.join(', ') + '.\n\nDelete it anyway? Those slots fall back to the placeholder.'
+        : 'Delete ' + trigger.dataset.name + '?';
+      if (!confirm(warning)) return;
       return api('/admin/uploads/' + encodeURIComponent(trigger.dataset.name), { method: 'DELETE' })
         .then(loadMedia)
         .then(function () {
@@ -1140,6 +1236,7 @@
           state.site = data.site;
           state.stats = data.stats;
           state.baseline = data.site.meta && data.site.meta.updatedAt;
+          markClean();
           render({ preserveFocus: false });
           toast('Click counts reset', 'ok');
         })
@@ -1334,7 +1431,9 @@
   document.addEventListener('keydown', function (event) {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      if (state.site) save();
+      if (!state.site) return;
+      if (state.dirty) save();
+      else toast('Nothing to save', 'info');
     }
     if (event.key === 'Escape' && !el.mediaModal.hidden) closeMediaModal();
   });

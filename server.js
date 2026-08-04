@@ -413,14 +413,31 @@ async function handle(req, res) {
     return serveFile(req, res, file, { cache: 'public, max-age=86400' });
   }
 
+  const origin = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host || 'localhost'}`;
+
   if (pathname === '/robots.txt') {
-    return send(res, 200, 'User-agent: *\nAllow: /\nDisallow: /admin\n', { 'Content-Type': MIME['.txt'] });
+    return send(res, 200, `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /go/\nSitemap: ${origin}/sitemap.xml\n`, {
+      'Content-Type': MIME['.txt']
+    });
+  }
+
+  if (pathname === '/sitemap.xml') {
+    const updated = (store.readSite().meta || {}).updatedAt || new Date().toISOString();
+    const urls = Object.keys(PAGES)
+      .map(
+        (page) =>
+          `  <url><loc>${origin}${page}</loc><lastmod>${updated.slice(0, 10)}</lastmod></url>`
+      )
+      .join('\n');
+    return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`, {
+      'Content-Type': 'application/xml; charset=utf-8'
+    });
   }
 
   if (pathname === '/healthz') return sendJson(res, 200, { ok: true });
 
   const page = PAGES[pathname];
-  if (page) return sendHtml(res, 200, page(store.readSite()));
+  if (page) return sendHtml(res, 200, page(store.readSite(), { origin }));
 
   return notFound(req, res);
 }

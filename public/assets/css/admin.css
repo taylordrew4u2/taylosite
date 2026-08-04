@@ -183,9 +183,27 @@ a {
 }
 
 .side-item .side-icon {
-  width: 18px;
-  text-align: center;
-  opacity: 0.85;
+  width: 16px;
+  flex: none;
+  opacity: 0.8;
+}
+
+.side-item.is-active .side-icon {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.side-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--warn);
+  flex: none;
+}
+
+.side-dot + .side-count {
+  margin-left: 8px;
 }
 
 .side-item .side-count {
@@ -810,11 +828,25 @@ a {
   cursor: pointer;
 }
 
+.media-item.is-used {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
 .media-meta {
   padding: 8px;
   font-size: 0.68rem;
   color: var(--muted);
   word-break: break-all;
+}
+
+.media-badge {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  word-break: normal;
 }
 
 .media-actions {
