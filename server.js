@@ -41,9 +41,6 @@ const IMAGE_TYPES = {
   'image/svg+xml': '.svg'
 };
 
-store.ensureDirs();
-auth.ensurePassword();
-
 // ------------------------------------------------------------------ helpers
 
 function clientIp(req) {
@@ -98,7 +95,9 @@ function readBody(req) {
 }
 
 async function readJson(req) {
-  const raw = await readBody(req);
+  // Serverless platforms may hand the body over already parsed.
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return req.body;
+  const raw = Buffer.isBuffer(req.body) ? req.body : await readBody(req);
   if (!raw.length) return {};
   try {
     return JSON.parse(raw.toString('utf8'));
@@ -108,22 +107,25 @@ async function readJson(req) {
 }
 
 function serveFile(req, res, filePath, { cache = 'public, max-age=300' } = {}) {
-  fs.stat(filePath, (err, stat) => {
-    if (err || !stat.isFile()) return notFound(req, res);
-    const etag = `"${stat.size.toString(16)}-${stat.mtimeMs.toString(16)}"`;
-    if (req.headers['if-none-match'] === etag) {
-      res.writeHead(304, { ETag: etag });
-      return res.end();
-    }
-    const type = MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
-    res.writeHead(200, {
-      'Content-Type': type,
-      'Content-Length': stat.size,
-      'Cache-Control': cache,
-      'X-Content-Type-Options': 'nosniff',
-      ETag: etag
+  return new Promise((resolve) => {
+    fs.stat(filePath, (err, stat) => {
+      if (err || !stat.isFile()) return resolve(notFound(req, res));
+      const etag = `"${stat.size.toString(16)}-${stat.mtimeMs.toString(16)}"`;
+      if (req.headers['if-none-match'] === etag) {
+        res.writeHead(304, { ETag: etag });
+        res.end();
+        return resolve();
+      }
+      const type = MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+      res.writeHead(200, {
+        'Content-Type': type,
+        'Content-Length': stat.size,
+        'Cache-Control': cache,
+        'X-Content-Type-Options': 'nosniff',
+        ETag: etag
+      });
+      fs.createReadStream(filePath).pipe(res).on('finish', resolve);
     });
-    fs.createReadStream(filePath).pipe(res);
   });
 }
 
@@ -135,19 +137,35 @@ function safeJoin(root, requestPath) {
   return target;
 }
 
-function notFound(req, res) {
+async function notFound(req, res) {
   if ((req.headers.accept || '').includes('application/json') || req.url.startsWith('/api/')) {
     return sendJson(res, 404, { error: 'Not found' });
   }
-  sendHtml(res, 404, render.renderNotFound(store.readSite()));
+  sendHtml(res, 404, render.renderNotFound(await store.readSite()));
+}
+
+// ------------------------------------------------------------------- boot
+
+let readyPromise = null;
+function ensureReady() {
+  if (!readyPromise) {
+    readyPromise = (async () => {
+      store.ensureDirs();
+      await auth.ensurePassword();
+    })().catch((err) => {
+      readyPromise = null; // let a later request retry once the config is fixed
+      throw err;
+    });
+  }
+  return readyPromise;
 }
 
 // ------------------------------------------------------------------- auth
 
-function requireSession(req, res) {
+async function requireSession(req, res) {
   const cookies = auth.parseCookies(req.headers.cookie);
   const token = cookies[auth.COOKIE_NAME];
-  const session = auth.getSession(token);
+  const session = await auth.getSession(token);
   if (!session) {
     sendJson(res, 401, { error: 'Not signed in' });
     return null;
@@ -168,16 +186,16 @@ async function handleApi(req, res, url) {
 
   // --- public -------------------------------------------------------------
   if (route === '/content' && req.method === 'GET') {
-    return sendJson(res, 200, publicSite(store.readSite()));
+    return sendJson(res, 200, publicSite(await store.readSite()));
   }
 
   if (route === '/session' && req.method === 'GET') {
     const cookies = auth.parseCookies(req.headers.cookie);
-    const session = auth.getSession(cookies[auth.COOKIE_NAME]);
+    const session = await auth.getSession(cookies[auth.COOKIE_NAME]);
     return sendJson(res, 200, {
       signedIn: Boolean(session),
       csrf: session ? session.csrf : null,
-      usingDefaultPassword: auth.usingDefaultPassword()
+      usingDefaultPassword: await auth.usingDefaultPassword()
     });
   }
 
@@ -190,46 +208,47 @@ async function handleApi(req, res, url) {
       });
     }
     const body = await readJson(req);
-    if (!auth.checkPassword(body.password || '')) {
+    if (!(await auth.checkPassword(body.password || ''))) {
       auth.recordFailure(ip);
       return sendJson(res, 401, { error: 'Wrong password' });
     }
     auth.clearFailures(ip);
-    const session = auth.createSession({ ip, agent: req.headers['user-agent'] });
+    const session = await auth.createSession({ ip, agent: req.headers['user-agent'] });
     return sendJson(
       res,
       200,
-      { ok: true, csrf: session.csrf, usingDefaultPassword: auth.usingDefaultPassword() },
+      { ok: true, csrf: session.csrf, usingDefaultPassword: await auth.usingDefaultPassword() },
       { 'Set-Cookie': auth.sessionCookie(session.token, { secure: isSecure(req) }) }
     );
   }
 
   if (route === '/logout' && req.method === 'POST') {
     const cookies = auth.parseCookies(req.headers.cookie);
-    auth.revokeSession(cookies[auth.COOKIE_NAME]);
+    await auth.revokeSession(cookies[auth.COOKIE_NAME]);
     return sendJson(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie({ secure: isSecure(req) }) });
   }
 
   // --- authenticated ------------------------------------------------------
   if (!route.startsWith('/admin')) return notFound(req, res);
 
-  const ctx = requireSession(req, res);
+  const ctx = await requireSession(req, res);
   if (!ctx) return undefined;
   const adminRoute = route.replace(/^\/admin/, '');
 
   if (adminRoute === '/site' && req.method === 'GET') {
-    const site = store.readSite();
+    const site = await store.readSite();
     return sendJson(res, 200, {
       site: publicSite(site),
-      stats: buildStats(site),
-      sessions: auth.listSessions(ctx.token),
-      usingDefaultPassword: auth.usingDefaultPassword()
+      stats: await buildStats(site),
+      sessions: await auth.listSessions(ctx.token),
+      usingDefaultPassword: await auth.usingDefaultPassword(),
+      storage: store.describe()
     });
   }
 
   if (adminRoute === '/site' && req.method === 'PUT') {
     const body = await readJson(req);
-    const current = store.readSite();
+    const current = await store.readSite();
     if (body.expectedUpdatedAt && current.meta && current.meta.updatedAt && body.expectedUpdatedAt !== current.meta.updatedAt) {
       return sendJson(res, 409, {
         error: 'This site was changed in another tab or window. Reload before saving.',
@@ -237,44 +256,45 @@ async function handleApi(req, res, url) {
       });
     }
     const next = normalizeSite(body.site, current);
-    store.writeSite(next);
-    return sendJson(res, 200, { ok: true, site: publicSite(next), stats: buildStats(next) });
+    await store.writeSite(next);
+    return sendJson(res, 200, { ok: true, site: publicSite(next), stats: await buildStats(next) });
   }
 
   if (adminRoute === '/site/reset' && req.method === 'POST') {
-    const current = store.readSite();
+    const current = await store.readSite();
     const fresh = defaultSite();
     fresh.auth = current.auth;
     fresh.meta = { updatedAt: new Date().toISOString() };
-    store.writeSite(fresh);
-    return sendJson(res, 200, { ok: true, site: publicSite(fresh), stats: buildStats(fresh) });
+    await store.writeSite(fresh);
+    return sendJson(res, 200, { ok: true, site: publicSite(fresh), stats: await buildStats(fresh) });
   }
 
   if (adminRoute === '/password' && req.method === 'POST') {
     const body = await readJson(req);
-    if (!auth.checkPassword(body.current || '')) {
+    if (!(await auth.checkPassword(body.current || ''))) {
       return sendJson(res, 401, { error: 'Current password is wrong' });
     }
     const next = String(body.next || '');
     if (next.length < 4) return sendJson(res, 400, { error: 'New password must be at least 4 characters' });
-    auth.setPassword(next);
+    await auth.setPassword(next);
     return sendJson(res, 200, { ok: true, signedOut: true }, { 'Set-Cookie': auth.clearCookie({ secure: isSecure(req) }) });
   }
 
   if (adminRoute === '/sessions' && req.method === 'DELETE') {
-    auth.revokeAllSessions();
+    await auth.revokeAllSessions();
     return sendJson(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie({ secure: isSecure(req) }) });
   }
 
   if (adminRoute === '/uploads' && req.method === 'GET') {
-    return sendJson(res, 200, { files: store.listUploads() });
+    return sendJson(res, 200, { files: await store.listUploads() });
   }
 
   if (adminRoute === '/uploads' && req.method === 'POST') {
     const body = await readJson(req);
     const match = /^data:([\w/+.-]+);base64,(.+)$/s.exec(String(body.dataUrl || ''));
     if (!match) return sendJson(res, 400, { error: 'Expected a base64 data URL' });
-    const ext = IMAGE_TYPES[match[1].toLowerCase()];
+    const contentType = match[1].toLowerCase();
+    const ext = IMAGE_TYPES[contentType];
     if (!ext) return sendJson(res, 415, { error: `Unsupported image type: ${match[1]}` });
     const buffer = Buffer.from(match[2], 'base64');
     if (buffer.length > 8 * 1024 * 1024) return sendJson(res, 413, { error: 'Image is larger than 8 MB' });
@@ -285,13 +305,13 @@ async function handleApi(req, res, url) {
       .replace(/^-+|-+$/g, '')
       .slice(0, 40) || 'image';
     const name = `${base}-${crypto.randomBytes(4).toString('hex')}${ext}`;
-    fs.writeFileSync(path.join(store.UPLOAD_DIR, name), buffer);
-    return sendJson(res, 201, { ok: true, file: { name, url: `/uploads/${name}`, size: buffer.length } });
+    const file = await store.putUpload(name, buffer, contentType);
+    return sendJson(res, 201, { ok: true, file });
   }
 
   if (adminRoute.startsWith('/uploads/') && req.method === 'DELETE') {
     try {
-      store.deleteUpload(decodeURIComponent(adminRoute.slice('/uploads/'.length)));
+      await store.deleteUpload(decodeURIComponent(adminRoute.slice('/uploads/'.length)));
       return sendJson(res, 200, { ok: true });
     } catch (err) {
       return sendJson(res, 400, { error: err.message });
@@ -299,26 +319,26 @@ async function handleApi(req, res, url) {
   }
 
   if (adminRoute === '/backups' && req.method === 'GET') {
-    return sendJson(res, 200, { backups: store.listBackups() });
+    return sendJson(res, 200, { backups: await store.listBackups() });
   }
 
   if (adminRoute === '/backups/restore' && req.method === 'POST') {
     const body = await readJson(req);
     try {
-      const snapshot = store.readBackup(String(body.name || ''));
-      const current = store.readSite();
+      const snapshot = await store.readBackup(String(body.name || ''));
+      const current = await store.readSite();
       const restored = normalizeSite(snapshot, current);
       // Restoring content must never roll the password back.
       restored.auth = current.auth;
-      store.writeSite(restored);
-      return sendJson(res, 200, { ok: true, site: publicSite(restored), stats: buildStats(restored) });
+      await store.writeSite(restored);
+      return sendJson(res, 200, { ok: true, site: publicSite(restored), stats: await buildStats(restored) });
     } catch (err) {
       return sendJson(res, 400, { error: err.message });
     }
   }
 
   if (adminRoute === '/export' && req.method === 'GET') {
-    const site = publicSite(store.readSite());
+    const site = publicSite(await store.readSite());
     return send(res, 200, JSON.stringify(site, null, 2), {
       'Content-Type': MIME['.json'],
       'Content-Disposition': `attachment; filename="taylosite-${new Date().toISOString().slice(0, 10)}.json"`,
@@ -328,28 +348,31 @@ async function handleApi(req, res, url) {
 
   if (adminRoute === '/import' && req.method === 'POST') {
     const body = await readJson(req);
-    const current = store.readSite();
+    const current = await store.readSite();
     const imported = normalizeSite(body.site, current);
     imported.auth = current.auth;
-    store.writeSite(imported);
-    return sendJson(res, 200, { ok: true, site: publicSite(imported), stats: buildStats(imported) });
+    await store.writeSite(imported);
+    return sendJson(res, 200, { ok: true, site: publicSite(imported), stats: await buildStats(imported) });
   }
 
   if (adminRoute === '/analytics/reset' && req.method === 'POST') {
-    const next = store.update((site) => {
-      site.links.items = (site.links.items || []).map((item) => ({ ...item, clicks: 0 }));
-      return site;
-    });
-    return sendJson(res, 200, { ok: true, site: publicSite(next), stats: buildStats(next) });
+    const next = await store.resetClicks();
+    return sendJson(res, 200, { ok: true, site: publicSite(next), stats: await buildStats(next) });
   }
 
   return notFound(req, res);
 }
 
-function buildStats(site) {
+async function buildStats(site) {
   const items = site.links.items || [];
   const today = new Date().toISOString().slice(0, 10);
   const shows = site.shows || [];
+  let uploads = 0;
+  try {
+    uploads = (await store.listUploads()).length;
+  } catch (_) {
+    // Image storage may not be configured yet; the rest of the panel still works.
+  }
   return {
     links: items.length,
     linksVisible: items.filter((l) => l.visible !== false).length,
@@ -360,22 +383,22 @@ function buildStats(site) {
       .map((l) => ({ id: l.id, label: l.label, clicks: Number(l.clicks) || 0 })),
     shows: shows.length,
     upcomingShows: shows.filter((s) => s.visible !== false && (!s.date || s.date >= today)).length,
-    uploads: store.listUploads().length,
+    uploads,
     updatedAt: site.meta && site.meta.updatedAt
   };
 }
 
-function handleClickThrough(req, res, url) {
+async function handleClickThrough(req, res, url) {
   const id = decodeURIComponent(url.pathname.slice('/go/'.length));
-  const site = store.readSite();
+  const site = await store.readSite();
   const link = (site.links.items || []).find((l) => l.id === id);
   if (!link || !link.url) return notFound(req, res);
-  // A click is not a content edit — do not spend a backup slot on it.
-  store.update((s) => {
-    const target = (s.links.items || []).find((l) => l.id === id);
-    if (target) target.clicks = (Number(target.clicks) || 0) + 1;
-    return s;
-  }, { backup: false });
+  try {
+    await store.bumpClick(id);
+  } catch (err) {
+    // A counter failure must never stop the visitor reaching the link.
+    console.error(`[server] click count failed: ${err.message}`);
+  }
   res.writeHead(302, { Location: link.url, 'Cache-Control': 'no-store' });
   res.end();
 }
@@ -390,6 +413,34 @@ async function handle(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
 
+  // Static assets never need storage, so serve them before the boot check.
+  if (pathname.startsWith('/assets/')) {
+    const file = safeJoin(PUBLIC_DIR, pathname);
+    if (!file) return sendJson(res, 404, { error: 'Not found' });
+    return serveFile(req, res, file, { cache: 'public, max-age=600' });
+  }
+
+  if (pathname === '/admin') {
+    return serveFile(req, res, path.join(PUBLIC_DIR, 'admin.html'), { cache: 'no-cache' });
+  }
+
+  if (pathname === '/healthz') {
+    try {
+      await ensureReady();
+      return sendJson(res, 200, { ok: true, storage: store.describe() });
+    } catch (err) {
+      return sendJson(res, 503, { ok: false, error: err.message });
+    }
+  }
+
+  try {
+    await ensureReady();
+  } catch (err) {
+    // Storage is not configured — say so in plain words rather than 500ing.
+    if (pathname.startsWith('/api/')) return sendJson(res, 503, { error: err.message });
+    return sendSetupError(res, err);
+  }
+
   if (pathname.startsWith('/api/')) return handleApi(req, res, url);
   if (pathname.startsWith('/go/')) return handleClickThrough(req, res, url);
 
@@ -397,20 +448,15 @@ async function handle(req, res) {
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
 
-  if (pathname === '/admin') {
-    return serveFile(req, res, path.join(PUBLIC_DIR, 'admin.html'), { cache: 'no-cache' });
-  }
-
-  if (pathname.startsWith('/assets/')) {
-    const file = safeJoin(PUBLIC_DIR, pathname);
-    if (!file) return notFound(req, res);
-    return serveFile(req, res, file, { cache: 'public, max-age=600' });
-  }
-
   if (pathname.startsWith('/uploads/')) {
-    const file = safeJoin(store.UPLOAD_DIR, pathname.slice('/uploads'.length));
-    if (!file) return notFound(req, res);
-    return serveFile(req, res, file, { cache: 'public, max-age=86400' });
+    const name = decodeURIComponent(pathname.slice('/uploads/'.length));
+    const image = await store.readUpload(name);
+    if (!image) return notFound(req, res);
+    if (image.redirect) {
+      res.writeHead(302, { Location: image.redirect, 'Cache-Control': 'public, max-age=3600' });
+      return res.end();
+    }
+    return serveFile(req, res, image.file, { cache: 'public, max-age=86400' });
   }
 
   const origin = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host || 'localhost'}`;
@@ -422,32 +468,48 @@ async function handle(req, res) {
   }
 
   if (pathname === '/sitemap.xml') {
-    const updated = (store.readSite().meta || {}).updatedAt || new Date().toISOString();
+    const updated = ((await store.readSite()).meta || {}).updatedAt || new Date().toISOString();
     const urls = Object.keys(PAGES)
-      .map(
-        (page) =>
-          `  <url><loc>${origin}${page}</loc><lastmod>${updated.slice(0, 10)}</lastmod></url>`
-      )
+      .map((page) => `  <url><loc>${origin}${page}</loc><lastmod>${updated.slice(0, 10)}</lastmod></url>`)
       .join('\n');
     return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`, {
       'Content-Type': 'application/xml; charset=utf-8'
     });
   }
 
-  if (pathname === '/healthz') return sendJson(res, 200, { ok: true });
-
   const page = PAGES[pathname];
-  if (page) return sendHtml(res, 200, page(store.readSite(), { origin }));
+  if (page) return sendHtml(res, 200, page(await store.readSite(), { origin }));
 
   return notFound(req, res);
+}
+
+/** A misconfigured deployment should say so in plain words, not throw a stack. */
+function sendSetupError(res, err) {
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Setup needed</title><style>
+body{background:#0b0b0b;color:#fff;font:16px/1.6 Helvetica,Arial,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;padding:24px}
+main{max-width:44rem;border:2px solid #2b2b2b;padding:32px}
+h1{font-size:2rem;font-weight:900;letter-spacing:-.02em;text-transform:uppercase;margin:0 0 8px}
+.rule{height:3px;background:#ef4123;margin:18px 0 22px}
+code{background:#1a1a1a;padding:2px 6px}
+</style></head><body><main>
+<p style="letter-spacing:.2em;text-transform:uppercase;font-size:.7rem;color:#8d8d8d;margin:0">Taylor Drew</p>
+<h1>Setup needed</h1><div class="rule"></div>
+<p>${render.esc(err.message)}</p>
+<p style="color:#8d8d8d">Once the storage integration is connected and the project redeployed, this page becomes the site.</p>
+</main></body></html>`;
+  send(res, 503, html, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-store' });
 }
 
 const server = http.createServer((req, res) => {
   Promise.resolve(handle(req, res)).catch((err) => {
     const status = err.status || 500;
     if (status >= 500) console.error('[server]', err);
-    if (!res.headersSent) sendJson(res, status, { error: err.message || 'Server error' });
-    else res.end();
+    if (res.headersSent) return res.end();
+    if (/Redis|Blob|integration/i.test(err.message) && !req.url.startsWith('/api/')) {
+      return sendSetupError(res, err);
+    }
+    sendJson(res, status, { error: err.message || 'Server error' });
   });
 });
 
@@ -455,11 +517,14 @@ if (require.main === module) {
   server.listen(PORT, HOST, () => {
     console.log(`\n  Taylor Drew site running at http://localhost:${PORT}`);
     console.log(`  Admin panel:                http://localhost:${PORT}/admin`);
-    if (auth.usingDefaultPassword()) {
-      console.log(`  Admin password:             "${auth.DEFAULT_PASSWORD}" (change it in Admin → Security)\n`);
-    } else {
-      console.log('');
-    }
+    console.log(`  Storage:                    ${store.describe()}`);
+    auth
+      .usingDefaultPassword()
+      .then((isDefault) => {
+        if (isDefault) console.log(`  Admin password:             "${auth.DEFAULT_PASSWORD}" (change it in Admin → Security)\n`);
+        else console.log('');
+      })
+      .catch((err) => console.log(`\n  Storage is not ready: ${err.message}\n`));
   });
 }
 

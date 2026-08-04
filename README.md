@@ -54,9 +54,11 @@ Editing notes:
 
 ```
 server.js            HTTP server, routing, JSON API, sessions, uploads
+api/index.js         Vercel entrypoint — hands each invocation to that server
 lib/defaults.js      the starting content for a fresh install
 lib/schema.js        validates + sanitises everything the admin panel sends
-lib/store.js         atomic JSON storage, automatic snapshots
+lib/storage.js       the two storage backends (filesystem / serverless)
+lib/store.js         site document, snapshots and uploads on top of a backend
 lib/auth.js          scrypt password hashing, sessions, login rate limiting
 lib/render.js        server-side HTML for the three public pages
 public/admin.html    the admin panel shell
@@ -93,11 +95,47 @@ and a `prefers-reduced-motion` opt-out.
 
 ### Data
 
-Everything lives in `data/site.json`. Each save first copies the previous
-version into `data/backups/` (last 30 kept) and then writes atomically, so a
-crash mid-save cannot corrupt the file.
+There are two storage backends and the right one is picked automatically. The
+admin panel shows which is live under **Overview → Site status**, and so does
+`/healthz`.
 
-Because content and uploads are files on disk, deploy to a host with a
-persistent filesystem (a VPS, Fly.io, Railway, Render with a disk) rather than a
-read-only serverless platform. To move a site, copy the `data/` directory — or
-use **Backups & data → Download a copy** and import it on the other end.
+| | Site content & snapshots | Sessions | Images |
+| --- | --- | --- | --- |
+| **filesystem** (default) | `data/site.json`, `data/backups/` | `data/sessions.json` | `data/uploads/` |
+| **serverless** (Vercel) | Redis | Redis, with expiry | Vercel Blob |
+
+The filesystem backend is used whenever no Redis credentials are present — local
+development, a VPS, Fly.io, Railway, Render with a disk. Each save copies the
+previous version into `data/backups/` (last 30 kept) and then writes atomically,
+so a crash mid-save cannot corrupt the file. Point `TAYLOSITE_DATA_DIR` at a
+mounted volume to keep the data outside the checkout.
+
+To move a site between hosts, use **Backups & data → Download a copy** and
+import the file on the other end.
+
+## Deploying to Vercel
+
+Vercel's filesystem is read-only and per-instance, so the site needs two
+integrations before the admin panel can save anything. Both have free tiers.
+
+1. **Redis** — in the Vercel dashboard, open the project → **Storage** → add
+   **Upstash for Redis**. It sets `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
+   This holds the site content, snapshots and sign-in sessions.
+2. **Blob** — same screen, add **Blob**. It sets `BLOB_READ_WRITE_TOKEN`, and
+   uploaded photos are stored there and served from Vercel's CDN.
+3. **Redeploy** so the new environment variables are picked up.
+
+Until Redis is connected, every page answers with a "Setup needed" notice
+explaining exactly what is missing rather than a blank 500. Blob is optional: if
+only Redis is connected, the whole site works except image uploads, which say so.
+
+Two behaviours differ on Vercel, both by design:
+
+- **Link click counts** are kept in their own Redis hash and merged in when the
+  site is read, so a visitor clicking a link can never overwrite an edit that is
+  being saved at the same moment.
+- **Login rate limiting** is per-instance rather than global, because it is held
+  in memory. Eight wrong guesses still lock that instance out for 15 minutes.
+
+`vercel.json` routes every request to `api/index.js`, which passes it to the same
+`server.js` used everywhere else — there is no separate serverless codebase.

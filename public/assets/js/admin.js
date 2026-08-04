@@ -18,6 +18,7 @@
     section: 'overview',
     baseline: null,
     usingDefaultPassword: false,
+    storage: '',
     mediaTarget: null
   };
 
@@ -352,6 +353,7 @@
           '<tr><th>Default theme</th><td>' + esc(site.themes.default) + '</td></tr>' +
           '<tr><th>Pages</th><td>' + esc(site.nav.filter(function (n) { return n.visible !== false; }).length) + ' in the menu</td></tr>' +
           '<tr><th>Last saved</th><td>' + esc(formatDate(s.updatedAt)) + '</td></tr>' +
+          (state.storage ? '<tr><th>Storage</th><td>' + esc(state.storage) + '</td></tr>' : '') +
           '</tbody></table>'
       )
     );
@@ -966,6 +968,7 @@
       state.stats = data.stats;
       state.sessions = data.sessions;
       state.usingDefaultPassword = data.usingDefaultPassword;
+      state.storage = data.storage || '';
       state.baseline = data.site.meta && data.site.meta.updatedAt;
       markClean();
     });

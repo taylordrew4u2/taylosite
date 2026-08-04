@@ -10,3 +10,6 @@ data/uploads/*
 
 .DS_Store
 *.tmp
+
+# Vercel
+.vercel
