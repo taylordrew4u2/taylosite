@@ -102,7 +102,7 @@ admin panel shows which is live under **Overview → Site status**, and so does
 | | Site content & snapshots | Sessions | Images |
 | --- | --- | --- | --- |
 | **filesystem** (default) | `data/site.json`, `data/backups/` | `data/sessions.json` | `data/uploads/` |
-| **serverless** (Vercel) | Redis | Redis, with expiry | Vercel Blob |
+| **serverless** (Vercel) | Redis | Redis, with expiry | Vercel Blob, or Redis when no Blob token is set |
 
 The filesystem backend is used whenever no Redis credentials are present — local
 development, a VPS, Fly.io, Railway, Render with a disk. Each save copies the
@@ -115,19 +115,49 @@ import the file on the other end.
 
 ## Deploying to Vercel
 
-Vercel's filesystem is read-only and per-instance, so the site needs two
-integrations before the admin panel can save anything. Both have free tiers.
+Vercel's filesystem is read-only and per-instance, so the site needs a Redis
+store before the admin panel can save anything. That is the only requirement —
+one free service, no card.
 
-1. **Redis** — in the Vercel dashboard, open the project → **Storage** → add
-   **Upstash for Redis**. It sets `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
-   This holds the site content, snapshots and sign-in sessions.
-2. **Blob** — same screen, add **Blob**. It sets `BLOB_READ_WRITE_TOKEN`, and
-   uploaded photos are stored there and served from Vercel's CDN.
-3. **Redeploy** so the new environment variables are picked up.
+### The free setup
+
+1. Sign up at [upstash.com](https://upstash.com) and create a **Redis** database.
+   The free tier is enough for a site like this and does not ask for payment
+   details. Copy the two REST values from the database page.
+2. In Vercel → project → **Settings → Environment Variables**, add them for
+   **Production**:
+
+   | Name | Value |
+   | --- | --- |
+   | `UPSTASH_REDIS_REST_URL` | the REST URL from Upstash |
+   | `UPSTASH_REDIS_REST_TOKEN` | the REST token from Upstash |
+
+3. **Redeploy.** Environment variables are read at build time, so an existing
+   deployment will not pick them up on its own.
+
+That is the whole setup. Content, snapshots, sessions and uploaded images all
+live in Redis, and `/healthz` reports `Redis + images in Redis`.
+
+Adding Vercel's own Upstash integration from **Storage** instead works exactly
+the same — it sets `KV_REST_API_URL` and `KV_REST_API_TOKEN`, which are also
+recognised.
+
+### Optional: Vercel Blob for images
+
+Keeping images in Redis has two costs: each one must stay under **700 KB**, and
+serving them spends a Redis command on any request the browser has not cached.
+Neither matters much for a handful of photos — the admin panel resizes every
+upload to at most 1800px and re-encodes it to WebP before sending, so ordinary
+photos land around 200–500 KB.
+
+If you would rather not spend Redis on images, add **Blob** from Vercel →
+Storage. It sets `BLOB_READ_WRITE_TOKEN`, which switches image storage over
+automatically: uploads go to Blob, are served from Vercel's CDN, and the size
+limit rises to 8 MB. Nothing else changes, and images already in Redis keep
+working.
 
 Until Redis is connected, every page answers with a "Setup needed" notice
-explaining exactly what is missing rather than a blank 500. Blob is optional: if
-only Redis is connected, the whole site works except image uploads, which say so.
+explaining exactly what is missing rather than a blank 500.
 
 Two behaviours differ on Vercel, both by design:
 

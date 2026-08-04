@@ -80,11 +80,17 @@ function readBody(req) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
+    let aborted = false;
     req.on('data', (chunk) => {
+      if (aborted) return;
       size += chunk.length;
       if (size > MAX_BODY) {
-        reject(Object.assign(new Error('Payload too large'), { status: 413 }));
-        req.destroy();
+        aborted = true;
+        chunks.length = 0;
+        // Drain rather than destroy, so there is still a socket to answer on
+        // and the client gets a 413 instead of a dropped connection.
+        req.resume();
+        reject(Object.assign(new Error(`Upload is larger than ${Math.round(MAX_BODY / 1024 / 1024)} MB`), { status: 413 }));
         return;
       }
       chunks.push(chunk);
@@ -297,7 +303,12 @@ async function handleApi(req, res, url) {
     const ext = IMAGE_TYPES[contentType];
     if (!ext) return sendJson(res, 415, { error: `Unsupported image type: ${match[1]}` });
     const buffer = Buffer.from(match[2], 'base64');
-    if (buffer.length > 8 * 1024 * 1024) return sendJson(res, 413, { error: 'Image is larger than 8 MB' });
+    const limit = store.maxImageBytes();
+    if (buffer.length > limit) {
+      return sendJson(res, 413, {
+        error: `Image is ${Math.round(buffer.length / 1024)} KB — the limit here is ${Math.round(limit / 1024)} KB.`
+      });
+    }
     const base = String(body.name || 'image')
       .toLowerCase()
       .replace(/\.[^.]+$/, '')
@@ -456,6 +467,20 @@ async function handle(req, res) {
       res.writeHead(302, { Location: image.redirect, 'Cache-Control': 'public, max-age=3600' });
       return res.end();
     }
+    if (image.buffer) {
+      // Names carry a random suffix, so the bytes behind one never change and
+      // browsers can hold onto them — which keeps Redis reads off the hot path.
+      const etag = `"${crypto.createHash('sha1').update(image.buffer).digest('hex').slice(0, 16)}"`;
+      if (req.headers['if-none-match'] === etag) {
+        res.writeHead(304, { ETag: etag });
+        return res.end();
+      }
+      return send(res, 200, image.buffer, {
+        'Content-Type': image.contentType || 'application/octet-stream',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        ETag: etag
+      });
+    }
     return serveFile(req, res, image.file, { cache: 'public, max-age=86400' });
   }
 
@@ -506,9 +531,9 @@ const server = http.createServer((req, res) => {
     const status = err.status || 500;
     if (status >= 500) console.error('[server]', err);
     if (res.headersSent) return res.end();
-    if (/Redis|Blob|integration/i.test(err.message) && !req.url.startsWith('/api/')) {
-      return sendSetupError(res, err);
-    }
+    // The "setup needed" page is only for a backend that could not be created
+    // at all — see the ensureReady() catch. A failure here is a real fault and
+    // should read like one rather than blaming configuration.
     sendJson(res, status, { error: err.message || 'Server error' });
   });
 });

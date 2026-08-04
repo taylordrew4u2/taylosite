@@ -1020,6 +1020,93 @@
     el.previewFrame.setAttribute('src', url + '?t=' + Date.now());
   }
 
+  // Photos off a phone are several megabytes; nothing on the site needs that.
+  // Shrinking in the browser keeps pages fast and fits the storage ceiling.
+  var MAX_DIMENSION = 1800;
+  var TARGET_BYTES = 560 * 1024;
+
+  function readAsDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        resolve(reader.result);
+      };
+      reader.onerror = function () {
+        reject(new Error('Could not read ' + file.name));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function dataUrlBytes(dataUrl) {
+    var comma = dataUrl.indexOf(',');
+    return Math.round(((dataUrl.length - comma - 1) * 3) / 4);
+  }
+
+  function loadImage(dataUrl) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        resolve(img);
+      };
+      img.onerror = function () {
+        reject(new Error('Not a readable image'));
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  /** Resolves to { dataUrl, shrunk, from, to }. Never rejects. */
+  function prepareImage(file) {
+    return readAsDataUrl(file).then(function (original) {
+      var originalBytes = dataUrlBytes(original);
+      // Vectors have no pixels to resample, and re-encoding a GIF would drop
+      // its animation — leave both exactly as they are.
+      if (/svg|gif/.test(file.type)) {
+        return { dataUrl: original, shrunk: false, from: originalBytes, to: originalBytes };
+      }
+
+      return loadImage(original)
+        .then(function (img) {
+          var scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
+          if (scale === 1 && originalBytes <= TARGET_BYTES) {
+            return { dataUrl: original, shrunk: false, from: originalBytes, to: originalBytes };
+          }
+
+          var canvas = document.createElement('canvas');
+          var context = canvas.getContext('2d');
+
+          function encode(currentScale) {
+            canvas.width = Math.max(1, Math.round(img.width * currentScale));
+            canvas.height = Math.max(1, Math.round(img.height * currentScale));
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(img, 0, 0, canvas.width, canvas.height);
+            // WebP keeps transparency and compresses hard; JPEG covers the rest.
+            var probe = canvas.toDataURL('image/webp', 0.85);
+            var type = probe.indexOf('data:image/webp') === 0 ? 'image/webp' : 'image/jpeg';
+            var qualities = [0.85, 0.75, 0.65, 0.55, 0.45];
+            for (var i = 0; i < qualities.length; i++) {
+              var out = canvas.toDataURL(type, qualities[i]);
+              if (dataUrlBytes(out) <= TARGET_BYTES) return out;
+            }
+            return canvas.toDataURL(type, 0.45);
+          }
+
+          var result = encode(scale);
+          if (dataUrlBytes(result) > TARGET_BYTES) result = encode(scale * 0.7);
+          // Re-encoding can occasionally cost more than it saves. If the file
+          // already fits, keep whatever is smaller.
+          if (dataUrlBytes(result) >= originalBytes && originalBytes <= TARGET_BYTES) {
+            return { dataUrl: original, shrunk: false, from: originalBytes, to: originalBytes };
+          }
+          return { dataUrl: result, shrunk: true, from: originalBytes, to: dataUrlBytes(result) };
+        })
+        .catch(function () {
+          return { dataUrl: original, shrunk: false, from: originalBytes, to: originalBytes };
+        });
+    });
+  }
+
   function uploadFiles(files, onDone) {
     var queue = Array.prototype.slice.call(files).filter(function (f) {
       return /^image\//.test(f.type);
@@ -1027,22 +1114,17 @@
     if (!queue.length) return;
 
     var uploaded = [];
+    var saved = 0;
     var chain = queue.reduce(function (promise, file) {
       return promise.then(function () {
-        return new Promise(function (resolve, reject) {
-          var reader = new FileReader();
-          reader.onload = function () {
-            api('/admin/uploads', { method: 'POST', body: { name: file.name, dataUrl: reader.result } })
-              .then(function (data) {
-                uploaded.push(data.file);
-                resolve();
-              })
-              .catch(reject);
-          };
-          reader.onerror = function () {
-            reject(new Error('Could not read ' + file.name));
-          };
-          reader.readAsDataURL(file);
+        return prepareImage(file).then(function (prepared) {
+          if (prepared.shrunk) saved += prepared.from - prepared.to;
+          return api('/admin/uploads', {
+            method: 'POST',
+            body: { name: file.name, dataUrl: prepared.dataUrl }
+          }).then(function (data) {
+            uploaded.push(data.file);
+          });
         });
       });
     }, Promise.resolve());
@@ -1052,7 +1134,11 @@
         return loadMedia();
       })
       .then(function () {
-        toast(uploaded.length + ' image' + (uploaded.length === 1 ? '' : 's') + ' uploaded', 'ok');
+        toast(
+          uploaded.length + ' image' + (uploaded.length === 1 ? '' : 's') + ' uploaded' +
+            (saved > 0 ? ' · ' + formatSize(saved) + ' saved by resizing' : ''),
+          'ok'
+        );
         if (onDone) onDone(uploaded[uploaded.length - 1]);
       })
       .catch(function (err) {
