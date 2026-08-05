@@ -18,6 +18,22 @@ PORT=8080 npm start
 - Default password: **`weed`** — change it in **Admin → Security**. (Set
   `ADMIN_PASSWORD` before the very first run to seed a different one.)
 
+## Tests
+
+```bash
+npm test
+```
+
+Node's built-in runner, no test dependencies. Covers input sanitising (unsafe
+URL schemes, forged click counts, credentials in the payload, oversized text),
+both storage backends against one shared contract, and the HTTP surface
+end-to-end against a real server process — auth, CSRF, rate limiting, upload
+validation, path traversal, click counting, snapshots and restore.
+
+The serverless backend is exercised against a stand-in for Upstash's REST API
+(`test/helpers/fake-redis.js`), so the Redis path runs for real without needing
+credentials.
+
 ## What the admin panel can edit
 
 | Section | What it controls |

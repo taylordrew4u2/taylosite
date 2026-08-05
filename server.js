@@ -255,10 +255,14 @@ async function handleApi(req, res, url) {
   if (adminRoute === '/site' && req.method === 'PUT') {
     const body = await readJson(req);
     const current = await store.readSite();
-    if (body.expectedUpdatedAt && current.meta && current.meta.updatedAt && body.expectedUpdatedAt !== current.meta.updatedAt) {
+    // If the client names the version it edited, it has to be the version we
+    // hold — including when we hold none, which means it is editing something
+    // that no longer exists.
+    const currentUpdatedAt = (current.meta && current.meta.updatedAt) || null;
+    if (body.expectedUpdatedAt && body.expectedUpdatedAt !== currentUpdatedAt) {
       return sendJson(res, 409, {
         error: 'This site was changed in another tab or window. Reload before saving.',
-        updatedAt: current.meta.updatedAt
+        updatedAt: currentUpdatedAt
       });
     }
     const next = normalizeSite(body.site, current);
