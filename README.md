@@ -45,7 +45,7 @@ credentials.
 | **Shows** | Date, time, venue, city, ticket link, button label, note, sold-out and hidden flags |
 | **About page** | Kicker, title, photo, unlimited bio paragraphs, label/value facts, press quotes |
 | **Navigation** | The header menu — labels, targets, order, visibility |
-| **Themes** | The A / B / C switch: every colour of every theme, which one is the default, whether the switch shows at all |
+| **Themes** | Every colour of every scheme, and which one the site is served with |
 | **Footer** | Left text, right text and its link, optional middle note |
 | **Media** | Upload / browse / delete images, copy URLs |
 | **Backups & data** | Restore any of the last 30 auto-snapshots, export or import the whole site as JSON, reset to defaults |

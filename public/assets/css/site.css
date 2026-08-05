@@ -199,39 +199,6 @@ img {
   transform: scaleX(1);
 }
 
-.theme-switch {
-  display: flex;
-  border: 2px solid var(--line);
-}
-
-.theme-btn {
-  width: 30px;
-  height: 30px;
-  border: 0;
-  border-right: 2px solid var(--line);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.theme-btn:last-child {
-  border-right: 0;
-}
-
-.theme-btn:hover {
-  background: var(--surface);
-}
-
-.theme-btn.is-active {
-  background: var(--accent);
-  color: var(--accent-text);
-}
-
 .menu-toggle {
   display: none;
   width: 40px;
@@ -301,12 +268,6 @@ img {
 .btn-ghost:hover {
   background: var(--text);
   color: var(--bg);
-}
-
-.btn-admin {
-  min-height: 34px;
-  padding: 7px 16px;
-  font-size: 0.7rem;
 }
 
 /* ------------------------------------------------------------------ main */

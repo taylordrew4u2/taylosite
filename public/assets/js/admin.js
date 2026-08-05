@@ -52,7 +52,7 @@
     { id: 'shows', label: 'Shows', hint: 'Tour dates shown on the home and links pages.', keys: ['shows'] },
     { id: 'about', label: 'About page', hint: 'Bio, facts and press quotes.', keys: ['about'] },
     { id: 'nav', label: 'Navigation', hint: 'The menu in the header.', keys: ['nav'] },
-    { id: 'themes', label: 'Themes', hint: 'The A / B / C colour schemes.', keys: ['themes'] },
+    { id: 'themes', label: 'Themes', hint: 'The colours the site is built from.', keys: ['themes'] },
     { id: 'footer', label: 'Footer', hint: 'The line at the bottom of every page.', keys: ['footer'] },
     { id: 'media', label: 'Media', hint: 'Uploaded images.' },
     { id: 'data', label: 'Backups & data', hint: 'Snapshots, export, import and reset.' },
@@ -630,7 +630,7 @@
           'Theme ' + t.id,
           '<div class="grid-2">' +
             field({ label: 'Name', path: 'themes.options.' + i + '.name', value: t.name }) +
-            field({ label: 'Button letter', path: 'themes.options.' + i + '.id', value: t.id, hint: 'One or two characters — shown in the A / B / C switch.' }) +
+            field({ label: 'Key', path: 'themes.options.' + i + '.id', value: t.id, hint: 'One or two characters, used to name this scheme.' }) +
             '</div>' +
             '<div class="grid-3">' +
             colorField('Background', 'themes.options.' + i + '.bg', t.bg) +
@@ -657,8 +657,7 @@
         'Theme settings',
         '<div class="field"><label class="label" for="theme-default">Default theme</label>' +
           '<select class="select" id="theme-default" data-path="themes.default" data-rerender="1">' + defaultOptions + '</select>' +
-          '<span class="hint">What a first-time visitor sees. Their own choice is remembered in their browser.</span></div>' +
-          toggleField({ label: 'Show the A / B / C switch in the header', path: 'themes.showSwitcher', checked: themes.showSwitcher !== false })
+          '<span class="hint">The colours the site is served with.</span></div>'
       ) + options
     );
   }
