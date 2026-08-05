@@ -118,7 +118,8 @@ admin panel shows which is live under **Overview → Site status**, and so does
 | | Site content & snapshots | Sessions | Images |
 | --- | --- | --- | --- |
 | **filesystem** (default) | `data/site.json`, `data/backups/` | `data/sessions.json` | `data/uploads/` |
-| **serverless** (Vercel) | Redis | Redis, with expiry | Vercel Blob, or Redis when no Blob token is set |
+| **github** | the repo, via the Contents API — commit history is the snapshot list | signed cookies | committed to `data/uploads/` |
+| **serverless** | Redis | Redis, with expiry | Vercel Blob, or Redis when no Blob token is set |
 
 The filesystem backend is used whenever no Redis credentials are present — local
 development, a VPS, Fly.io, Railway, Render with a disk. Each save copies the
@@ -131,49 +132,62 @@ import the file on the other end.
 
 ## Deploying to Vercel
 
-Vercel's filesystem is read-only and per-instance, so the site needs a Redis
-store before the admin panel can save anything. That is the only requirement —
-one free service, no card.
+Vercel's filesystem is read-only and per-instance, so the site needs somewhere
+to keep its content. There are two ways, and the first costs nothing.
 
-### The free setup
+### Option 1 — the repository itself (no extra service)
 
-1. Sign up at [upstash.com](https://upstash.com) and create a **Redis** database.
-   The free tier is enough for a site like this and does not ask for payment
-   details. Copy the two REST values from the database page.
-2. In Vercel → project → **Settings → Environment Variables**, add them for
+The admin panel commits changes straight back to this repo through the GitHub
+API, and reads them back the same way. No database, no object store, no paid
+tier. Content is version-controlled, every save is a commit you can read and
+revert, and the snapshot list in the admin panel *is* the file's history.
+
+1. Create a GitHub token: **Settings → Developer settings → Personal access
+   tokens → Fine-grained tokens**. Give it access to this repository only, with
+   **Contents: Read and write**. (A classic token with `repo` scope works too.)
+2. In Vercel → project → **Settings → Environment Variables**, add for
    **Production**:
 
    | Name | Value |
    | --- | --- |
-   | `UPSTASH_REDIS_REST_URL` | the REST URL from Upstash |
-   | `UPSTASH_REDIS_REST_TOKEN` | the REST token from Upstash |
+   | `GITHUB_TOKEN` | the token you just created |
+   | `GITHUB_REPO` | `owner/name` — optional on Vercel, which already exposes it |
 
-3. **Redeploy.** Environment variables are read at build time, so an existing
+3. **Redeploy.** Environment variables are read at build time, so the existing
    deployment will not pick them up on its own.
 
-That is the whole setup. Content, snapshots, sessions and uploaded images all
-live in Redis, and `/healthz` reports `Redis + images in Redis`.
+`/healthz` will then report `GitHub repository owner/name@main`.
 
-Adding Vercel's own Upstash integration from **Storage** instead works exactly
-the same — it sets `KV_REST_API_URL` and `KV_REST_API_TOKEN`, which are also
-recognised.
+Worth knowing about this backend:
 
-### Optional: Vercel Blob for images
+- Content commits carry `[skip ci]`, so saving does **not** trigger a rebuild.
+  The site reads content live through the API, so edits appear immediately.
+- Reads are cached for 15 seconds per instance, so a page view is usually not
+  an API call. An edit you just saved is visible at once regardless.
+- Images are committed to `data/uploads/` and must stay under **900 KB**, the
+  Contents API's inline limit. The admin panel resizes uploads to at most
+  1800px and re-encodes them to WebP first, so ordinary photos land well under.
+- Sessions are signed cookies rather than stored records, because a commit per
+  sign-in would be absurd. Consequences: the signed-in devices list only shows
+  the current one, and signing out of a single device just clears that cookie.
+  **Sign out everywhere** and **changing the password** both invalidate every
+  outstanding cookie immediately.
+- Link click counts are per-instance and reset on cold starts — the alternative
+  was a commit per click.
 
-Keeping images in Redis has two costs: each one must stay under **700 KB**, and
-serving them spends a Redis command on any request the browser has not cached.
-Neither matters much for a handful of photos — the admin panel resizes every
-upload to at most 1800px and re-encodes it to WebP before sending, so ordinary
-photos land around 200–500 KB.
+### Option 2 — Redis (and optionally Blob)
 
-If you would rather not spend Redis on images, add **Blob** from Vercel →
-Storage. It sets `BLOB_READ_WRITE_TOKEN`, which switches image storage over
-automatically: uploads go to Blob, are served from Vercel's CDN, and the size
-limit rises to 8 MB. Nothing else changes, and images already in Redis keep
-working.
+If you have an Upstash Redis database, use it instead: it holds sessions
+properly, keeps click counts exactly, and has no size ceiling worth worrying
+about. Add `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (or the
+`KV_REST_API_*` pair that Vercel's own integration sets) and redeploy. Redis
+takes precedence over the GitHub backend when both are configured.
 
-Until Redis is connected, every page answers with a "Setup needed" notice
-explaining exactly what is missing rather than a blank 500.
+Adding **Blob** on top sets `BLOB_READ_WRITE_TOKEN` and moves images there,
+served from Vercel's CDN with the limit raised to 8 MB.
+
+Until one of these is configured, every page answers with a "Setup needed"
+notice naming both options rather than a blank 500.
 
 Two behaviours differ on Vercel, both by design:
 

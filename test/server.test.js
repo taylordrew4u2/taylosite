@@ -8,6 +8,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const { startFakeRedis } = require('./helpers/fake-redis');
+const { startFakeGithub } = require('./helpers/fake-github');
 
 const ROOT = path.join(__dirname, '..');
 const PNG = Buffer.from(
@@ -18,9 +19,15 @@ const PNG = Buffer.from(
 /** Boot the real server as a child process and wait for it to answer. */
 async function startServer(env = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'taylosite-srv-'));
+  // A null value removes an inherited variable — this machine may well have a
+  // GITHUB_TOKEN of its own, which some cases need absent.
+  const childEnv = { ...process.env, PORT: '0', TAYLOSITE_DATA_DIR: dir, ...env };
+  for (const [key, value] of Object.entries(childEnv)) {
+    if (value === null) delete childEnv[key];
+  }
   const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: ROOT,
-    env: { ...process.env, PORT: '0', TAYLOSITE_DATA_DIR: dir, ...env },
+    env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -368,12 +375,144 @@ test('the serverless backend serves the whole site from Redis', async () => {
   }
 });
 
+test('the whole site runs out of a GitHub repository', async () => {
+  const gh = await startFakeGithub();
+  const env = {
+    VERCEL: '1',
+    GITHUB_TOKEN: gh.token,
+    GITHUB_REPO: `${gh.owner}/${gh.repo}`,
+    GITHUB_BRANCH: 'main',
+    GITHUB_API_URL: gh.api
+  };
+
+  try {
+    await withServer(env, async (server) => {
+      const health = await server.call('/healthz');
+      assert.strictEqual(health.json.ok, true);
+      assert.match(health.json.storage, /GitHub repository/);
+
+      assert.strictEqual((await server.call('/')).status, 200);
+
+      // Sessions here are signed rather than stored.
+      assert.strictEqual((await server.login('nope')).status, 401);
+      assert.strictEqual((await server.login('weed')).status, 200);
+      assert.strictEqual((await server.call('/api/session')).json.signedIn, true);
+
+      await server.call('/api/admin/site', { method: 'PUT', body: { site: { home: { subhead: 'Straight from git.' } } } });
+      assert.match((await server.call('/')).text, /Straight from git\./);
+      assert.match(
+        gh.files.get('data/site.json').buffer.toString('utf8'),
+        /Straight from git\./,
+        'the change is a real file in the repo'
+      );
+
+      const upload = await server.call('/api/admin/uploads', {
+        method: 'POST',
+        body: { name: 'photo.png', dataUrl: `data:image/png;base64,${PNG.toString('base64')}` }
+      });
+      assert.strictEqual(upload.status, 201);
+      assert.ok(gh.files.has('data/uploads/' + upload.json.file.name), 'the image is committed too');
+
+      const served = await server.call(upload.json.file.url);
+      assert.strictEqual(served.status, 200);
+      assert.strictEqual(served.headers.get('content-type'), 'image/png');
+
+      const backups = (await server.call('/api/admin/backups')).json.backups;
+      assert.ok(backups.length >= 1, 'commit history shows up as snapshots');
+    });
+  } finally {
+    await gh.close();
+  }
+});
+
+test('signed sessions survive a restart, and reject tampering', async () => {
+  const gh = await startFakeGithub();
+  const env = {
+    VERCEL: '1',
+    GITHUB_TOKEN: gh.token,
+    GITHUB_REPO: `${gh.owner}/${gh.repo}`,
+    GITHUB_API_URL: gh.api
+  };
+
+  try {
+    let cookie = null;
+    await withServer(env, async (server) => {
+      const res = await server.login('weed');
+      assert.strictEqual(res.status, 200);
+      cookie = res.headers.get('set-cookie').split(';')[0];
+    });
+
+    // A brand new process — nothing was stored anywhere, but the cookie holds.
+    await withServer(env, async (server) => {
+      const still = await fetch(`${server.base}/api/session`, { headers: { cookie } });
+      assert.strictEqual((await still.json()).signedIn, true, 'no session store, yet still signed in');
+
+      const tampered = cookie.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A'));
+      const forged = await fetch(`${server.base}/api/session`, { headers: { cookie: tampered } });
+      assert.strictEqual((await forged.json()).signedIn, false, 'an edited cookie is rejected');
+    });
+  } finally {
+    await gh.close();
+  }
+});
+
+test('signing out everywhere invalidates an existing signed cookie', async () => {
+  const gh = await startFakeGithub();
+  const env = {
+    VERCEL: '1',
+    GITHUB_TOKEN: gh.token,
+    GITHUB_REPO: `${gh.owner}/${gh.repo}`,
+    GITHUB_API_URL: gh.api
+  };
+
+  try {
+    await withServer(env, async (server) => {
+      const res = await server.login('weed');
+      const cookie = res.headers.get('set-cookie').split(';')[0];
+
+      assert.strictEqual((await server.call('/api/admin/sessions', { method: 'DELETE' })).status, 200);
+
+      const after = await fetch(`${server.base}/api/session`, { headers: { cookie } });
+      assert.strictEqual((await after.json()).signedIn, false, 'the old generation is dead');
+
+      assert.strictEqual((await server.login('weed')).status, 200, 'and you can sign back in');
+    });
+  } finally {
+    await gh.close();
+  }
+});
+
+test('changing the password invalidates signed cookies too', async () => {
+  const gh = await startFakeGithub();
+  const env = {
+    VERCEL: '1',
+    GITHUB_TOKEN: gh.token,
+    GITHUB_REPO: `${gh.owner}/${gh.repo}`,
+    GITHUB_API_URL: gh.api
+  };
+
+  try {
+    await withServer(env, async (server) => {
+      const res = await server.login('weed');
+      const cookie = res.headers.get('set-cookie').split(';')[0];
+
+      await server.call('/api/admin/password', { method: 'POST', body: { current: 'weed', next: 'a-new-one' } });
+
+      const after = await fetch(`${server.base}/api/session`, { headers: { cookie } });
+      assert.strictEqual((await after.json()).signedIn, false, 'the signing key moved with the password');
+    });
+  } finally {
+    await gh.close();
+  }
+});
+
 test('on Vercel without a store, the site explains itself instead of crashing', async () => {
-  await withServer({ VERCEL: '1' }, async (server) => {
+  await withServer({ VERCEL: '1', GITHUB_TOKEN: null, GH_TOKEN: null }, async (server) => {
     const page = await server.call('/');
     assert.strictEqual(page.status, 503);
     assert.match(page.text, /Setup needed/);
-    assert.match(page.text, /Upstash|Redis/);
+    assert.match(page.text, /GITHUB_TOKEN/, 'the no-extra-service option is offered');
+    assert.match(page.text, /Redis/, 'and the database option too');
 
     const health = await server.call('/healthz');
     assert.strictEqual(health.status, 503);

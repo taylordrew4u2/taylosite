@@ -176,7 +176,7 @@ test('half-configured Redis credentials are named precisely', () => {
     () => createBackend({ VERCEL: '1', UPSTASH_REDIS_REST_TOKEN: 'token-only' }),
     /URL is missing/
   );
-  assert.throws(() => createBackend({ VERCEL: '1' }), /without a Redis store/);
+  assert.throws(() => createBackend({ VERCEL: '1' }), /nowhere to store content/);
 });
 
 test('without Blob, images are kept in Redis and stay under its request ceiling', async () => {
