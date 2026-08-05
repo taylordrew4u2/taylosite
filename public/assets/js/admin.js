@@ -726,18 +726,33 @@
   }
 
   function sectionData() {
+    // On the GitHub backend a snapshot is a commit, so it is labelled by its
+    // message and short sha rather than by a filename and a byte count.
+    var backedByGit = /github/i.test(state.storage || '');
+
     var backups = state.backups.length
-      ? '<table class="table"><thead><tr><th>Snapshot</th><th>Taken</th><th>Size</th><th></th></tr></thead><tbody>' +
+      ? '<table class="table"><thead><tr><th>' + (backedByGit ? 'Commit' : 'Snapshot') + '</th><th>Taken</th>' +
+        (backedByGit ? '' : '<th>Size</th>') + '<th></th></tr></thead><tbody>' +
         state.backups
           .map(function (b) {
+            var ref = String(b.name).replace(/^site-/, '').replace(/\.json$/, '');
+            var label = backedByGit
+              ? (String(b.message || 'Saved from the admin panel').replace(/\[skip ci\]/gi, '').trim() || 'Saved') +
+                ' · ' + ref.slice(0, 7)
+              : b.name;
             return (
-              '<tr><td class="wrap">' + esc(b.name) + '</td><td>' + esc(formatDate(b.createdAt)) + '</td><td>' + esc(formatSize(b.size)) + '</td>' +
+              '<tr><td class="wrap">' + esc(label) + '</td><td>' + esc(formatDate(b.createdAt)) + '</td>' +
+              (backedByGit ? '' : '<td>' + esc(b.size ? formatSize(b.size) : '—') + '</td>') +
               '<td><button class="btn btn-sm" type="button" data-action="restore-backup" data-name="' + esc(b.name) + '">Restore</button></td></tr>'
             );
           })
           .join('') +
         '</tbody></table>'
-      : emptyState('No snapshots yet — one is taken automatically every time you save.');
+      : emptyState(
+          backedByGit
+            ? 'No earlier versions yet — the next save will create one.'
+            : 'No snapshots yet — one is taken automatically every time you save.'
+        );
 
     return (
       card('Export & import',
@@ -746,10 +761,14 @@
           '<label class="btn btn-sm" style="cursor:pointer">Import a file<input type="file" accept="application/json" hidden data-import-input="1"></label>' +
           '</div><p class="hint" style="margin-top:10px">Importing replaces all site content. Your password is never included in an export.</p>',
         { subtitle: 'A JSON file with everything on the site.' }) +
-      card('Snapshots', backups, { subtitle: 'The last 30 saves, oldest pruned automatically.' }) +
+      card(backedByGit ? 'Version history' : 'Snapshots', backups, {
+        subtitle: backedByGit
+          ? 'Every save is a commit in the repository, so this is the file\'s own history.'
+          : 'The last 30 saves, oldest pruned automatically.'
+      }) +
       card('Danger zone',
         '<button class="btn btn-sm btn-danger" type="button" data-action="reset-site">Reset all content to defaults</button>' +
-          '<p class="hint" style="margin-top:10px">Your password and uploaded images are kept. A snapshot is taken first.</p>')
+          '<p class="hint" style="margin-top:10px">Your password and uploaded images are kept. The current version is recorded first, so this can be undone from the list above.</p>')
     );
   }
 
