@@ -160,6 +160,25 @@ test('backend selection reads the documented environment variables', () => {
   assert.deepStrictEqual(detectConfig({}), { redisUrl: undefined, redisToken: undefined, blobToken: undefined });
 });
 
+test('half-configured Redis credentials are named precisely', () => {
+  const { createBackend } = require('../lib/storage');
+
+  assert.throws(
+    () => createBackend({ VERCEL: '1', UPSTASH_REDIS_REST_URL: 'redis://default:pw@eu1.upstash.io:6379', UPSTASH_REDIS_REST_TOKEN: 't' }),
+    /REST URL/,
+    'the redis:// connection string is the easy mistake, so say so'
+  );
+  assert.throws(
+    () => createBackend({ VERCEL: '1', UPSTASH_REDIS_REST_URL: 'https://x.upstash.io' }),
+    /token is missing/
+  );
+  assert.throws(
+    () => createBackend({ VERCEL: '1', UPSTASH_REDIS_REST_TOKEN: 'token-only' }),
+    /URL is missing/
+  );
+  assert.throws(() => createBackend({ VERCEL: '1' }), /without a Redis store/);
+});
+
 test('without Blob, images are kept in Redis and stay under its request ceiling', async () => {
   const redis = await startFakeRedis();
   const backend = createServerlessBackend({ redisUrl: redis.url, redisToken: redis.token });
