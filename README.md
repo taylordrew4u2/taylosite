@@ -88,10 +88,24 @@ single-page app that talks to the JSON API.
 
 ### Findability and accessibility
 
+All of this is machine-facing — none of it changes a single pixel of the page.
+
 Every page carries canonical, Open Graph and Twitter card tags built from the
-admin content, plus `schema.org` structured data — a `Person` for Taylor and an
-`Event` for each upcoming show, so dates can surface directly in search results.
-`/sitemap.xml` and `/robots.txt` are generated from the live content.
+admin content, plus one `schema.org` graph rather than loose objects: a
+`WebSite`, the `Person`, the page itself (`ProfilePage` / `AboutPage` /
+`CollectionPage`), a `BreadcrumbList` on sub-pages, and an `Event` per upcoming
+show carrying a real `PostalAddress` and an `Offer` with its ticket link and
+sold-out status. The nodes cross-reference by `@id`, so a crawler can tell that
+the site, the page and the performer are one subject and the shows are his.
+
+Social profiles among the links become `sameAs` in the graph and `rel="me"` in
+the head, and a linked X profile supplies the Twitter card's `creator`. The
+`robots` meta opts into large image previews and untruncated snippets.
+`/sitemap.xml` and `/robots.txt` are generated from the live content, and a URL
+with a trailing slash is redirected rather than answering as a duplicate.
+
+The hero image is marked `fetchpriority="high"` and images below the fold are
+lazy, which is what the Core Web Vitals measurement actually rewards.
 
 There is a skip link, `aria-current` on the active nav item, real `<time>`
 elements on show dates, visible focus rings, a keyboard-closable mobile menu,

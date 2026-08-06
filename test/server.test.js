@@ -141,9 +141,75 @@ test('structured data is valid JSON and covers upcoming shows', async () => {
     const blocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) =>
       JSON.parse(m[1])
     );
-    assert.ok(blocks.length >= 2, 'a Person plus an Event');
-    assert.strictEqual(blocks[0]['@type'], 'Person');
-    assert.ok(blocks.some((b) => b['@type'] === 'Event' && b.startDate === '2099-05-01'));
+    assert.strictEqual(blocks.length, 1, 'one linked graph rather than loose objects');
+
+    const graph = blocks[0]['@graph'];
+    const byType = (type) => graph.filter((node) => node['@type'] === type);
+
+    assert.ok(byType('WebSite').length, 'the site itself');
+    assert.ok(byType('ProfilePage').length, 'the home page is a profile page');
+
+    const person = byType('Person')[0];
+    assert.ok(person, 'the person');
+    assert.match(person['@id'], /#person$/);
+
+    const event = byType('Event').find((e) => e.startDate === '2099-05-01');
+    assert.ok(event, 'the upcoming show');
+    assert.strictEqual(event.location.address['@type'], 'PostalAddress');
+    assert.strictEqual(event.location.address.addressLocality, 'New York');
+    assert.strictEqual(event.location.address.addressRegion, 'NY');
+    assert.deepStrictEqual(event.performer, { '@id': person['@id'] }, 'shows point back at the same person');
+
+    // Sub-pages describe where they sit.
+    const aboutGraph = JSON.parse(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/about')).text)[1]
+    )['@graph'];
+    assert.ok(aboutGraph.some((n) => n['@type'] === 'AboutPage'));
+    assert.ok(aboutGraph.some((n) => n['@type'] === 'BreadcrumbList'));
+  });
+});
+
+test('a trailing slash redirects instead of answering as a second URL', async () => {
+  await withServer({}, async (server) => {
+    const res = await server.call('/about/');
+    assert.strictEqual(res.status, 301);
+    assert.strictEqual(res.headers.get('location'), '/about');
+
+    const withQuery = await server.call('/links/?ref=poster');
+    assert.strictEqual(withQuery.status, 301);
+    assert.strictEqual(withQuery.headers.get('location'), '/links?ref=poster', 'the query survives');
+  });
+});
+
+test('crawler directives and identity links are present', async () => {
+  await withServer({}, async (server) => {
+    await server.login();
+    await server.call('/api/admin/site', {
+      method: 'PUT',
+      body: {
+        site: {
+          links: {
+            items: [
+              { id: 'l1', label: 'X', url: 'https://x.com/taylordrew', visible: true },
+              { id: 'l2', label: 'Instagram', url: 'https://instagram.com/taylordrew', visible: true },
+              { id: 'l3', label: 'Booking', url: 'mailto:hi@example.com', visible: true }
+            ]
+          }
+        }
+      }
+    });
+
+    const html = (await server.call('/')).text;
+    assert.match(html, /<meta name="robots" content="index, follow, max-image-preview:large/);
+    assert.match(html, /<meta property="og:type" content="profile">/);
+    assert.match(html, /<meta name="twitter:creator" content="@taylordrew">/);
+    assert.match(html, /<link rel="me" href="https:\/\/x\.com\/taylordrew">/);
+    assert.match(html, /<link rel="me" href="https:\/\/instagram\.com\/taylordrew">/);
+    assert.ok(!/rel="me" href="mailto/.test(html), 'only profiles, not the booking address');
+
+    const graph = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)[1])['@graph'];
+    const person = graph.find((n) => n['@type'] === 'Person');
+    assert.deepStrictEqual(person.sameAs, ['https://x.com/taylordrew', 'https://instagram.com/taylordrew']);
   });
 });
 

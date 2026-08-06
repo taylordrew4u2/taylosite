@@ -428,6 +428,13 @@ async function handle(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
 
+  // /about/ and /about must not both answer 200, or they compete as duplicates
+  // in search results. One canonical spelling, everything else redirected.
+  if (url.pathname !== pathname && (req.method === 'GET' || req.method === 'HEAD')) {
+    res.writeHead(301, { Location: pathname + url.search, 'Cache-Control': 'public, max-age=3600' });
+    return res.end();
+  }
+
   // Static assets never need storage, so serve them before the boot check.
   if (pathname.startsWith('/assets/')) {
     const file = safeJoin(PUBLIC_DIR, pathname);
