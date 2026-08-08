@@ -19,7 +19,9 @@
     baseline: null,
     usingDefaultPassword: false,
     storage: '',
-    mediaTarget: null
+    mediaTarget: null,
+    showFilter: 'all',
+    expandedShows: {}
   };
 
   function icon(paths) {
@@ -265,7 +267,7 @@
 
   function repeatItem(opts) {
     return (
-      '<article class="repeat-item" draggable="true" data-list="' + esc(opts.list) + '" data-index="' + opts.index + '">' +
+      '<article class="repeat-item" draggable="true" data-sortable-item data-list="' + esc(opts.list) + '" data-index="' + opts.index + '">' +
       '<header class="repeat-head">' +
       '<span class="drag-handle" title="Drag to reorder">⠿</span>' +
       '<span class="repeat-title">' + esc(opts.title || 'Untitled') + '</span>' +
@@ -473,44 +475,145 @@
 
   function sectionShows() {
     var shows = state.site.shows || [];
-    var body = shows.length
-      ? '<div class="repeat-list" data-sortable="shows">' +
-        shows
-          .map(function (show, i) {
-            var badges = [];
-            if (show.soldOut) badges.push({ text: 'Sold out', cls: 'is-accent' });
-            if (show.visible === false) badges.push({ text: 'Hidden', cls: 'is-hidden' });
-            return repeatItem({
-              list: 'shows',
-              index: i,
-              title: [show.date, show.venue].filter(Boolean).join(' · ') || 'New show',
-              badges: badges,
-              body:
-                '<div class="grid-3">' +
-                field({ label: 'Date', path: 'shows.' + i + '.date', value: show.date, type: 'date' }) +
-                field({ label: 'Time', path: 'shows.' + i + '.time', value: show.time, placeholder: '8:00 PM' }) +
-                field({ label: 'City', path: 'shows.' + i + '.city', value: show.city }) +
-                '</div>' +
-                '<div class="grid-2">' +
-                field({ label: 'Venue', path: 'shows.' + i + '.venue', value: show.venue, titleSource: true }) +
-                field({ label: 'Ticket link', path: 'shows.' + i + '.url', value: show.url }) +
-                field({ label: 'Button label', path: 'shows.' + i + '.ctaLabel', value: show.ctaLabel, placeholder: 'Tickets' }) +
-                field({ label: 'Note', path: 'shows.' + i + '.note', value: show.note, placeholder: 'Late show, 18+' }) +
-                '</div>' +
-                '<div class="image-buttons">' +
-                toggleField({ label: 'Visible', path: 'shows.' + i + '.visible', checked: show.visible !== false }) +
-                toggleField({ label: 'Sold out', path: 'shows.' + i + '.soldOut', checked: !!show.soldOut }) +
-                '</div>'
-            });
-          })
-          .join('') +
-        '</div>'
-      : emptyState('No dates yet. The home page will show your “coming soon” text.');
+    var today = new Date().toISOString().slice(0, 10);
+    var filter = state.showFilter || 'all';
+    var isPast = function (show) {
+      return show.date && show.date < today;
+    };
 
-    return card('Shows', body, {
-      subtitle: 'Past dates move to the bottom of the links page automatically.',
-      actions: '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="shows">Add show</button>'
+    // Rows carry their original index, so filtering never rewrites a data-path.
+    var rows = shows
+      .map(function (show, index) {
+        return { show: show, index: index };
+      })
+      .filter(function (row) {
+        if (filter === 'upcoming') return !isPast(row.show);
+        if (filter === 'past') return isPast(row.show);
+        return true;
+      });
+
+    var live = shows.filter(function (s) {
+      return s.visible !== false;
     });
+    var upcoming = live.filter(function (s) {
+      return !isPast(s);
+    });
+    var next = upcoming
+      .slice()
+      .sort(function (a, b) {
+        return String(a.date || '9999').localeCompare(String(b.date || '9999'));
+      })[0];
+
+    var stats =
+      '<div class="stat-grid">' +
+      [
+        { value: upcoming.length, label: 'Live upcoming' },
+        {
+          value: next ? (next.date ? formatShortDate(next.date) : 'TBA') : '—',
+          label: next ? (next.venue || 'Next show').slice(0, 24) : 'Nothing booked',
+          small: true
+        },
+        { value: shows.filter(isPast).length, label: 'Past' },
+        { value: shows.length - live.length, label: 'Hidden' }
+      ]
+        .map(function (item) {
+          return (
+            '<div class="stat"><div class="stat-value' + (item.small ? ' stat-value-sm' : '') + '">' +
+            esc(item.value) + '</div><div class="stat-label">' + esc(item.label) + '</div></div>'
+          );
+        })
+        .join('') +
+      '</div>';
+
+    var filters = [
+      { id: 'all', label: 'All', count: shows.length },
+      { id: 'upcoming', label: 'Upcoming', count: shows.filter(function (s) { return !isPast(s); }).length },
+      { id: 'past', label: 'Past', count: shows.filter(isPast).length }
+    ]
+      .map(function (f) {
+        return (
+          '<button class="chip' + (filter === f.id ? ' is-active' : '') + '" type="button" ' +
+          'data-action="show-filter" data-filter="' + f.id + '">' + esc(f.label) +
+          '<span class="chip-count">' + f.count + '</span></button>'
+        );
+      })
+      .join('');
+
+    var header =
+      '<div class="show-row show-head">' +
+      '<span></span><span>Date</span><span>Time</span><span>Venue</span><span>City</span>' +
+      '<span>Ticket link</span><span>Sold</span><span>Live</span><span></span>' +
+      '</div>';
+
+    var body = shows.length
+      ? (rows.length
+          ? '<div class="show-scroll"><div class="show-table" data-sortable="shows">' + header +
+            rows
+              .map(function (row) {
+                var show = row.show;
+                var i = row.index;
+                var open = (state.expandedShows || {})[show.id];
+                return (
+                  '<div class="show-row' + (isPast(show) ? ' is-past' : '') +
+                  (show.visible === false ? ' is-off' : '') + (open ? ' is-open' : '') +
+                  '" data-sortable-item data-list="shows" data-index="' + i + '" draggable="true">' +
+                  '<span class="drag-handle" title="Drag to reorder">⠿</span>' +
+                  cell('date', 'shows.' + i + '.date', show.date, 'Date', 'date') +
+                  cell('time', 'shows.' + i + '.time', show.time, 'Time', 'text', '8:00 PM') +
+                  cell('venue', 'shows.' + i + '.venue', show.venue, 'Venue', 'text', 'Venue name') +
+                  cell('city', 'shows.' + i + '.city', show.city, 'City', 'text', 'City, ST') +
+                  cell('url', 'shows.' + i + '.url', show.url, 'Ticket link', 'text', 'https://…') +
+                  miniToggle('shows.' + i + '.soldOut', !!show.soldOut, 'Sold out') +
+                  miniToggle('shows.' + i + '.visible', show.visible !== false, 'Visible on the site') +
+                  '<span class="row-tools">' +
+                  '<button class="icon-btn icon-btn-sm" type="button" data-action="toggle-show" data-id="' + esc(show.id) + '" title="More" aria-expanded="' + (open ? 'true' : 'false') + '">' + (open ? '−' : '+') + '</button>' +
+                  '<button class="icon-btn icon-btn-sm btn-danger" type="button" data-action="list-remove" data-list="shows" data-index="' + i + '" title="Delete">✕</button>' +
+                  '</span>' +
+                  (open
+                    ? '<div class="show-extra">' +
+                      '<label class="mini-field"><span>Button label</span><input class="input input-sm" type="text" data-path="shows.' + i + '.ctaLabel" value="' + esc(show.ctaLabel || '') + '" placeholder="Tickets"></label>' +
+                      '<label class="mini-field mini-field-wide"><span>Note</span><input class="input input-sm" type="text" data-path="shows.' + i + '.note" value="' + esc(show.note || '') + '" placeholder="Late show · 18+"></label>' +
+                      '</div>'
+                    : '') +
+                  '</div>'
+                );
+              })
+              .join('') +
+            '</div></div>'
+          : emptyState('Nothing in this view. Try another filter.'))
+      : emptyState('No dates yet. The home page shows your “coming soon” text until there are some.');
+
+    return (
+      stats +
+      card('Tour dates', body, {
+        subtitle: 'Past dates leave the home page on their own and move to the bottom of the links page.',
+        actions:
+          '<div class="chips">' + filters + '</div>' +
+          '<button class="btn btn-sm" type="button" data-action="sort-shows" title="Order by date, soonest first">Sort by date</button>' +
+          '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="shows">Add show</button>'
+      })
+    );
+  }
+
+  function cell(kind, path, value, label, type, placeholder) {
+    return (
+      '<input class="input input-sm cell-' + kind + '" type="' + (type || 'text') + '" data-path="' + esc(path) + '"' +
+      ' aria-label="' + esc(label) + '" placeholder="' + esc(placeholder || '') + '" value="' + esc(value || '') + '">'
+    );
+  }
+
+  function miniToggle(path, checked, label) {
+    return (
+      '<label class="switch switch-mini" title="' + esc(label) + '">' +
+      '<input type="checkbox" data-path="' + esc(path) + '" data-rerender="1"' + (checked ? ' checked' : '') + '>' +
+      '<span class="sr-only">' + esc(label) + '</span></label>'
+    );
+  }
+
+  function formatShortDate(iso) {
+    var d = new Date(iso + 'T12:00:00Z');
+    if (isNaN(d)) return iso;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
   }
 
   function sectionAbout() {
@@ -1291,6 +1394,25 @@
     var action = trigger.dataset.action;
 
     if (action === 'goto') return go(trigger.dataset.section);
+
+    if (action === 'show-filter') {
+      state.showFilter = trigger.dataset.filter;
+      return render({ preserveFocus: false });
+    }
+    if (action === 'toggle-show') {
+      var id = trigger.dataset.id;
+      state.expandedShows[id] = !state.expandedShows[id];
+      return render({ preserveFocus: false });
+    }
+    if (action === 'sort-shows') {
+      // Undated shows sort last rather than jumping to the front.
+      state.site.shows = (state.site.shows || []).slice().sort(function (a, b) {
+        return String(a.date || '9999-99-99').localeCompare(String(b.date || '9999-99-99'));
+      });
+      markDirty();
+      toast('Sorted by date — save to keep it', 'info');
+      return render({ preserveFocus: false });
+    }
     if (action === 'list-add') return listAdd(trigger.dataset.list);
     if (action === 'list-remove') {
       if (!confirm('Delete this item?')) return;
@@ -1408,7 +1530,7 @@
   // drag to reorder
   var dragFrom = null;
   el.panel.addEventListener('dragstart', function (event) {
-    var item = event.target.closest('.repeat-item');
+    var item = event.target.closest('[data-sortable-item]');
     if (!item) return;
     dragFrom = item;
     item.classList.add('is-dragging');
@@ -1421,19 +1543,19 @@
   });
 
   el.panel.addEventListener('dragover', function (event) {
-    var item = event.target.closest('.repeat-item');
+    var item = event.target.closest('[data-sortable-item]');
     if (!item || !dragFrom || item.dataset.list !== dragFrom.dataset.list) return;
     event.preventDefault();
     item.classList.add('is-drop-target');
   });
 
   el.panel.addEventListener('dragleave', function (event) {
-    var item = event.target.closest('.repeat-item');
+    var item = event.target.closest('[data-sortable-item]');
     if (item) item.classList.remove('is-drop-target');
   });
 
   el.panel.addEventListener('drop', function (event) {
-    var item = event.target.closest('.repeat-item');
+    var item = event.target.closest('[data-sortable-item]');
     if (!item || !dragFrom || item.dataset.list !== dragFrom.dataset.list) return;
     event.preventDefault();
     var from = Number(dragFrom.dataset.index);
