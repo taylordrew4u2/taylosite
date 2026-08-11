@@ -572,6 +572,42 @@ test('changing the password invalidates signed cookies too', async () => {
   }
 });
 
+test('healthz reports which credentials the build can see, and never their values', async () => {
+  const redis = await startFakeRedis();
+  try {
+    await withServer(
+      {
+        VERCEL: '1',
+        VERCEL_ENV: 'production',
+        VERCEL_URL: 'taylosite-xyz.vercel.app',
+        VERCEL_GIT_COMMIT_SHA: '8dc330e1234567890',
+        VERCEL_GIT_COMMIT_REF: 'main',
+        KV_REST_API_URL: redis.url,
+        KV_REST_API_TOKEN: redis.token,
+        GITHUB_TOKEN: null,
+        GH_TOKEN: null
+      },
+      async (server) => {
+        const health = (await server.call('/healthz')).json;
+        assert.strictEqual(health.ok, true);
+        assert.deepStrictEqual(health.credentials, { redis: true, blob: false, github: false });
+        assert.deepStrictEqual(health.build, {
+          env: 'production',
+          deployment: 'taylosite-xyz.vercel.app',
+          commit: '8dc330e',
+          branch: 'main'
+        });
+
+        const raw = (await server.call('/healthz')).text;
+        assert.ok(!raw.includes(redis.token), 'the token itself is never echoed');
+        assert.ok(!raw.includes(redis.url), 'nor the store URL');
+      }
+    );
+  } finally {
+    await redis.close();
+  }
+});
+
 test('Blob alone is called out as not enough, and the deployment names itself', async () => {
   await withServer(
     { VERCEL: '1', VERCEL_ENV: 'preview', VERCEL_URL: 'taylosite-abc123.vercel.app', BLOB_READ_WRITE_TOKEN: 'blob_test', GITHUB_TOKEN: null, GH_TOKEN: null },

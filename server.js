@@ -447,11 +447,20 @@ async function handle(req, res) {
   }
 
   if (pathname === '/healthz') {
+    // Deployment identity and which credentials this build can see — the two
+    // things you cannot otherwise tell from outside, and the ones that explain
+    // almost every "I added it but nothing changed".
+    const build = {
+      env: process.env.VERCEL_ENV || (process.env.VERCEL ? 'vercel' : 'local'),
+      deployment: process.env.VERCEL_URL || null,
+      commit: (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7) || null,
+      branch: process.env.VERCEL_GIT_COMMIT_REF || null
+    };
     try {
       await ensureReady();
-      return sendJson(res, 200, { ok: true, storage: store.describe() });
+      return sendJson(res, 200, { ok: true, storage: store.describe(), credentials: store.credentials(), build });
     } catch (err) {
-      return sendJson(res, 503, { ok: false, error: err.message });
+      return sendJson(res, 503, { ok: false, error: err.message, credentials: store.credentials(), build });
     }
   }
 
