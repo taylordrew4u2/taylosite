@@ -133,7 +133,7 @@ admin panel shows which is live under **Overview → Site status**, and so does
 | --- | --- | --- | --- |
 | **filesystem** (default) | `data/site.json`, `data/backups/` | `data/sessions.json` | `data/uploads/` |
 | **github** | the repo, via the Contents API — commit history is the snapshot list | signed cookies | committed to `data/uploads/` |
-| **serverless** | Redis | Redis, with expiry | Vercel Blob, or Redis when no Blob token is set |
+| **serverless** | Redis | Redis, with expiry | Vercel Blob when configured, otherwise Redis; older Redis images stay readable either way |
 
 The filesystem backend is used whenever no Redis credentials are present — local
 development, a VPS, Fly.io, Railway, Render with a disk. Each save copies the
@@ -197,8 +197,11 @@ about. Add `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (or the
 `KV_REST_API_*` pair that Vercel's own integration sets) and redeploy. Redis
 takes precedence over the GitHub backend when both are configured.
 
-Adding **Blob** on top sets `BLOB_READ_WRITE_TOKEN` and moves images there,
-served from Vercel's CDN with the limit raised to 8 MB.
+Adding **Blob** on top sets `BLOB_READ_WRITE_TOKEN`. New uploads then go to
+Blob, are served from Vercel's CDN, and the size limit rises from 700 KB to
+8 MB. Images uploaded before Blob was connected stay in Redis and keep working
+— listings, pages and deletes fall back there — so adding Blob never orphans an
+existing photo and nothing needs migrating.
 
 Until one of these is configured, every page answers with a "Setup needed"
 notice naming both options rather than a blank 500.

@@ -194,3 +194,78 @@ test('without Blob, images are kept in Redis and stay under its request ceiling'
 
   await redis.close();
 });
+
+test('adding Blob does not orphan images already in Redis', async (t) => {
+  const { composeImageStores } = require('../lib/storage');
+
+  // Two fakes standing in for Blob (new) and Redis (what is already there).
+  const makeStore = (label, seed) => {
+    const files = new Map(seed || []);
+    return {
+      limit: label === 'blob' ? 8 * 1024 * 1024 : 700 * 1024,
+      calls: [],
+      async put(name, buffer) {
+        this.calls.push('put');
+        files.set(name, buffer);
+        return { name, url: `/${label}/${name}`, size: buffer.length };
+      },
+      async list() {
+        return [...files.keys()].map((name) => ({ name, url: `/${label}/${name}`, size: 1, createdAt: name }));
+      },
+      async remove(name) {
+        if (!files.has(name)) throw new Error('File not found');
+        files.delete(name);
+      },
+      async read(name) {
+        return files.has(name) ? { buffer: files.get(name), contentType: 'image/png', from: label } : null;
+      }
+    };
+  };
+
+  const blob = makeStore('blob');
+  const redis = makeStore('redis', [['old-photo.png', Buffer.from('old')]]);
+  const images = composeImageStores(blob, redis);
+
+  await t.test('the older image is still listed', async () => {
+    assert.deepStrictEqual((await images.list()).map((i) => i.name), ['old-photo.png']);
+  });
+
+  await t.test('and still readable, from where it actually is', async () => {
+    const found = await images.read('old-photo.png');
+    assert.strictEqual(found.from, 'redis');
+    assert.ok(found.buffer.equals(Buffer.from('old')));
+  });
+
+  await t.test('new uploads go to the new store', async () => {
+    await images.put('new-photo.png', Buffer.from('new'), 'image/png');
+    assert.deepStrictEqual(blob.calls, ['put']);
+    assert.strictEqual((await images.read('new-photo.png')).from, 'blob');
+  });
+
+  await t.test('both appear together, newest first', async () => {
+    assert.deepStrictEqual((await images.list()).map((i) => i.name), ['old-photo.png', 'new-photo.png']);
+  });
+
+  await t.test('the limit is the new store’s, not the old one’s', () => {
+    assert.strictEqual(images.limit, 8 * 1024 * 1024);
+  });
+
+  await t.test('deleting reaches whichever store holds the file', async () => {
+    await images.remove('old-photo.png');
+    await images.remove('new-photo.png');
+    assert.deepStrictEqual(await images.list(), []);
+  });
+
+  await t.test('a genuinely missing file still raises', async () => {
+    await assert.rejects(() => images.remove('never-existed.png'));
+  });
+
+  await t.test('a failing new store does not hide the older images', async () => {
+    const broken = { limit: 1, put: async () => {}, list: async () => { throw new Error('Blob down'); },
+                     remove: async () => { throw new Error('Blob down'); }, read: async () => { throw new Error('Blob down'); } };
+    const survivor = makeStore('redis', [['kept.png', Buffer.from('kept')]]);
+    const resilient = composeImageStores(broken, survivor);
+    assert.deepStrictEqual((await resilient.list()).map((i) => i.name), ['kept.png']);
+    assert.strictEqual((await resilient.read('kept.png')).from, 'redis');
+  });
+});
