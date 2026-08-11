@@ -1119,7 +1119,7 @@ a {
   }
 }
 
-/* ------------------------------------------------------- shows dashboard */
+/* -------------------------------------------------------- data tables */
 
 .chips {
   display: flex;
@@ -1165,33 +1165,41 @@ a {
 
 /* A plain block wrapper owns the horizontal scroll; a flex/grid container
    does not reliably keep its own overflow out of the page's scroll width. */
-.show-scroll {
+.dtable-scroll {
   overflow-x: auto;
   border: 2px solid var(--line);
   max-width: 100%;
 }
 
-.show-table {
+.dtable {
   display: flex;
   flex-direction: column;
   min-width: 900px;
 }
 
 /* handle · date · time · venue · city · link · sold · live · tools */
-.show-row {
-  display: grid;
+.dtable-shows .dtable-row {
   grid-template-columns: 24px 132px 88px minmax(150px, 1.4fr) minmax(120px, 1fr) minmax(150px, 1.2fr) 44px 44px 74px;
+}
+
+/* handle · label · sub-label · url · clicks · featured · live · tools */
+.dtable-links .dtable-row {
+  grid-template-columns: 24px minmax(130px, 1fr) minmax(140px, 1.1fr) minmax(180px, 1.6fr) 62px 52px 44px 44px;
+}
+
+.dtable-row {
+  display: grid;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
   border-bottom: 1px solid var(--line-soft);
 }
 
-.show-row:last-child {
+.dtable-row:last-child {
   border-bottom: 0;
 }
 
-.show-head {
+.dtable-head {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -1206,23 +1214,23 @@ a {
   padding-bottom: 10px;
 }
 
-.show-row:not(.show-head):hover {
+.dtable-row:not(.dtable-head):hover {
   background: var(--card-2);
 }
 
-.show-row.is-past .input {
+.dtable-row.is-past .input {
   color: var(--muted);
 }
 
-.show-row.is-off {
+.dtable-row.is-off {
   opacity: 0.55;
 }
 
-.show-row.is-dragging {
+.dtable-row.is-dragging {
   opacity: 0.4;
 }
 
-.show-row.is-drop-target {
+.dtable-row.is-drop-target {
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
@@ -1268,7 +1276,7 @@ a {
 }
 
 /* The expanded strip spans the whole row. */
-.show-extra {
+.dtable-extra {
   grid-column: 1 / -1;
   display: flex;
   gap: 12px;
@@ -1308,42 +1316,70 @@ a {
    forcing the page sideways. Sideways scrolling a dense table on a phone is
    worse than stacking it. */
 @media (max-width: 1240px) {
-  .show-scroll {
+  .dtable-scroll {
     overflow-x: visible;
   }
 
-  .show-table {
+  .dtable {
     min-width: 0;
   }
 
-  .show-head {
+  .dtable-head {
     display: none;
   }
 
-  .show-row {
-    grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr) 44px 44px 74px;
+  .dtable-row {
     row-gap: 6px;
     padding: 12px 10px;
     border-bottom: 2px solid var(--line-soft);
   }
 
-  /* line 1: handle · date · time · sold · live · tools
-     line 2: venue (wide) · city · link                       */
-  .show-row .cell-venue {
+  .dtable-shows .dtable-row {
+    grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr) 44px 44px 74px;
+  }
+
+  /* handle · label · clicks · featured · live · delete, then sub-label + url */
+  .dtable-links .dtable-row {
+    grid-template-columns: 24px minmax(0, 1fr) 62px 52px 44px 44px;
+  }
+
+  .dtable-links .cell-sublabel {
     grid-column: 2 / 4;
   }
 
-  .show-row .cell-city {
+  .dtable-links .cell-linkurl {
+    grid-column: 4 / 7;
+  }
+
+  /* line 1: handle · date · time · sold · live · tools
+     line 2: venue (wide) · city · link                       */
+  .dtable-row .cell-venue {
+    grid-column: 2 / 4;
+  }
+
+  .dtable-row .cell-city {
     grid-column: 2 / 3;
   }
 
-  .show-row .cell-url {
+  .dtable-row .cell-url {
     grid-column: 3 / 7;
   }
 
-  .show-extra {
+  .dtable-extra {
     padding-left: 0;
     flex-direction: column;
     gap: 8px;
   }
+}
+
+.cell-clicks {
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  text-align: right;
+  padding-right: 6px;
+}
+
+.dtable-row.is-featured .cell-label {
+  border-left: 3px solid var(--accent);
 }

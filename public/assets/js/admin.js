@@ -428,48 +428,86 @@
   function sectionLinks() {
     var links = state.site.links;
     var items = links.items || [];
-    var body = items.length
-      ? '<div class="repeat-list" data-sortable="links.items">' +
+    var live = items.filter(function (l) {
+      return l.visible !== false;
+    });
+    var totalClicks = items.reduce(function (sum, l) {
+      return sum + (Number(l.clicks) || 0);
+    }, 0);
+    var top = items.slice().sort(function (a, b) {
+      return (Number(b.clicks) || 0) - (Number(a.clicks) || 0);
+    })[0];
+
+    var stats =
+      '<div class="stat-grid">' +
+      [
+        { value: live.length + ' / ' + items.length, label: 'Live' },
+        { value: totalClicks, label: 'Clicks' },
+        {
+          value: top && top.clicks ? top.clicks : '—',
+          label: top && top.clicks ? 'Most clicked · ' + top.label : 'No clicks yet'
+        },
+        { value: items.filter(function (l) { return l.featured; }).length, label: 'Featured' }
+      ]
+        .map(function (item) {
+          return (
+            '<div class="stat"><div class="stat-value">' + esc(item.value) + '</div>' +
+            '<div class="stat-label">' + esc(item.label) + '</div></div>'
+          );
+        })
+        .join('') +
+      '</div>';
+
+    var header =
+      '<div class="dtable-row dtable-head">' +
+      '<span></span><span>Label</span><span>Sub-label</span><span>URL</span>' +
+      '<span>Clicks</span><span>Feat</span><span>Live</span><span></span>' +
+      '</div>';
+
+    var table = items.length
+      ? '<div class="dtable-scroll"><div class="dtable dtable-links" data-sortable="links.items">' +
+        header +
         items
           .map(function (item, i) {
-            var badges = [];
-            if (item.featured) badges.push({ text: 'Featured', cls: 'is-accent' });
-            if (item.visible === false) badges.push({ text: 'Hidden', cls: 'is-hidden' });
-            badges.push({ text: (item.clicks || 0) + ' clicks' });
-            return repeatItem({
-              list: 'links.items',
-              index: i,
-              title: item.label || 'Untitled link',
-              badges: badges,
-              body:
-                '<div class="grid-2">' +
-                field({ label: 'Label', path: 'links.items.' + i + '.label', value: item.label, titleSource: true }) +
-                field({ label: 'Sub-label', path: 'links.items.' + i + '.sublabel', value: item.sublabel }) +
-                '</div>' +
-                field({ label: 'URL', path: 'links.items.' + i + '.url', value: item.url, hint: 'https://…, mailto:… or tel:… — plain domains get https:// added.' }) +
-                '<div class="image-buttons">' +
-                toggleField({ label: 'Visible', path: 'links.items.' + i + '.visible', checked: item.visible !== false }) +
-                toggleField({ label: 'Featured', path: 'links.items.' + i + '.featured', checked: !!item.featured }) +
-                '</div>'
-            });
+            return (
+              '<div class="dtable-row' + (item.visible === false ? ' is-off' : '') +
+              (item.featured ? ' is-featured' : '') +
+              '" data-sortable-item data-list="links.items" data-index="' + i + '" draggable="true">' +
+              '<span class="drag-handle" title="Drag to reorder">⠿</span>' +
+              cell('label', 'links.items.' + i + '.label', item.label, 'Label', 'text', 'Instagram') +
+              cell('sublabel', 'links.items.' + i + '.sublabel', item.sublabel, 'Sub-label', 'text', 'Clips and day-to-day') +
+              cell('linkurl', 'links.items.' + i + '.url', item.url, 'URL', 'text', 'https://…') +
+              '<span class="cell-clicks" title="Clicks counted when a visitor follows this link">' +
+              esc(Number(item.clicks) || 0) + '</span>' +
+              miniToggle('links.items.' + i + '.featured', !!item.featured, 'Featured') +
+              miniToggle('links.items.' + i + '.visible', item.visible !== false, 'Visible on the site') +
+              '<span class="row-tools">' +
+              '<button class="icon-btn icon-btn-sm btn-danger" type="button" data-action="list-remove" data-list="links.items" data-index="' + i + '" title="Delete">✕</button>' +
+              '</span>' +
+              '</div>'
+            );
           })
           .join('') +
-        '</div>'
+        '</div></div>'
       : emptyState('No links yet — add the first one.');
 
     return (
+      stats +
+      card('Links', table, {
+        subtitle: 'Drag to reorder. Featured links get the accent bar on the links page.',
+        actions:
+          '<button class="btn btn-sm" type="button" data-action="sort-links" title="Order by clicks, most first">Sort by clicks</button>' +
+          '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="links.items">Add link</button>'
+      }) +
       card(
-        'Links page header',
+        'Page header',
         '<div class="grid-2">' +
           field({ label: 'Kicker', path: 'links.kicker', value: links.kicker }) +
           field({ label: 'Title', path: 'links.title', value: links.title }) +
           '</div>' +
-          textareaField({ label: 'Intro', path: 'links.intro', value: links.intro, rows: 2 })
-      ) +
-      card('Links', body, {
-        subtitle: 'Drag the handle or use the arrows to reorder.',
-        actions: '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="links.items">Add link</button>'
-      })
+          textareaField({ label: 'Intro', path: 'links.intro', value: links.intro, rows: 2 }),
+        { subtitle: 'The wording above the list on the public links page.' }
+      )
     );
   }
 
@@ -540,21 +578,21 @@
       .join('');
 
     var header =
-      '<div class="show-row show-head">' +
+      '<div class="dtable-row dtable-head">' +
       '<span></span><span>Date</span><span>Time</span><span>Venue</span><span>City</span>' +
       '<span>Ticket link</span><span>Sold</span><span>Live</span><span></span>' +
       '</div>';
 
     var body = shows.length
       ? (rows.length
-          ? '<div class="show-scroll"><div class="show-table" data-sortable="shows">' + header +
+          ? '<div class="dtable-scroll"><div class="dtable dtable-shows" data-sortable="shows">' + header +
             rows
               .map(function (row) {
                 var show = row.show;
                 var i = row.index;
                 var open = (state.expandedShows || {})[show.id];
                 return (
-                  '<div class="show-row' + (isPast(show) ? ' is-past' : '') +
+                  '<div class="dtable-row' + (isPast(show) ? ' is-past' : '') +
                   (show.visible === false ? ' is-off' : '') + (open ? ' is-open' : '') +
                   '" data-sortable-item data-list="shows" data-index="' + i + '" draggable="true">' +
                   '<span class="drag-handle" title="Drag to reorder">⠿</span>' +
@@ -570,7 +608,7 @@
                   '<button class="icon-btn icon-btn-sm btn-danger" type="button" data-action="list-remove" data-list="shows" data-index="' + i + '" title="Delete">✕</button>' +
                   '</span>' +
                   (open
-                    ? '<div class="show-extra">' +
+                    ? '<div class="dtable-extra">' +
                       '<label class="mini-field"><span>Button label</span><input class="input input-sm" type="text" data-path="shows.' + i + '.ctaLabel" value="' + esc(show.ctaLabel || '') + '" placeholder="Tickets"></label>' +
                       '<label class="mini-field mini-field-wide"><span>Note</span><input class="input input-sm" type="text" data-path="shows.' + i + '.note" value="' + esc(show.note || '') + '" placeholder="Late show · 18+"></label>' +
                       '</div>'
@@ -1402,6 +1440,14 @@
     if (action === 'toggle-show') {
       var id = trigger.dataset.id;
       state.expandedShows[id] = !state.expandedShows[id];
+      return render({ preserveFocus: false });
+    }
+    if (action === 'sort-links') {
+      state.site.links.items = (state.site.links.items || []).slice().sort(function (a, b) {
+        return (Number(b.clicks) || 0) - (Number(a.clicks) || 0);
+      });
+      markDirty();
+      toast('Sorted by clicks — save to keep it', 'info');
       return render({ preserveFocus: false });
     }
     if (action === 'sort-shows') {
