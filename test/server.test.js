@@ -572,6 +572,19 @@ test('changing the password invalidates signed cookies too', async () => {
   }
 });
 
+test('Blob alone is called out as not enough, and the deployment names itself', async () => {
+  await withServer(
+    { VERCEL: '1', VERCEL_ENV: 'preview', VERCEL_URL: 'taylosite-abc123.vercel.app', BLOB_READ_WRITE_TOKEN: 'blob_test', GITHUB_TOKEN: null, GH_TOKEN: null },
+    async (server) => {
+      const page = await server.call('/');
+      assert.strictEqual(page.status, 503);
+      assert.match(page.text, /Blob only stores images/, 'the Blob-is-not-content misconception is named');
+      assert.match(page.text, /environment: preview/, 'so you can see this is not production');
+      assert.match(page.text, /taylosite-abc123\.vercel\.app/, 'and which deployment it is');
+    }
+  );
+});
+
 test('on Vercel without a store, the site explains itself instead of crashing', async () => {
   await withServer({ VERCEL: '1', GITHUB_TOKEN: null, GH_TOKEN: null }, async (server) => {
     const page = await server.call('/');
@@ -579,6 +592,7 @@ test('on Vercel without a store, the site explains itself instead of crashing', 
     assert.match(page.text, /Setup needed/);
     assert.match(page.text, /GITHUB_TOKEN/, 'the no-extra-service option is offered');
     assert.match(page.text, /Redis/, 'and the database option too');
+    assert.match(page.text, /per environment/, 'and the reason a preview build can differ from production');
 
     const health = await server.call('/healthz');
     assert.strictEqual(health.status, 503);

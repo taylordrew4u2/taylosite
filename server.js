@@ -521,6 +521,14 @@ async function handle(req, res) {
 
 /** A misconfigured deployment should say so in plain words, not throw a stack. */
 function sendSetupError(res, err) {
+  // Which deployment this is matters: a preview build does not automatically
+  // get variables scoped to Production, and that looks identical from outside.
+  const where = [
+    process.env.VERCEL_ENV ? `environment: ${process.env.VERCEL_ENV}` : '',
+    process.env.VERCEL_URL ? `deployment: ${process.env.VERCEL_URL}` : ''
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>Setup needed</title><style>
 body{background:#0b0b0b;color:#fff;font:16px/1.6 Helvetica,Arial,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;padding:24px}
@@ -532,6 +540,7 @@ code{background:#1a1a1a;padding:2px 6px}
 <p style="letter-spacing:.2em;text-transform:uppercase;font-size:.7rem;color:#8d8d8d;margin:0">Taylor Drew</p>
 <h1>Setup needed</h1><div class="rule"></div>
 <p>${render.esc(err.message)}</p>
+${where ? `<p style="color:#8d8d8d;font-size:.85rem">This page is being served by — ${render.esc(where)}</p>` : ''}
 <p style="color:#8d8d8d">Once the storage integration is connected and the project redeployed, this page becomes the site.</p>
 </main></body></html>`;
   send(res, 503, html, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-store' });
