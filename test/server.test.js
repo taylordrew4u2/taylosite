@@ -117,6 +117,22 @@ test('public pages render', async () => {
   });
 });
 
+test('pages carry the meta a phone needs', async () => {
+  await withServer({}, async (server) => {
+    for (const page of ['/', '/about', '/links']) {
+      const { text } = await server.call(page);
+      assert.match(
+        text,
+        /<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">/,
+        `${page} opts into the display cutout area so safe-area insets resolve`
+      );
+      // The browser tints its chrome with this. The accent would draw a
+      // coloured band above the header instead of continuing it.
+      assert.match(text, /<meta name="theme-color" content="#0b0b0b">/, `${page} matches the page background`);
+    }
+  });
+});
+
 test('content is escaped on the way out', async () => {
   await withServer({}, async (server) => {
     await server.login();

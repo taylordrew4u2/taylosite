@@ -480,8 +480,9 @@
               '<span class="cell-clicks" title="Clicks counted when a visitor follows this link">' +
               esc(Number(item.clicks) || 0) + '</span>' +
               miniToggle('links.items.' + i + '.featured', !!item.featured, 'Featured') +
-              miniToggle('links.items.' + i + '.visible', item.visible !== false, 'Visible on the site') +
+              miniToggle('links.items.' + i + '.visible', item.visible !== false, 'Visible on the site', 'Live') +
               '<span class="row-tools">' +
+              reorderButtons('links.items', i) +
               '<button class="icon-btn icon-btn-sm btn-danger" type="button" data-action="list-remove" data-list="links.items" data-index="' + i + '" title="Delete">✕</button>' +
               '</span>' +
               '</div>'
@@ -602,8 +603,9 @@
                   cell('city', 'shows.' + i + '.city', show.city, 'City', 'text', 'City, ST') +
                   cell('url', 'shows.' + i + '.url', show.url, 'Ticket link', 'text', 'https://…') +
                   miniToggle('shows.' + i + '.soldOut', !!show.soldOut, 'Sold out') +
-                  miniToggle('shows.' + i + '.visible', show.visible !== false, 'Visible on the site') +
+                  miniToggle('shows.' + i + '.visible', show.visible !== false, 'Visible on the site', 'Live') +
                   '<span class="row-tools">' +
+                  reorderButtons('shows', i) +
                   '<button class="icon-btn icon-btn-sm" type="button" data-action="toggle-show" data-id="' + esc(show.id) + '" title="More" aria-expanded="' + (open ? 'true' : 'false') + '">' + (open ? '−' : '+') + '</button>' +
                   '<button class="icon-btn icon-btn-sm btn-danger" type="button" data-action="list-remove" data-list="shows" data-index="' + i + '" title="Delete">✕</button>' +
                   '</span>' +
@@ -633,18 +635,38 @@
     );
   }
 
+  // Touch screens never fire the drag events the reorder handle relies on, so
+  // narrow layouts get buttons instead. Hidden by CSS wherever dragging works.
+  function reorderButtons(list, index) {
+    return [-1, 1]
+      .map(function (dir) {
+        return (
+          '<button class="icon-btn icon-btn-sm reorder-btn" type="button" data-action="list-move"' +
+          ' data-list="' + esc(list) + '" data-index="' + index + '" data-dir="' + dir + '"' +
+          ' title="Move ' + (dir < 0 ? 'up' : 'down') + '">' + (dir < 0 ? '\u2191' : '\u2193') + '</button>'
+        );
+      })
+      .join('');
+  }
+
+  // The wrapper carries the column name so a stacked phone row can show it.
+  // Wide enough for the header strip, the name is hidden and the header labels.
   function cell(kind, path, value, label, type, placeholder) {
     return (
-      '<input class="input input-sm cell-' + kind + '" type="' + (type || 'text') + '" data-path="' + esc(path) + '"' +
-      ' aria-label="' + esc(label) + '" placeholder="' + esc(placeholder || '') + '" value="' + esc(value || '') + '">'
+      '<label class="cell cell-' + kind + '"><span class="cell-name">' + esc(label) + '</span>' +
+      '<input class="input input-sm" type="' + (type || 'text') + '" data-path="' + esc(path) + '"' +
+      ' aria-label="' + esc(label) + '" placeholder="' + esc(placeholder || '') + '" value="' + esc(value || '') + '"></label>'
     );
   }
 
-  function miniToggle(path, checked, label) {
+  // `short` is the caption a stacked phone row shows beside the switch; the
+  // screen-reader name stays the longer, fuller `label`.
+  function miniToggle(path, checked, label, short) {
     return (
       '<label class="switch switch-mini" title="' + esc(label) + '">' +
       '<input type="checkbox" data-path="' + esc(path) + '" data-rerender="1"' + (checked ? ' checked' : '') + '>' +
-      '<span class="sr-only">' + esc(label) + '</span></label>'
+      '<span class="sr-only">' + esc(label) + '</span>' +
+      '<span class="switch-name" aria-hidden="true">' + esc(short || label) + '</span></label>'
     );
   }
 
@@ -1694,6 +1716,18 @@
 
   document.getElementById('nav-toggle').addEventListener('click', function () {
     el.app.classList.toggle('nav-open');
+  });
+
+  // On a phone the drawer covers the panel, so a tap on what is left of it,
+  // or Escape, is the expected way out.
+  el.app.addEventListener('click', function (event) {
+    if (!el.app.classList.contains('nav-open')) return;
+    if (event.target.closest('.sidebar') || event.target.closest('#nav-toggle')) return;
+    el.app.classList.remove('nav-open');
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') el.app.classList.remove('nav-open');
   });
 
   document.getElementById('sign-out').addEventListener('click', function () {

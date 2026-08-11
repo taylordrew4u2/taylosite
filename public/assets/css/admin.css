@@ -1100,6 +1100,16 @@ a {
     transform: none;
   }
 
+  /* Dims the panel behind the drawer so the two layers read apart, and gives
+     the tap-to-close listener something to land on. */
+  .app.nav-open::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgba(0, 0, 0, 0.55);
+  }
+
   .nav-toggle {
     display: inline-grid;
   }
@@ -1232,6 +1242,29 @@ a {
 
 .dtable-row.is-drop-target {
   box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Wherever the drag handle works, it is the way to reorder. */
+.reorder-btn {
+  display: none;
+}
+
+/* The sticky header strip names the columns wherever it fits. */
+.cell-name,
+.switch-name {
+  display: none;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .input-sm {
@@ -1372,6 +1405,114 @@ a {
   }
 }
 
+/* On a phone even two columns leaves the label a sliver, so a row becomes a
+   stack: one field per line, named, with the switches gathered underneath. */
+@media (max-width: 700px) {
+  /* Side by side, the title column collapses to one word per line and the
+     buttons run off the edge. */
+  .card-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .card-head .card-actions {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .chips {
+    flex-wrap: wrap;
+    margin-right: 0;
+  }
+
+  .dtable-links .dtable-row,
+  .dtable-shows .dtable-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    row-gap: 10px;
+    padding: 14px 12px;
+  }
+
+  .dtable-links .dtable-row > *,
+  .dtable-shows .dtable-row > * {
+    grid-column: 1;
+  }
+
+  .cell-name {
+    display: block;
+  }
+
+  .dtable-row .input-sm {
+    min-height: 40px;
+  }
+
+  .dtable-row .drag-handle {
+    display: none;
+  }
+
+  .dtable-row .reorder-btn {
+    display: inline-grid;
+  }
+
+  /* clicks · featured · live · delete, gathered on one line under the fields */
+  .dtable-links .dtable-row {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .dtable-shows .dtable-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dtable-links .dtable-row > .cell,
+  .dtable-shows .dtable-row > .cell {
+    grid-column: 1 / -1;
+  }
+
+  .dtable-links .dtable-row .cell-clicks {
+    grid-column: 1;
+    text-align: left;
+    padding-right: 0;
+    align-self: center;
+  }
+
+  .dtable-links .dtable-row .switch-mini,
+  .dtable-shows .dtable-row .switch-mini {
+    grid-column: auto;
+    align-self: center;
+  }
+
+  /* Sharing a line with the switches over-constrains the tracks and clips
+     their captions, so the buttons take a line of their own. */
+  .dtable-links .dtable-row .row-tools,
+  .dtable-shows .dtable-row .row-tools {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  /* Unlabelled switches need names once the header strip is gone. */
+  .dtable-row .switch-name {
+    display: inline;
+  }
+
+  .dtable-row .switch-mini {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 12px;
+  }
+
+  .dtable-row.is-featured .cell-label {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .dtable-row.is-featured .cell-label .input {
+    border-left: 3px solid var(--accent);
+  }
+}
+
 .cell-clicks {
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
@@ -1382,4 +1523,16 @@ a {
 
 .dtable-row.is-featured .cell-label {
   border-left: 3px solid var(--accent);
+}
+
+/* iOS Safari zooms the page in whenever a focused field is smaller than 16px,
+   and it never zooms back out. Full-size text below the breakpoint where the
+   panel is being used on a phone keeps the view where the editor left it. */
+@media (max-width: 860px) {
+  .input,
+  .textarea,
+  .select,
+  .input-sm {
+    font-size: 16px;
+  }
 }

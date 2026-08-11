@@ -14,8 +14,12 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  /* Phone browsers shrink the viewport as the URL bar hides; svh stays put. */
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
+  /* Grey flash on tap looks like a bug — the :active states below replace it. */
+  -webkit-tap-highlight-color: transparent;
   background: var(--bg);
   color: var(--text);
   font-family: 'Helvetica Neue', Helvetica, Arial, 'Segoe UI', sans-serif;
@@ -88,6 +92,8 @@ img {
   line-height: 0.84;
   letter-spacing: -0.035em;
   text-transform: uppercase;
+  /* A single long word must break rather than push the page sideways. */
+  overflow-wrap: break-word;
 }
 
 .display-sm {
@@ -194,15 +200,22 @@ img {
   transition: transform 0.18s ease;
 }
 
-.nav-link:hover::after,
 .nav-link.is-active::after {
   transform: scaleX(1);
 }
 
+/* Touch screens have no hover to leave; without this guard a tapped card keeps
+   its hover colour until you tap somewhere else, which reads as a stuck state. */
+@media (hover: hover) {
+  .nav-link:hover::after {
+    transform: scaleX(1);
+  }
+}
+
 .menu-toggle {
   display: none;
-  width: 40px;
-  height: 32px;
+  width: 46px;
+  height: 44px;
   flex-direction: column;
   justify-content: center;
   gap: 7px;
@@ -256,18 +269,25 @@ img {
   transform: translateY(1px);
 }
 
-.btn-accent:hover {
-  filter: brightness(1.1);
-}
-
 .btn-ghost {
   background: transparent;
   color: var(--text);
 }
 
-.btn-ghost:hover {
+.btn-ghost:active {
   background: var(--text);
   color: var(--bg);
+}
+
+@media (hover: hover) {
+  .btn-accent:hover {
+    filter: brightness(1.1);
+  }
+
+  .btn-ghost:hover {
+    background: var(--text);
+    color: var(--bg);
+  }
 }
 
 /* ------------------------------------------------------------------ main */
@@ -530,13 +550,24 @@ img {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.link-card:hover {
+.link-card:active {
   background: var(--accent);
   color: var(--accent-text);
 }
 
-.link-card:hover .link-sub {
+.link-card:active .link-sub {
   color: var(--accent-text);
+}
+
+@media (hover: hover) {
+  .link-card:hover {
+    background: var(--accent);
+    color: var(--accent-text);
+  }
+
+  .link-card:hover .link-sub {
+    color: var(--accent-text);
+  }
 }
 
 .link-card.is-featured {
@@ -553,6 +584,7 @@ img {
   background: var(--accent);
 }
 
+.link-card.is-featured:active::before,
 .link-card.is-featured:hover::before {
   background: var(--accent-text);
 }
@@ -562,6 +594,8 @@ img {
   font-weight: 900;
   letter-spacing: -0.01em;
   text-transform: uppercase;
+  /* Keeps a long label clear of the arrow parked in the corner. */
+  padding-right: 44px;
 }
 
 .link-sub {
@@ -578,9 +612,15 @@ img {
   transition: transform 0.18s ease;
 }
 
-.link-card:hover .link-arrow,
-.link-card:focus-visible .link-arrow {
+.link-card:focus-visible .link-arrow,
+.link-card:active .link-arrow {
   transform: translateX(6px);
+}
+
+@media (hover: hover) {
+  .link-card:hover .link-arrow {
+    transform: translateX(6px);
+  }
 }
 
 .link-grid .muted {
@@ -676,6 +716,10 @@ img {
 }
 
 .show-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -685,10 +729,18 @@ img {
   white-space: nowrap;
 }
 
-a.show-cta:hover {
+a.show-cta:active {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-text);
+}
+
+@media (hover: hover) {
+  a.show-cta:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
 }
 
 .show-cta.is-soldout {
@@ -726,12 +778,15 @@ a.show-cta:hover {
   letter-spacing: 0.12em;
 }
 
-a.footer-right:hover {
-  color: var(--accent);
+@media (hover: hover) {
+  a.footer-right:hover {
+    color: var(--accent);
+  }
 }
 
 /* ------------------------------------------------------------ responsive */
 
+/* Tablets and phones: the two-column layouts become one column. */
 @media (max-width: 900px) {
   .menu-toggle {
     display: flex;
@@ -740,15 +795,18 @@ a.footer-right:hover {
   .topbar {
     flex-wrap: wrap;
     padding: 14px 18px;
+    /* Landscape phones put the notch beside the content. */
+    padding-left: max(18px, env(safe-area-inset-left));
+    padding-right: max(18px, env(safe-area-inset-right));
   }
 
   .topbar-right {
     order: 3;
     width: 100%;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 18px;
-    padding-top: 18px;
+    align-items: stretch;
+    gap: 0;
+    padding-top: 10px;
     display: none;
   }
 
@@ -758,8 +816,38 @@ a.footer-right:hover {
 
   .nav {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 14px;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  /* Full-width rows: a thumb-sized target instead of a word-sized one. */
+  .nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 52px;
+    padding: 0;
+    font-size: 0.86rem;
+    border-top: 1px solid color-mix(in srgb, var(--line) 28%, transparent);
+  }
+
+  .nav-link::after {
+    bottom: 12px;
+    right: auto;
+    width: 2.2em;
+  }
+
+  /* Comfortable targets for a thumb: the logo and the footer email are links
+     too, and at their natural size they are barely half a fingertip tall. */
+  .logo {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  a.footer-right {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
   }
 
   .hero,
@@ -783,8 +871,14 @@ a.footer-right:hover {
     padding-top: 40px;
   }
 
-  .hero-photo-wrap {
-    min-height: 240px;
+  /* Left to itself the photo panel grows to the image's full height and eats a
+     whole screen of scrolling. A fixed ratio keeps it a deliberate block. */
+  .hero-photo-wrap,
+  .side-photo {
+    flex: none;
+    aspect-ratio: 4 / 5;
+    min-height: 0;
+    max-height: 70svh;
   }
 
   .hero-upcoming,
@@ -795,17 +889,212 @@ a.footer-right:hover {
   .footer,
   .facts,
   .quote {
-    padding-left: 18px;
-    padding-right: 18px;
+    padding-left: max(18px, env(safe-area-inset-left));
+    padding-right: max(18px, env(safe-area-inset-right));
   }
 
   .link-card {
     border-right: 0;
   }
 
+  .quote {
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+  }
+
+  .quote:last-child {
+    border-bottom: 0;
+  }
+
   .footer {
     justify-content: flex-start;
     gap: 10px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}
+
+/* A phone held sideways is short but wide. Stacking the hero there leaves a
+   headline alone on screen and pushes the photo out of sight, so the two
+   columns come back while the menu stays behind the hamburger. */
+@media (max-width: 900px) and (min-width: 680px) and (orientation: landscape) {
+  .hero {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+
+  .split {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  }
+
+  .hero-side,
+  .split-side {
+    border-left: 2px solid var(--line);
+    border-top: 0;
+  }
+
+  .hero-photo-wrap,
+  .side-photo {
+    flex: 1;
+    aspect-ratio: auto;
+    max-height: none;
+    min-height: 200px;
+  }
+}
+
+/* Phones. Everything below here is about one narrow column of text. */
+@media (max-width: 640px) {
+  .page-head {
+    padding: 34px 18px 30px;
+  }
+
+  .page-head .eyebrow {
+    margin-bottom: 12px;
+  }
+
+  /* Without a subhead the rule left a dead band above the next section. */
+  .page-head .rule-accent {
+    margin: 22px 0 0;
+  }
+
+  .page-head .rule-accent:not(:last-child) {
+    margin-bottom: 22px;
+  }
+
+  .hero-main {
+    padding: 28px 18px 30px;
+  }
+
+  .hero-title {
+    margin-bottom: 26px;
+  }
+
+  .hero-main .rule-accent {
+    margin-bottom: 22px;
+  }
+
+  .hero-main .cta-row {
+    padding-top: 32px;
+  }
+
+  .hero-photo-wrap {
+    aspect-ratio: 1 / 1;
+  }
+
+  .split-main,
+  .dates {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+
+  .hero-upcoming {
+    padding-top: 24px;
+    padding-bottom: 24px;
+  }
+
+  .link-card {
+    padding: 24px 18px;
+  }
+
+  .link-label {
+    font-size: 1.3rem;
+    padding-right: 38px;
+  }
+
+  .link-arrow {
+    top: 50%;
+    right: 18px;
+    transform: translateY(-50%);
+  }
+
+  .link-card:focus-visible .link-arrow,
+  .link-card:active .link-arrow {
+    transform: translateY(-50%) translateX(6px);
+  }
+
+  /* A show row is date + details + a ticket button. Side by side in 300-odd
+     pixels the venue wraps one word per line, so the button moves underneath. */
+  .show {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    column-gap: 16px;
+    row-gap: 12px;
+    padding: 20px 0;
+  }
+
+  .show-date {
+    align-items: flex-start;
+    min-width: 0;
+    padding-top: 2px;
+  }
+
+  .show-cta {
+    grid-column: 2;
+    justify-self: start;
+    min-height: 44px;
+    padding: 9px 20px;
+    white-space: normal;
+  }
+
+  .quote {
+    padding: 26px 18px;
+  }
+
+  .quote p {
+    font-size: 1.05rem;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    letter-spacing: 0.14em;
+    /* Long email addresses must break rather than widen the page. */
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Small phones — the last place things run out of room. */
+@media (max-width: 400px) {
+  .logo {
+    font-size: 0.95rem;
+    letter-spacing: 0.12em;
+  }
+
+  .hero-main,
+  .page-head,
+  .split-main,
+  .dates,
+  .hero-upcoming,
+  .link-card,
+  .footer,
+  .facts,
+  .quote {
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+
+  /* Two buttons share the row evenly instead of one squeezing the other. */
+  .cta-row .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 12px 14px;
+    letter-spacing: 0.12em;
+  }
+
+  /* A right-aligned value beside its label leaves no room for an email. */
+  .fact {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+
+  .fact dd {
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .show-venue {
+    font-size: 0.98rem;
   }
 }
 
