@@ -96,7 +96,7 @@ admin content, plus one `schema.org` graph rather than loose objects: a
 `CollectionPage`), a `BreadcrumbList` on sub-pages, and an `Event` per upcoming
 show carrying a real `PostalAddress` and an `Offer` with its ticket link and
 sold-out status. The nodes cross-reference by `@id`, so a crawler can tell that
-the site, the page and the performer are one subject and the shows are his.
+the site, the page and the performer are one subject and the shows are theirs.
 
 Social profiles among the links become `sameAs` in the graph and `rel="me"` in
 the head, and a linked X profile supplies the Twitter card's `creator`. The
@@ -110,6 +110,36 @@ lazy, which is what the Core Web Vitals measurement actually rewards.
 There is a skip link, `aria-current` on the active nav item, real `<time>`
 elements on show dates, visible focus rings, a keyboard-closable mobile menu,
 and a `prefers-reduced-motion` opt-out.
+
+### On a phone
+
+Below 900px the two-column layouts become one and the menu goes behind a
+hamburger. The breakpoints under that are named after what runs out of room
+rather than after any device: 640px is where a show row stops trying to fit a
+date, a venue and a ticket button on one line, and 400px is where a fact's label
+and value stop sitting at opposite ends of their row.
+
+- Photo panels are given a ratio — square for the hero, 4:5 for the about page,
+  neither taller than 70% of the screen — instead of growing to the full height
+  of whatever was uploaded.
+- Hover styles sit behind `@media (hover: hover)` with `:active` equivalents. A
+  touch screen has no way to leave a hover, so without the guard a tapped link
+  card keeps its accent colour until you tap somewhere else.
+- Nav rows, the logo, the footer email, the menu button and the ticket buttons
+  are all at least 40px tall.
+- A phone held sideways gets the two columns back while keeping the hamburger —
+  844px of width is plenty for both, and stacking them there would leave the
+  headline alone on screen.
+- `viewport-fit=cover` and `env(safe-area-inset-*)` padding keep content clear
+  of a notch in landscape, and `theme-color` matches the page background so the
+  browser's chrome continues the header rather than banding it.
+
+The admin panel is meant to be usable from a phone as well. Below 700px its
+dense tables stack into one named field per line; reordering falls back from
+drag to buttons, since touch screens never fire drag events; fields are 16px so
+iOS does not zoom the page in on focus and leave it there; and the sidebar
+becomes a drawer that dims the panel behind it and closes on an outside tap or
+Escape.
 
 ### Security
 
@@ -127,7 +157,20 @@ and a `prefers-reduced-motion` opt-out.
 
 There are two storage backends and the right one is picked automatically. The
 admin panel shows which is live under **Overview → Site status**, and so does
-`/healthz`.
+`/healthz`:
+
+```json
+{ "ok": true,
+  "storage": "Redis + images in Redis",
+  "credentials": { "redis": true, "blob": false, "github": false },
+  "build": { "env": "production", "commit": "a9703b2", "branch": "main",
+             "deployment": "…vercel.app" } }
+```
+
+`credentials` reports presence only — never a token, never a store URL. Since
+environment variables are read at build time, `"blob": false` on a deployment
+you have just redeployed means the variable did not reach that environment, and
+an unchanged `commit` means the build itself did not change.
 
 | | Site content & snapshots | Sessions | Images |
 | --- | --- | --- | --- |
