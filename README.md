@@ -96,7 +96,7 @@ admin content, plus one `schema.org` graph rather than loose objects: a
 `CollectionPage`), a `BreadcrumbList` on sub-pages, and an `Event` per upcoming
 show carrying a real `PostalAddress` and an `Offer` with its ticket link and
 sold-out status. The nodes cross-reference by `@id`, so a crawler can tell that
-the site, the page and the performer are one subject and the shows are theirs.
+the site, the page and the performer are one subject and the shows are hers.
 
 Social profiles among the links become `sameAs` in the graph and `rel="me"` in
 the head, and a linked X profile supplies the Twitter card's `creator`. The
