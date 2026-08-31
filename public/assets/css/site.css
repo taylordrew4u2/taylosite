@@ -527,6 +527,88 @@ img {
   text-align: right;
 }
 
+/* credits */
+
+.credits .eyebrow {
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.credit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
+}
+
+.credit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 18px;
+  padding: 11px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 22%, transparent);
+}
+
+.credit:last-child {
+  border-bottom: 0;
+}
+
+.credit-title {
+  font-weight: 700;
+}
+
+/* An award is the thing worth noticing in a list of credits. */
+.credit.is-award .credit-title::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 9px;
+  vertical-align: 0.12em;
+  background: var(--accent);
+}
+
+a.credit-title {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+}
+
+.credit-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+@media (hover: hover) {
+  a.credit-title:hover {
+    border-bottom-color: var(--accent);
+  }
+}
+
+/* A linked credit is a link like any other, and needs a thumb-sized target. */
+@media (max-width: 900px) {
+  a.credit-title {
+    display: inline-block;
+    padding: 8px 0;
+  }
+
+  .credit {
+    padding: 6px 0;
+  }
+}
+
+@media (max-width: 400px) {
+  .credit {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .credit-meta {
+    text-align: left;
+  }
+}
+
 .quotes {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

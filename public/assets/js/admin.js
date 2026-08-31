@@ -52,7 +52,7 @@
     { id: 'home', label: 'Home page', hint: 'The hero, the photo and the upcoming block.', keys: ['home'] },
     { id: 'links', label: 'Links', hint: 'Every link, in the order they appear.', keys: ['links'] },
     { id: 'shows', label: 'Shows', hint: 'Tour dates shown on the home and links pages.', keys: ['shows'] },
-    { id: 'about', label: 'About page', hint: 'Bio, facts and press quotes.', keys: ['about'] },
+    { id: 'about', label: 'About page', hint: 'Bio, facts, credits and press quotes.', keys: ['about'] },
     { id: 'nav', label: 'Navigation', hint: 'The menu in the header.', keys: ['nav'] },
     { id: 'themes', label: 'Themes', hint: 'The colours the site is built from.', keys: ['themes'] },
     { id: 'footer', label: 'Footer', hint: 'The line at the bottom of every page.', keys: ['footer'] },
@@ -712,6 +712,34 @@
         '</div>'
       : emptyState('No facts listed.');
 
+    var credits = (about.credits || []).length
+      ? '<div class="repeat-list" data-sortable="about.credits">' +
+        about.credits
+          .map(function (c, i) {
+            var base = 'about.credits.' + i;
+            return repeatItem({
+              list: 'about.credits',
+              index: i,
+              title: c.title || 'Credit',
+              body:
+                '<div class="grid-2">' +
+                field({ label: 'Title', path: base + '.title', value: c.title, titleSource: true, placeholder: 'Orange Is the New Black' }) +
+                field({ label: 'Detail', path: base + '.detail', value: c.detail, placeholder: 'Best Writer, Alternative Film Festival' }) +
+                '</div>' +
+                '<div class="grid-2">' +
+                field({ label: 'Year', path: base + '.year', value: c.year, placeholder: '2025' }) +
+                field({ label: 'Link', path: base + '.url', value: c.url, placeholder: 'https://…', hint: 'Optional. IMDb, a festival page, the film itself.' }) +
+                '</div>' +
+                '<div class="row-switches">' +
+                toggleField({ label: 'This is an award', path: base + '.award', checked: !!c.award }) +
+                toggleField({ label: 'Show on the site', path: base + '.visible', checked: c.visible !== false }) +
+                '</div>'
+            });
+          })
+          .join('') +
+        '</div>'
+      : emptyState('No credits yet — add the ones worth naming.');
+
     var quotes = (about.quotes || []).length
       ? '<div class="repeat-list" data-sortable="about.quotes">' +
         about.quotes
@@ -746,6 +774,21 @@
         subtitle: 'Small label / value pairs beside the bio.',
         actions: '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="about.facts">Add fact</button>'
       }) +
+      card(
+        'Credits & awards',
+        field({
+          label: 'Section heading',
+          path: 'about.creditsLabel',
+          value: about.creditsLabel,
+          placeholder: 'Selected credits'
+        }) + credits,
+        {
+          subtitle:
+            'Listed on the about page, and published as structured data so search and answer engines can attribute them to you. Mark the awards — they are the part that carries weight.',
+          actions:
+            '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="about.credits">Add credit</button>'
+        }
+      ) +
       card('Press quotes', quotes, {
         actions: '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="about.quotes">Add quote</button>'
       })

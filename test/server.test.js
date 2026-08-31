@@ -260,6 +260,53 @@ test('the machine-readable surface answers for the site', async (t) => {
       );
     });
 
+    await t.test('awards and credits are published as data, not only as prose', async () => {
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: {
+          site: {
+            about: {
+              credits: [
+                { id: 'c1', title: 'Best Writer', detail: 'Alternative Film Festival', year: '2025', award: true, visible: true },
+                { id: 'c2', title: 'A Screen Credit', detail: 'Series', year: '2024', url: 'https://imdb.example/title', award: false, visible: true },
+                { id: 'c3', title: 'Kept Back', award: false, visible: false }
+              ]
+            }
+          }
+        }
+      });
+
+      const graph = JSON.parse(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/')).text)[1]
+      )['@graph'];
+      const person = graph.find((n) => n['@type'] === 'Person');
+      const works = graph.filter((n) => n['@type'] === 'CreativeWork');
+
+      assert.deepStrictEqual(person.award, ['Best Writer — Alternative Film Festival'], 'awards are a Person property');
+      assert.strictEqual(works.length, 1, 'the non-award credit becomes the work it is, and the hidden one does not');
+      assert.strictEqual(works[0].name, 'A Screen Credit');
+      assert.strictEqual(works[0].datePublished, '2024');
+      assert.deepStrictEqual(works[0].contributor, { '@id': person['@id'] }, 'and points back at her');
+
+      const about = (await server.call('/about')).text;
+      assert.match(about, /A Screen Credit/, 'a visitor sees the same list a crawler does');
+      assert.ok(!about.includes('Kept Back'), 'except what she chose to hide');
+    });
+
+    await t.test('an IMDb profile counts as the same person elsewhere', async () => {
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: { site: { links: { items: [{ id: 'l3', label: 'IMDb', url: 'https://www.imdb.com/name/nm123/', visible: true }] } } }
+      });
+      const graph = JSON.parse(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/')).text)[1]
+      )['@graph'];
+      assert.ok(
+        graph.find((n) => n['@type'] === 'Person').sameAs.includes('https://www.imdb.com/name/nm123/'),
+        'sameAs is what tells a knowledge graph the two profiles are one person'
+      );
+    });
+
     await t.test('the person carries an occupation, a bio and one shared image node', async () => {
       const graph = JSON.parse(
         /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/')).text)[1]
