@@ -185,6 +185,99 @@ test('structured data is valid JSON and covers upcoming shows', async () => {
   });
 });
 
+test('the machine-readable surface answers for the site', async (t) => {
+  await withServer({}, async (server) => {
+    await server.login();
+    await server.call('/api/admin/site', {
+      method: 'PUT',
+      body: {
+        site: {
+          links: {
+            items: [
+              { id: 'l1', label: 'Instagram', url: 'https://instagram.com/taylordrew4u', visible: true },
+              { id: 'l2', label: 'Hidden', url: 'https://hidden.example', visible: false }
+            ]
+          },
+          home: { photo: '/uploads/hero.png', photoAlt: 'Taylor Drew on stage' },
+          about: {
+            photo: '/uploads/portrait.png',
+            body: ['A New York City stand-up comedian.'],
+            facts: [{ id: 'f1', label: 'Booking', value: 'hi@example.com' }]
+          }
+        }
+      }
+    });
+
+    await t.test('/llms.txt names the site, its pages and its links', async () => {
+      const res = await server.call('/llms.txt');
+      assert.strictEqual(res.status, 200);
+      assert.match(res.headers.get('content-type'), /text\/plain/);
+      assert.match(res.text, /^# Taylor Drew/m);
+      assert.match(res.text, /A New York City stand-up comedian\./, 'the bio, not a second version of it');
+      assert.match(res.text, /\[Instagram\]\(https:\/\/instagram\.com\/taylordrew4u\)/);
+      assert.ok(!res.text.includes('hidden.example'), 'a hidden link stays hidden here too');
+    });
+
+    await t.test('and never leaks what the pages do not show', async () => {
+      const res = await server.call('/llms.txt');
+      assert.ok(!/hash|salt|password|csrf/i.test(res.text), 'no credentials in the file crawlers read first');
+    });
+
+    await t.test('robots.txt names answer engines and training crawlers apart', async () => {
+      const { text } = await server.call('/robots.txt');
+      for (const agent of ['OAI-SearchBot', 'PerplexityBot', 'ClaudeBot', 'GPTBot', 'Google-Extended']) {
+        assert.ok(text.includes(`User-agent: ${agent}`), `${agent} is addressed`);
+      }
+      assert.match(text, /Sitemap: https?:\/\/[^\s]+\/sitemap\.xml/);
+      assert.ok(text.includes('Disallow: /admin'), 'the panel stays out of every group');
+    });
+
+    await t.test('the sitemap carries each page’s photo', async () => {
+      const { text } = await server.call('/sitemap.xml');
+      assert.match(text, /xmlns:image="http:\/\/www\.google\.com\/schemas\/sitemap-image\/1\.1"/);
+      assert.match(text, /<image:loc>[^<]+<\/image:loc>/);
+    });
+
+    await t.test('a missing page asks not to be indexed', async () => {
+      const res = await server.call('/nope');
+      assert.strictEqual(res.status, 404);
+      assert.match(res.text, /<meta name="robots" content="noindex, follow">/);
+      assert.ok(!/index, follow,/.test(res.text), 'and not both at once');
+    });
+
+    await t.test('the links page publishes the list itself', async () => {
+      const graph = JSON.parse(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/links')).text)[1]
+      )['@graph'];
+      const list = graph.find((n) => n['@type'] === 'ItemList');
+      assert.ok(list, 'an ItemList');
+      assert.strictEqual(list.numberOfItems, 1, 'only the visible link');
+      assert.strictEqual(list.itemListElement[0].url, 'https://instagram.com/taylordrew4u', 'the real URL, not /go/');
+      assert.deepStrictEqual(
+        graph.find((n) => n['@type'] === 'CollectionPage').mainEntity,
+        { '@id': list['@id'] },
+        'and the page points at it'
+      );
+    });
+
+    await t.test('the person carries an occupation, a bio and one shared image node', async () => {
+      const graph = JSON.parse(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/')).text)[1]
+      )['@graph'];
+      const person = graph.find((n) => n['@type'] === 'Person');
+      const image = graph.find((n) => n['@type'] === 'ImageObject');
+      const page = graph.find((n) => n['@type'] === 'ProfilePage');
+
+      assert.strictEqual(person.hasOccupation['@type'], 'Occupation');
+      assert.match(person.description, /A New York City stand-up comedian/, 'the bio outranks the meta description');
+      assert.ok(image, 'the photo is a node');
+      assert.deepStrictEqual(person.image, { '@id': image['@id'] }, 'referenced, not repeated');
+      assert.deepStrictEqual(page.primaryImageOfPage, { '@id': image['@id'] });
+      assert.strictEqual(page.speakable['@type'], 'SpeakableSpecification');
+    });
+  });
+});
+
 test('a trailing slash redirects instead of answering as a second URL', async () => {
   await withServer({}, async (server) => {
     const res = await server.call('/about/');

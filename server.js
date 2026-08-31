@@ -424,6 +424,39 @@ const PAGES = {
   '/links': render.renderLinks
 };
 
+const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
+function escapeXml(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => XML_ESCAPES[c]);
+}
+
+/**
+ * Crawlers that answer questions rather than return links — they read the site
+ * and cite it, so they are named here instead of being left to the wildcard.
+ * The distinction is worth keeping: the first group sends people back, the
+ * second only reads for training. To stay out of training corpora while
+ * remaining answerable, change Allow to Disallow in the second group.
+ */
+const ANSWER_CRAWLERS = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Perplexity-User', 'ClaudeBot', 'Claude-User', 'Applebot', 'Bingbot'];
+// Applebot-Extended and Google-Extended are training controls, not crawlers of
+// their own: they govern what Apple and Google may train on, nothing else.
+const TRAINING_CRAWLERS = ['GPTBot', 'Google-Extended', 'Applebot-Extended', 'CCBot', 'anthropic-ai', 'Meta-ExternalAgent', 'Amazonbot', 'Bytespider'];
+
+function robotsTxt(origin) {
+  const block = (agents, note) =>
+    [`# ${note}`, ...agents.map((a) => `User-agent: ${a}`), 'Allow: /', 'Disallow: /admin', 'Disallow: /go/', ''].join('\n');
+  return [
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /admin',
+    'Disallow: /go/',
+    '',
+    block(ANSWER_CRAWLERS, 'Answer engines — these cite the site and send people to it.'),
+    block(TRAINING_CRAWLERS, 'Training crawlers — change Allow to Disallow to opt out.'),
+    `Sitemap: ${origin}/sitemap.xml`,
+    ''
+  ].join('\n');
+}
+
 async function handle(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
@@ -507,19 +540,40 @@ async function handle(req, res) {
   const origin = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host || 'localhost'}`;
 
   if (pathname === '/robots.txt') {
-    return send(res, 200, `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /go/\nSitemap: ${origin}/sitemap.xml\n`, {
-      'Content-Type': MIME['.txt']
+    return send(res, 200, robotsTxt(origin), { 'Content-Type': MIME['.txt'] });
+  }
+
+  // Answer engines look for this before crawling the pages themselves.
+  if (pathname === '/llms.txt') {
+    return send(res, 200, render.llmsTxt(await store.readSite(), origin), {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'public, max-age=300'
     });
   }
 
   if (pathname === '/sitemap.xml') {
-    const updated = ((await store.readSite()).meta || {}).updatedAt || new Date().toISOString();
+    const site = await store.readSite();
+    const updated = (site.meta || {}).updatedAt || new Date().toISOString();
+    // Naming the photo on the page it belongs to is what gets it into image
+    // search; a crawler will not pair them up on its own.
+    const photos = { '/': site.home.photo, '/about': site.about.photo };
     const urls = Object.keys(PAGES)
-      .map((page) => `  <url><loc>${origin}${page}</loc><lastmod>${updated.slice(0, 10)}</lastmod></url>`)
+      .map((page) => {
+        const photo = photos[page];
+        const image = photo
+          ? `<image:image><image:loc>${escapeXml(origin + photo)}</image:loc><image:title>${escapeXml(
+              site.brand.name
+            )}</image:title></image:image>`
+          : '';
+        return `  <url><loc>${origin}${page}</loc><lastmod>${updated.slice(0, 10)}</lastmod>${image}</url>`;
+      })
       .join('\n');
-    return send(res, 200, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`, {
-      'Content-Type': 'application/xml; charset=utf-8'
-    });
+    return send(
+      res,
+      200,
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls}\n</urlset>\n`,
+      { 'Content-Type': 'application/xml; charset=utf-8' }
+    );
   }
 
   const page = PAGES[pathname];
