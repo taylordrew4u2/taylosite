@@ -378,11 +378,36 @@
         field({ label: 'Page title', path: 'seo.title', value: site.seo.title, hint: 'Shown in the browser tab and in Google results.' }) +
           textareaField({ label: 'Description', path: 'seo.description', value: site.seo.description, rows: 3, hint: 'Around 150 characters works best.' }) +
           '<div class="grid-2">' +
-          imageField({ label: 'Social share image', path: 'seo.ogImage', value: site.seo.ogImage, hint: '1200 × 630 is ideal.' }) +
-          imageField({ label: 'Favicon', path: 'seo.favicon', value: site.seo.favicon, hint: 'A small square image.' }) +
-          '</div>'
+          imageField({ label: 'Social share image', path: 'seo.ogImage', value: site.seo.ogImage, hint: 'What shows when someone pastes your link. 1200 × 630 is ideal.' }) +
+          imageField({
+            label: 'App icon',
+            path: 'seo.favicon',
+            value: site.seo.favicon,
+            hint: 'Square. Used on phone home screens and bookmarks. The browser tab gets a drawn “' +
+              esc(brandInitials(site)) +
+              '” instead — at 16 pixels a wordmark or a face is unreadable.'
+          }) +
+          '</div>' +
+          field({
+            label: 'Share image alt text',
+            path: 'seo.ogImageAlt',
+            value: site.seo.ogImageAlt,
+            placeholder: 'Taylor Drew logo — torn paper lettering',
+            hint: 'Describes the share image for screen readers and image search.'
+          })
       )
     );
+  }
+
+  /** Mirrors the initials the server draws into the tab icon. */
+  function brandInitials(site) {
+    var parts = String(site.brand.logoText || site.brand.name || '')
+      .trim()
+      .split(/\s+/)
+      .filter(function (w) { return /[a-z0-9]/i.test(w); });
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
 
   function sectionHome() {
@@ -886,7 +911,7 @@
     { path: 'home.photo', label: 'Hero photo' },
     { path: 'about.photo', label: 'About photo' },
     { path: 'seo.ogImage', label: 'Share image' },
-    { path: 'seo.favicon', label: 'Favicon' }
+    { path: 'seo.favicon', label: 'App icon' }
   ];
 
   function mediaUsage(url) {

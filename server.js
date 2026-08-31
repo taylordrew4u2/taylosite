@@ -543,6 +543,23 @@ async function handle(req, res) {
     return send(res, 200, robotsTxt(origin), { 'Content-Type': MIME['.txt'] });
   }
 
+  // Drawn from the brand rather than uploaded — see faviconSvg for why a tab
+  // cannot use a wordmark. .ico is answered too because bookmark managers and
+  // link previewers still ask for it by name whatever the page declares.
+  if (pathname === '/favicon.svg' || pathname === '/favicon-dark.svg' || pathname === '/favicon.ico') {
+    return send(res, 200, render.faviconSvg(await store.readSite(), { dark: pathname === '/favicon-dark.svg' }), {
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600'
+    });
+  }
+
+  if (pathname === '/site.webmanifest') {
+    return send(res, 200, render.webManifest(await store.readSite()), {
+      'Content-Type': 'application/manifest+json; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600'
+    });
+  }
+
   // Answer engines look for this before crawling the pages themselves.
   if (pathname === '/llms.txt') {
     return send(res, 200, render.llmsTxt(await store.readSite(), origin), {
@@ -556,16 +573,24 @@ async function handle(req, res) {
     const updated = (site.meta || {}).updatedAt || new Date().toISOString();
     // Naming the photo on the page it belongs to is what gets it into image
     // search; a crawler will not pair them up on its own.
-    const photos = { '/': site.home.photo, '/about': site.about.photo };
+    const photos = {
+      '/': [{ url: site.home.photo, caption: site.home.photoAlt }],
+      '/about': [{ url: site.about.photo, caption: site.about.photoAlt }]
+    };
     const urls = Object.keys(PAGES)
       .map((page) => {
-        const photo = photos[page];
-        const image = photo
-          ? `<image:image><image:loc>${escapeXml(origin + photo)}</image:loc><image:title>${escapeXml(
-              site.brand.name
-            )}</image:title></image:image>`
-          : '';
-        return `  <url><loc>${origin}${page}</loc><lastmod>${updated.slice(0, 10)}</lastmod>${image}</url>`;
+        const images = (photos[page] || [])
+          .filter((p) => p.url)
+          .map(
+            (p) =>
+              `<image:image><image:loc>${escapeXml(origin + p.url)}</image:loc>` +
+              `<image:title>${escapeXml(site.brand.name)}</image:title>` +
+              // The caption is the alt text — the one sentence that says what is
+              // in the picture, which is all image search has to go on.
+              `<image:caption>${escapeXml(p.caption || site.brand.name)}</image:caption></image:image>`
+          )
+          .join('');
+        return `  <url><loc>${origin}${page}</loc><lastmod>${updated.slice(0, 10)}</lastmod>${images}</url>`;
       })
       .join('\n');
     return send(

@@ -307,6 +307,62 @@ test('the machine-readable surface answers for the site', async (t) => {
       );
     });
 
+    await t.test('the tab icon is drawn, and an uploaded one takes the large sizes', async () => {
+      const svg = await server.call('/favicon.svg');
+      assert.strictEqual(svg.status, 200);
+      assert.match(svg.headers.get('content-type'), /image\/svg\+xml/);
+      assert.match(svg.text, />TD</, 'initials, which is all that survives at 16 pixels');
+
+      const dark = (await server.call('/favicon-dark.svg')).text;
+      assert.notStrictEqual(dark, svg.text, 'a black square would vanish into a dark tab strip');
+
+      assert.strictEqual((await server.call('/favicon.ico')).status, 200, 'asked for by name whatever the page declares');
+
+      const manifest = await server.call('/site.webmanifest');
+      assert.match(manifest.headers.get('content-type'), /manifest\+json/);
+      assert.strictEqual(JSON.parse(manifest.text).name, 'Taylor Drew');
+
+      await server.call('/api/admin/site', { method: 'PUT', body: { site: { seo: { favicon: '/uploads/logo.png' } } } });
+      const html = (await server.call('/')).text;
+      assert.match(html, /<link rel="icon" href="\/favicon\.svg" type="image\/svg\+xml"/);
+      assert.match(html, /<link rel="apple-touch-icon" href="\/uploads\/logo\.png">/, 'the upload keeps the big surfaces');
+    });
+
+    await t.test('every photo is a described entity, not a filename', async () => {
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: {
+          site: {
+            home: { photo: '/uploads/hero.png', photoAlt: 'Taylor Drew against a pale backdrop' },
+            about: { photo: '/uploads/portrait.png', photoAlt: 'Taylor Drew with her arms crossed' },
+            seo: { ogImage: '/uploads/logo.png', ogImageAlt: 'Taylor Drew logo' }
+          }
+        }
+      });
+
+      const graph = JSON.parse(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/about')).text)[1]
+      )['@graph'];
+      const captions = graph.filter((n) => n['@type'] === 'ImageObject').map((n) => n.caption).sort();
+      assert.deepStrictEqual(captions, [
+        'Taylor Drew against a pale backdrop',
+        'Taylor Drew logo',
+        'Taylor Drew with her arms crossed'
+      ]);
+      assert.strictEqual(
+        graph.find((n) => n['@type'] === 'AboutPage').primaryImageOfPage['@id'],
+        graph.find((n) => n.caption === 'Taylor Drew with her arms crossed')['@id'],
+        'each page leads with its own photo'
+      );
+
+      const home = (await server.call('/')).text;
+      assert.match(home, /<meta property="og:image:alt" content="Taylor Drew logo">/, 'the share image, not the hero');
+
+      const sitemap = (await server.call('/sitemap.xml')).text;
+      assert.match(sitemap, /<image:caption>Taylor Drew against a pale backdrop<\/image:caption>/);
+      assert.match(sitemap, /<image:caption>Taylor Drew with her arms crossed<\/image:caption>/);
+    });
+
     await t.test('the person carries an occupation, a bio and one shared image node', async () => {
       const graph = JSON.parse(
         /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/')).text)[1]
@@ -318,8 +374,10 @@ test('the machine-readable surface answers for the site', async (t) => {
       assert.strictEqual(person.hasOccupation['@type'], 'Occupation');
       assert.match(person.description, /A New York City stand-up comedian/, 'the bio outranks the meta description');
       assert.ok(image, 'the photo is a node');
-      assert.deepStrictEqual(person.image, { '@id': image['@id'] }, 'referenced, not repeated');
-      assert.deepStrictEqual(page.primaryImageOfPage, { '@id': image['@id'] });
+      const referenced = [].concat(person.image).map((r) => r['@id']);
+      assert.ok(referenced.includes(image['@id']), 'referenced, not repeated');
+      assert.ok(referenced.every((id) => graph.some((n) => n['@id'] === id)), 'and every reference resolves');
+      assert.ok(page.primaryImageOfPage['@id'], 'the page leads with one of them');
       assert.strictEqual(page.speakable['@type'], 'SpeakableSpecification');
     });
   });
