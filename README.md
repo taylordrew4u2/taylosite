@@ -93,13 +93,29 @@ All of this is machine-facing — none of it changes a single pixel of the page.
 Every page carries canonical, Open Graph and Twitter card tags built from the
 admin content, plus one `schema.org` graph rather than loose objects: a
 `WebSite`, the `Person` (with her booking `ContactPoint`), the page itself
-(`ProfilePage` / `AboutPage` / `CollectionPage`), a `BreadcrumbList` on
-sub-pages, a `Quotation` per press quote attributed to who said it, an
+(`WebPage` / `ProfilePage` / `CollectionPage` — `ProfilePage` sits on `/about`
+wrapping the person, which is the case Google documents as valid, rather than
+on a mixed-content home page, which it documents as invalid), a
+`BreadcrumbList` on sub-pages, a `Quotation` per press quote attributed to who said it, an
 `FAQPage` of her own answers on `/about`, and an `Event` per upcoming show
-carrying a real `PostalAddress`, its door time as a real start time, and an
-`Offer` with its ticket link and sold-out status. The nodes cross-reference by
+carrying a real `PostalAddress` (open a date's row in the admin panel to add
+the venue's street address — `Event` is the one type here that still earns a
+documented Google search appearance, and a full address is what it wants), its
+door time as a real start time, and an `Offer` with its ticket link and
+sold-out status. The nodes cross-reference by
 `@id`, so a crawler can tell that the site, the page and the performer are one
 subject and the shows are hers.
+
+A note on what this does and does not buy. Google's own documentation is
+explicit that no AI-specific file or markup is needed to appear in AI Overviews
+or AI Mode, that `llms.txt` is ignored by Google Search outright, and that FAQ
+rich results stopped appearing in May 2026. So `/llms.txt` and the `FAQPage`
+markup are kept because they cost nothing, are harmless by Google's own
+statement, and may be read by other engines — not because they are known to
+work. The parts with documented payoff are narrower: `Event` for tour dates,
+`ProfilePage` for disambiguation, and ordinary crawlability and indexing, which
+is the only stated gate on AI Overview eligibility. Treat the rest as cheap
+optionality rather than as a ranking lever.
 
 The **Questions** section of the about page is the part aimed squarely at
 answer engines. Anything asked often enough to be worth answering — who she is,

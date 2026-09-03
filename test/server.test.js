@@ -163,7 +163,7 @@ test('structured data is valid JSON and covers upcoming shows', async () => {
     const byType = (type) => graph.filter((node) => node['@type'] === type);
 
     assert.ok(byType('WebSite').length, 'the site itself');
-    assert.ok(byType('ProfilePage').length, 'the home page is a profile page');
+    assert.ok(byType('WebPage').length, 'the home page is a plain page — the profile lives on /about');
 
     const person = byType('Person')[0];
     assert.ok(person, 'the person');
@@ -180,7 +180,7 @@ test('structured data is valid JSON and covers upcoming shows', async () => {
     const aboutGraph = JSON.parse(
       /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/about')).text)[1]
     )['@graph'];
-    assert.ok(aboutGraph.some((n) => n['@type'] === 'AboutPage'));
+    assert.ok(aboutGraph.some((n) => n['@type'] === 'ProfilePage'), 'the about page is the profile');
     assert.ok(aboutGraph.some((n) => n['@type'] === 'BreadcrumbList'));
   });
 });
@@ -262,6 +262,70 @@ test('the machine-readable surface answers for the site', async (t) => {
       );
     });
 
+    await t.test('the about page is the ProfilePage, not the home page', async () => {
+      const typeOf = async (path) => {
+        const graph = JSON.parse(
+          /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call(path)).text)[1]
+        )['@graph'];
+        return graph.find((n) => String(n['@id'] || '').endsWith('#webpage'))['@type'];
+      };
+
+      // Google documents ProfilePage as valid for an "About Me" page and
+      // invalid for a mixed-content home page, so it belongs on /about.
+      assert.strictEqual(await typeOf('/about'), 'ProfilePage');
+      assert.strictEqual(await typeOf('/'), 'WebPage');
+
+      const graph = JSON.parse(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/about')).text)[1]
+      )['@graph'];
+      const person = graph.find((n) => n['@type'] === 'Person');
+      const page = graph.find((n) => n['@type'] === 'ProfilePage');
+      assert.deepStrictEqual(page.mainEntity, { '@id': person['@id'] }, 'with the person as its mainEntity');
+      assert.match(person.mainEntityOfPage['@id'], /\/about#webpage$/, 'and she points back at it');
+    });
+
+    await t.test('a venue address becomes an address an event listing can use', async () => {
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: {
+          site: {
+            shows: [
+              {
+                id: 'sa',
+                date: '2099-07-07',
+                venue: 'Comedy Cellar',
+                city: 'New York, NY',
+                street: '117 MacDougal St',
+                postalCode: '10012',
+                country: 'US',
+                visible: true
+              },
+              { id: 'sb', date: '2099-08-08', venue: 'Somewhere', city: 'Chicago, IL', visible: true }
+            ]
+          }
+        }
+      });
+
+      const graph = JSON.parse(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/')).text)[1]
+      )['@graph'];
+      const events = graph.filter((n) => n['@type'] === 'Event');
+
+      assert.deepStrictEqual(events.find((e) => /Cellar/.test(e.name)).location.address, {
+        '@type': 'PostalAddress',
+        streetAddress: '117 MacDougal St',
+        postalCode: '10012',
+        addressCountry: 'US',
+        addressLocality: 'New York',
+        addressRegion: 'NY'
+      });
+      assert.deepStrictEqual(
+        events.find((e) => /Somewhere/.test(e.name)).location.address,
+        { '@type': 'PostalAddress', addressLocality: 'Chicago', addressRegion: 'IL' },
+        'a gig with only a city still validates'
+      );
+    });
+
     await t.test('the questions she answers are published as questions', async () => {
       await server.call('/api/admin/site', {
         method: 'PUT',
@@ -288,7 +352,7 @@ test('the machine-readable surface answers for the site', async (t) => {
       assert.strictEqual(faq.mainEntity.length, 1, 'only the visible one');
       assert.strictEqual(faq.mainEntity[0].acceptedAnswer.text, 'A stand-up comedian in New York City.');
       assert.deepStrictEqual(
-        graph.find((n) => n['@type'] === 'AboutPage').hasPart,
+        graph.find((n) => n['@type'] === 'ProfilePage').hasPart,
         { '@id': faq['@id'] },
         'hung off the page it is on'
       );
@@ -456,7 +520,7 @@ test('the machine-readable surface answers for the site', async (t) => {
         'Taylor Drew with her arms crossed'
       ]);
       assert.strictEqual(
-        graph.find((n) => n['@type'] === 'AboutPage').primaryImageOfPage['@id'],
+        graph.find((n) => n['@type'] === 'ProfilePage').primaryImageOfPage['@id'],
         graph.find((n) => n.caption === 'Taylor Drew with her arms crossed')['@id'],
         'each page leads with its own photo'
       );
@@ -475,7 +539,7 @@ test('the machine-readable surface answers for the site', async (t) => {
       )['@graph'];
       const person = graph.find((n) => n['@type'] === 'Person');
       const image = graph.find((n) => n['@type'] === 'ImageObject');
-      const page = graph.find((n) => n['@type'] === 'ProfilePage');
+      const page = graph.find((n) => n['@type'] === 'WebPage');
 
       assert.strictEqual(person.hasOccupation['@type'], 'Occupation');
       assert.match(person.description, /A New York City stand-up comedian/, 'the bio outranks the meta description');
