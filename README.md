@@ -41,7 +41,7 @@ credentials.
 | **Overview** | Live stats, most-clicked links, quick actions |
 | **Brand & SEO** | Name, logo text, location, booking email, page title, description, social share image, favicon, Google/Bing verification codes |
 | **Home page** | Kicker, big headline, subhead, hero photo + alt text, both buttons (label / link / visibility), the "Upcoming" block |
-| **Reels** | The wall at `/reels` — Instagram link, looping video URL, poster, description, order and visibility per reel |
+| **Reels** | The wall at `/reels` — pulled from the connected Instagram account, plus any reels pinned by hand |
 | **Links** | Add, edit, delete, reorder (drag or arrows), hide, feature; label, sub-label, URL; click counts per link |
 | **Shows** | Date, time, venue, city, ticket link, button label, note, sold-out and hidden flags |
 | **About page** | Kicker, title, photo, unlimited bio paragraphs, label/value facts, credits and awards, press quotes, questions and answers |
@@ -159,6 +159,33 @@ still. Videos are `muted playsinline`, which is what lets a phone play them
 inline at all, and an `IntersectionObserver` plays only the tiles on screen and
 pauses the rest: twenty videos decoding at once will stall a phone. Anyone who
 asked for reduced motion gets controls instead of movement.
+
+### Connecting the Instagram account
+
+Set `INSTAGRAM_TOKEN` and `/reels` fills itself from the account: captions,
+cover frames, and the MP4 behind each reel — which is the whole point, because
+that file is what makes a silent autoplaying loop possible. Instagram's embed
+cannot be made to autoplay from another site; their own API is the only route
+to a wall that actually moves.
+
+| Variable | |
+| --- | --- |
+| `INSTAGRAM_TOKEN` | **required** — a long-lived token for an Instagram Business or Creator account |
+| `INSTAGRAM_USER_ID` | optional, defaults to `me` — whichever account the token belongs to |
+| `INSTAGRAM_LIMIT` | optional, defaults to 24 |
+| `INSTAGRAM_API_BASE` | optional — only used to point the tests at a stand-in |
+
+Reels added by hand in the admin panel are **pinned above** the feed, and a
+pinned reel is matched against the feed by permalink so the same one never
+appears twice.
+
+The MP4 URLs their API returns are signed and expire within hours, so nothing
+is written into the site document: the wall is rendered from a 20-minute cache
+and re-fetched, which keeps every link fresh and stays far inside the 200
+calls/hour limit. If Instagram is unreachable the last good wall is served for
+up to a day rather than blanking the page, and an expired token is reported as
+an expired token rather than as "no reels" — that one needs the owner to act.
+`/healthz` reports whether the account is connected at all.
 
 Uploads accept `mp4` and `webm`, but whether a video *fits* is the storage
 backend's call — Redis caps uploads at 700 KB, far below any video, while

@@ -10,6 +10,7 @@ const auth = require('./lib/auth');
 const { normalizeSite, publicSite } = require('./lib/schema');
 const { defaultSite } = require('./lib/defaults');
 const render = require('./lib/render');
+const instagram = require('./lib/instagram');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -508,7 +509,12 @@ async function handle(req, res) {
     };
     try {
       await ensureReady();
-      return sendJson(res, 200, { ok: true, storage: store.describe(), credentials: store.credentials(), build });
+      return sendJson(res, 200, {
+        ok: true,
+        storage: store.describe(),
+        credentials: { ...store.credentials(), instagram: instagram.isConfigured() },
+        build
+      });
     } catch (err) {
       return sendJson(res, 503, { ok: false, error: err.message, credentials: store.credentials(), build });
     }
@@ -616,6 +622,11 @@ async function handle(req, res) {
       `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls}\n</urlset>\n`,
       { 'Content-Type': 'application/xml; charset=utf-8' }
     );
+  }
+
+  if (pathname === '/reels') {
+    const feed = await instagram.fetchReels();
+    return sendHtml(res, 200, render.renderReels(await store.readSite(), { origin, remote: feed.reels, error: feed.error }));
   }
 
   const page = PAGES[pathname];

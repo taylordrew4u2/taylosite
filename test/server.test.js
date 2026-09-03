@@ -9,6 +9,7 @@ const { spawn } = require('node:child_process');
 
 const { startFakeRedis } = require('./helpers/fake-redis');
 const { startFakeGithub } = require('./helpers/fake-github');
+const { startFakeInstagram } = require('./helpers/fake-instagram');
 
 const ROOT = path.join(__dirname, '..');
 const PNG = Buffer.from(
@@ -599,6 +600,106 @@ test('the reel wall plays what it can and links the rest', async () => {
   });
 });
 
+test('the wall fills itself from the connected account', async () => {
+  const api = await startFakeInstagram({
+    media: [
+      {
+        id: '111',
+        caption: 'Crowd work #comedy',
+        media_type: 'VIDEO',
+        media_product_type: 'REELS',
+        media_url: 'https://cdn.example/111.mp4',
+        permalink: 'https://www.instagram.com/reel/AAA/',
+        thumbnail_url: 'https://cdn.example/111.jpg'
+      },
+      {
+        id: '222',
+        caption: 'A photo',
+        media_type: 'IMAGE',
+        media_product_type: 'FEED',
+        permalink: 'https://www.instagram.com/p/BBB/'
+      }
+    ]
+  });
+
+  try {
+    await withServer({ INSTAGRAM_TOKEN: 'tok', INSTAGRAM_API_BASE: api.base }, async (server) => {
+      await server.login();
+      // One reel pinned by hand, and it is also in the feed — it must not double.
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: {
+          site: {
+            reels: {
+              items: [
+                { id: 'pinned', url: 'https://www.instagram.com/reel/AAA', video: '/uploads/mine.mp4', caption: 'Pinned', visible: true }
+              ]
+            }
+          }
+        }
+      });
+
+      const html = (await server.call('/reels')).text;
+
+      assert.match(html, /\/uploads\/mine\.mp4/, 'the pinned one leads');
+      assert.strictEqual(
+        (html.match(/instagram\.com\/reel\/AAA/g) || []).length,
+        1,
+        'and the same reel from the feed does not appear twice'
+      );
+      assert.ok(!html.includes('cdn.example/111.mp4'), 'the pinned version wins over the fetched one');
+      assert.ok(!html.includes('A photo'), 'a photo is not a reel');
+
+      const health = (await server.call('/healthz')).json;
+      assert.strictEqual(health.credentials.instagram, true, 'healthz says the account is connected');
+    });
+  } finally {
+    await api.stop();
+  }
+});
+
+test('a reel only on Instagram is played from Instagram', async () => {
+  const api = await startFakeInstagram({
+    media: [
+      {
+        id: '999',
+        caption: 'Roast battle',
+        media_type: 'VIDEO',
+        media_product_type: 'REELS',
+        media_url: 'https://cdn.example/999.mp4',
+        permalink: 'https://www.instagram.com/reel/ZZZ/',
+        thumbnail_url: 'https://cdn.example/999.jpg'
+      }
+    ]
+  });
+
+  try {
+    await withServer({ INSTAGRAM_TOKEN: 'tok', INSTAGRAM_API_BASE: api.base }, async (server) => {
+      const html = (await server.call('/reels')).text;
+      // The MP4 from their API is what makes a silent loop possible at all.
+      assert.match(html, /<video class="reel-media" src="https:\/\/cdn\.example\/999\.mp4" poster="https:\/\/cdn\.example\/999\.jpg"[^>]*\bloop\b/);
+      assert.match(html, /aria-label="Roast battle"/);
+      assert.ok(!html.includes('reel-embed'), 'no embed fallback is needed when the video is in hand');
+    });
+  } finally {
+    await api.stop();
+  }
+});
+
+test('an Instagram outage leaves the rest of the page standing', async () => {
+  const api = await startFakeInstagram({ media: [], state: { down: true } });
+  try {
+    await withServer({ INSTAGRAM_TOKEN: 'tok', INSTAGRAM_API_BASE: api.base }, async (server) => {
+      const res = await server.call('/reels');
+      assert.strictEqual(res.status, 200, 'the page still answers');
+      assert.match(res.text, /Reels are unavailable just now/);
+      assert.match(res.text, /<header class="topbar">/, 'and the site around it is intact');
+    });
+  } finally {
+    await api.stop();
+  }
+});
+
 test('an unsupported upload is refused by type, and a large one by size', async () => {
   await withServer({}, async (server) => {
     await server.login();
@@ -1035,12 +1136,19 @@ test('healthz reports which credentials the build can see, and never their value
         KV_REST_API_URL: redis.url,
         KV_REST_API_TOKEN: redis.token,
         GITHUB_TOKEN: null,
-        GH_TOKEN: null
+        GH_TOKEN: null,
+        INSTAGRAM_TOKEN: null,
+        IG_TOKEN: null
       },
       async (server) => {
         const health = (await server.call('/healthz')).json;
         assert.strictEqual(health.ok, true);
-        assert.deepStrictEqual(health.credentials, { redis: true, blob: false, github: false });
+        assert.deepStrictEqual(health.credentials, {
+          redis: true,
+          blob: false,
+          github: false,
+          instagram: false
+        });
         assert.deepStrictEqual(health.build, {
           env: 'production',
           deployment: 'taylosite-xyz.vercel.app',
