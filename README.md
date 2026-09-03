@@ -13,7 +13,7 @@ npm start          # http://localhost:3000
 PORT=8080 npm start
 ```
 
-- Public site: `/`, `/about`, `/links`
+- Public site: `/`, `/about`, `/reels`, `/links`
 - Admin panel: `/admin`
 - Default password: **`weed`** — change it in **Admin → Security**. (Set
   `ADMIN_PASSWORD` before the very first run to seed a different one.)
@@ -41,6 +41,7 @@ credentials.
 | **Overview** | Live stats, most-clicked links, quick actions |
 | **Brand & SEO** | Name, logo text, location, booking email, page title, description, social share image, favicon, Google/Bing verification codes |
 | **Home page** | Kicker, big headline, subhead, hero photo + alt text, both buttons (label / link / visibility), the "Upcoming" block |
+| **Reels** | The wall at `/reels` — Instagram link, looping video URL, poster, description, order and visibility per reel |
 | **Links** | Add, edit, delete, reorder (drag or arrows), hide, feature; label, sub-label, URL; click counts per link |
 | **Shows** | Date, time, venue, city, ticket link, button label, note, sold-out and hidden flags |
 | **About page** | Kicker, title, photo, unlimited bio paragraphs, label/value facts, credits and awards, press quotes, questions and answers |
@@ -144,6 +145,24 @@ rewards.
 There is a skip link, `aria-current` on the active nav item, real `<time>`
 elements on show dates, visible focus rings, a keyboard-closable mobile menu,
 and a `prefers-reduced-motion` opt-out.
+
+### The reel wall
+
+`/reels` is one edge-to-edge grid: no padding, no gaps, every tile the 9:16 a
+reel is shot in, separated by hairlines rather than space.
+
+A tile plays silently on a loop when the reel has a **video URL** of its own.
+Instagram's embed cannot be made to autoplay from another site — that is their
+player's decision, not a setting we are missing — so a reel with only a
+permalink falls back to that embed, and one with a poster falls back to the
+still. Videos are `muted playsinline`, which is what lets a phone play them
+inline at all, and an `IntersectionObserver` plays only the tiles on screen and
+pauses the rest: twenty videos decoding at once will stall a phone. Anyone who
+asked for reduced motion gets controls instead of movement.
+
+Uploads accept `mp4` and `webm`, but whether a video *fits* is the storage
+backend's call — Redis caps uploads at 700 KB, far below any video, while
+Vercel Blob allows 8 MB. Without Blob, host the file anywhere and paste the URL.
 
 ### On a phone
 

@@ -29,10 +29,17 @@ const MIME = {
   '.webp': 'image/webp',
   '.avif': 'image/avif',
   '.ico': 'image/x-icon',
-  '.txt': 'text/plain; charset=utf-8'
+  '.txt': 'text/plain; charset=utf-8',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm'
 };
 
+// Uploads. Video is here so a reel can be hosted on the site itself — whether
+// it fits is the storage backend's call (Redis caps uploads far below a video;
+// Vercel Blob does not), and the size error says so in plain words.
 const IMAGE_TYPES = {
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
   'image/png': '.png',
   'image/jpeg': '.jpg',
   'image/webp': '.webp',
@@ -305,12 +312,14 @@ async function handleApi(req, res, url) {
     if (!match) return sendJson(res, 400, { error: 'Expected a base64 data URL' });
     const contentType = match[1].toLowerCase();
     const ext = IMAGE_TYPES[contentType];
-    if (!ext) return sendJson(res, 415, { error: `Unsupported image type: ${match[1]}` });
+    if (!ext) return sendJson(res, 415, { error: `Unsupported file type: ${match[1]}` });
     const buffer = Buffer.from(match[2], 'base64');
     const limit = store.maxImageBytes();
     if (buffer.length > limit) {
       return sendJson(res, 413, {
-        error: `Image is ${Math.round(buffer.length / 1024)} KB — the limit here is ${Math.round(limit / 1024)} KB.`
+        error: `File is ${Math.round(buffer.length / 1024)} KB — the limit here is ${Math.round(
+          limit / 1024
+        )} KB. Images fit; a video usually needs Vercel Blob storage, or host it elsewhere and paste the URL.`
       });
     }
     const base = String(body.name || 'image')
@@ -421,7 +430,8 @@ async function handleClickThrough(req, res, url) {
 const PAGES = {
   '/': render.renderHome,
   '/about': render.renderAbout,
-  '/links': render.renderLinks
+  '/links': render.renderLinks,
+  '/reels': render.renderReels
 };
 
 const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };

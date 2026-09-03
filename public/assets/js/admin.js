@@ -52,6 +52,7 @@
     { id: 'home', label: 'Home page', hint: 'The hero, the photo and the upcoming block.', keys: ['home'] },
     { id: 'links', label: 'Links', hint: 'Every link, in the order they appear.', keys: ['links'] },
     { id: 'shows', label: 'Shows', hint: 'Tour dates shown on the home and links pages.', keys: ['shows'] },
+    { id: 'reels', label: 'Reels', hint: 'The wall of clips.', keys: ['reels'] },
     { id: 'about', label: 'About page', hint: 'Bio, facts, credits, press quotes and questions.', keys: ['about'] },
     { id: 'nav', label: 'Navigation', hint: 'The menu in the header.', keys: ['nav'] },
     { id: 'themes', label: 'Themes', hint: 'The colours the site is built from.', keys: ['themes'] },
@@ -888,6 +889,69 @@
     );
   }
 
+  function sectionReels() {
+    var reels = state.site.reels || { items: [] };
+    var items = (reels.items || []).length
+      ? '<div class="repeat-list" data-sortable="reels.items">' +
+        reels.items
+          .map(function (r, i) {
+            var base = 'reels.items.' + i;
+            return repeatItem({
+              list: 'reels.items',
+              index: i,
+              title: r.caption || r.url || 'Reel',
+              body:
+                field({
+                  label: 'Instagram link',
+                  path: base + '.url',
+                  value: r.url,
+                  titleSource: true,
+                  placeholder: 'https://www.instagram.com/reel/…'
+                }) +
+                '<div class="grid-2">' +
+                field({
+                  label: 'Video URL (loops)',
+                  path: base + '.video',
+                  value: r.video,
+                  placeholder: 'https://…/clip.mp4',
+                  hint: 'A tile only plays on a loop when it has its own video. Instagram will not let their embed autoplay here.'
+                }) +
+                imageField({ label: 'Poster / cover frame', path: base + '.poster', value: r.poster }) +
+                '</div>' +
+                field({
+                  label: 'Description',
+                  path: base + '.caption',
+                  value: r.caption,
+                  placeholder: 'Crowd work at the Cellar',
+                  hint: 'Read aloud by screen readers, and what image search has to go on.'
+                }) +
+                '<div class="row-switches">' +
+                toggleField({ label: 'Show on the site', path: base + '.visible', checked: r.visible !== false }) +
+                '</div>'
+            });
+          })
+          .join('') +
+        '</div>'
+      : emptyState('No reels yet.');
+
+    return (
+      card(
+        'Header',
+        '<div class="grid-2">' +
+          field({ label: 'Kicker', path: 'reels.kicker', value: reels.kicker }) +
+          field({ label: 'Title', path: 'reels.title', value: reels.title }) +
+          '</div>' +
+          textareaField({ label: 'Intro', path: 'reels.intro', value: reels.intro, rows: 2 })
+      ) +
+      card('Reels', items, {
+        subtitle:
+          'An edge-to-edge grid at /reels. Each tile plays silently on a loop if you give it a video URL; with only an Instagram link it falls back to Instagram\u2019s own embed, which they do not allow to autoplay. Add “Reels” to the menu under Navigation to link it.',
+        actions:
+          '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="reels.items">Add reel</button>'
+      })
+    );
+  }
+
   function sectionNav() {
     var nav = state.site.nav || [];
     var body = nav.length
@@ -1113,6 +1177,7 @@
     links: sectionLinks,
     shows: sectionShows,
     about: sectionAbout,
+    reels: sectionReels,
     nav: sectionNav,
     themes: sectionThemes,
     footer: sectionFooter,
@@ -1249,6 +1314,9 @@
     },
     'about.quotes': function () {
       return { id: uid('quote'), text: '', source: '' };
+    },
+    'reels.items': function () {
+      return { id: uid('reel'), url: '', video: '', poster: '', caption: '', visible: true };
     },
     'about.faqs': function () {
       return { id: uid('faq'), question: '', answer: '', visible: true };

@@ -527,6 +527,106 @@ img {
   text-align: right;
 }
 
+/* reels — an edge-to-edge wall, no padding, no gaps */
+
+.reel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0;
+  background: var(--bg);
+}
+
+/* The tile is the 9:16 a reel is shot in, so nothing is letterboxed. */
+.reel {
+  position: relative;
+  display: block;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  background: var(--surface);
+  /* Hairlines rather than gaps: the wall stays solid, the tiles stay separate. */
+  box-shadow: inset -1px -1px 0 color-mix(in srgb, var(--line) 14%, transparent);
+}
+
+.reel-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 0;
+  display: block;
+}
+
+/* Instagram's embed draws its own white card, which cannot be styled from
+   here. Letting it sit on its own ground beats cropping their chrome away and
+   breaking their player. */
+.reel-embed {
+  background: #fff;
+}
+
+@media (hover: hover) {
+  .reel[href] .reel-media {
+    transition: transform 480ms cubic-bezier(0.2, 0.7, 0.2, 1), opacity 240ms ease;
+  }
+
+  .reel[href]:hover .reel-media {
+    transform: scale(1.04);
+  }
+
+  .reel-grid:hover .reel[href]:not(:hover) .reel-media {
+    opacity: 0.55;
+  }
+}
+
+.reel[href]:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* The wall is the page, so its heading is a label rather than a billboard —
+   a full display headline would push the grid below the fold on a laptop. */
+.reel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 20px 28px;
+}
+
+.reel-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.reel-intro {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.reel-empty {
+  padding: 56px 28px;
+}
+
+@media (max-width: 700px) {
+  .reel-grid {
+    grid-template-columns: repeat(auto-fill, minmax(46%, 1fr));
+  }
+
+  .reel-head {
+    padding: 16px 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reel[href]:hover .reel-media {
+    transform: none;
+  }
+}
+
 /* questions */
 
 .faq {
