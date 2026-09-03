@@ -52,7 +52,7 @@
     { id: 'home', label: 'Home page', hint: 'The hero, the photo and the upcoming block.', keys: ['home'] },
     { id: 'links', label: 'Links', hint: 'Every link, in the order they appear.', keys: ['links'] },
     { id: 'shows', label: 'Shows', hint: 'Tour dates shown on the home and links pages.', keys: ['shows'] },
-    { id: 'about', label: 'About page', hint: 'Bio, facts, credits and press quotes.', keys: ['about'] },
+    { id: 'about', label: 'About page', hint: 'Bio, facts, credits, press quotes and questions.', keys: ['about'] },
     { id: 'nav', label: 'Navigation', hint: 'The menu in the header.', keys: ['nav'] },
     { id: 'themes', label: 'Themes', hint: 'The colours the site is built from.', keys: ['themes'] },
     { id: 'footer', label: 'Footer', hint: 'The line at the bottom of every page.', keys: ['footer'] },
@@ -395,6 +395,29 @@
             placeholder: 'Taylor Drew logo — torn paper lettering',
             hint: 'Describes the share image for screen readers and image search.'
           })
+      ) +
+      card(
+        'Verify with search engines',
+        '<div class="grid-2">' +
+          field({
+            label: 'Google Search Console',
+            path: 'seo.googleVerification',
+            value: site.seo.googleVerification,
+            placeholder: 'google-site-verification code',
+            hint: 'Paste the code — or the whole meta tag — from Search Console’s HTML tag method, then press Verify there.'
+          }) +
+          field({
+            label: 'Bing Webmaster Tools',
+            path: 'seo.bingVerification',
+            value: site.seo.bingVerification,
+            placeholder: 'msvalidate.01 code',
+            hint: 'Bing feeds Copilot and ChatGPT search, so this one is worth doing too.'
+          }) +
+          '</div>',
+        {
+          subtitle:
+            'Verifying proves the site is yours. It is how you submit the sitemap, ask for a page to be re-crawled the day you change it, and see what people searched to find you.'
+        }
       )
     );
   }
@@ -782,6 +805,33 @@
         '</div>'
       : emptyState('No press quotes yet.');
 
+    var faqs = (about.faqs || []).length
+      ? '<div class="repeat-list" data-sortable="about.faqs">' +
+        about.faqs
+          .map(function (f, i) {
+            var base = 'about.faqs.' + i;
+            return repeatItem({
+              list: 'about.faqs',
+              index: i,
+              title: f.question || 'Question',
+              body:
+                field({
+                  label: 'Question',
+                  path: base + '.question',
+                  value: f.question,
+                  titleSource: true,
+                  placeholder: 'Where can I see Taylor Drew live?'
+                }) +
+                textareaField({ label: 'Answer', path: base + '.answer', value: f.answer, rows: 3 }) +
+                '<div class="row-switches">' +
+                toggleField({ label: 'Show on the site', path: base + '.visible', checked: f.visible !== false }) +
+                '</div>'
+            });
+          })
+          .join('') +
+        '</div>'
+      : emptyState('No questions yet.');
+
     return (
       card(
         'Header',
@@ -816,7 +866,22 @@
       ) +
       card('Press quotes', quotes, {
         actions: '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="about.quotes">Add quote</button>'
-      })
+      }) +
+      card(
+        'Questions',
+        field({
+          label: 'Section heading',
+          path: 'about.faqLabel',
+          value: about.faqLabel,
+          placeholder: 'Questions'
+        }) + faqs,
+        {
+          subtitle:
+            'The questions people ask, answered in your words. These go on the about page, into /llms.txt, and out as structured data — so when someone asks ChatGPT or Google who you are, the answer it repeats is this one rather than a guess.',
+          actions:
+            '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="about.faqs">Add question</button>'
+        }
+      )
     );
   }
 
@@ -1181,6 +1246,9 @@
     },
     'about.quotes': function () {
       return { id: uid('quote'), text: '', source: '' };
+    },
+    'about.faqs': function () {
+      return { id: uid('faq'), question: '', answer: '', visible: true };
     }
   };
 

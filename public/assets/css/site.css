@@ -527,6 +527,45 @@ img {
   text-align: right;
 }
 
+/* questions */
+
+.faq {
+  margin-top: 34px;
+}
+
+.faq .eyebrow {
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.faq-list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
+}
+
+.faq-item {
+  padding: 16px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 22%, transparent);
+}
+
+.faq-item:last-child {
+  border-bottom: 0;
+}
+
+.faq-q {
+  font-weight: 800;
+  font-size: 1.02rem;
+  margin-bottom: 7px;
+}
+
+.faq-a {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 /* credits */
 
 .credits .eyebrow {
