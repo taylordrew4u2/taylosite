@@ -19,6 +19,7 @@
     baseline: null,
     usingDefaultPassword: false,
     storage: '',
+    health: null,
     mediaTarget: null,
     showFilter: 'all',
     expandedShows: {}
@@ -889,6 +890,21 @@
     );
   }
 
+  /** Whether the deployment can read the account, in plain words. */
+  function igStatus() {
+    var connected = state.health && state.health.credentials && state.health.credentials.instagram;
+    if (connected) {
+      return '<p class="hint">Connected. The wall is rebuilt from your account every 20 minutes. ' +
+        'If a token expires, /reels keeps showing the last good wall for a day and then falls back to the pinned reels below.</p>';
+    }
+    return (
+      '<p class="hint">Not connected — /reels currently shows only the pinned reels below.</p>' +
+      '<p class="hint">To connect it, set <code>INSTAGRAM_TOKEN</code> in the Vercel project to a long-lived token ' +
+      'for an Instagram <strong>Business</strong> or <strong>Creator</strong> account, then redeploy. ' +
+      'Optionally set <code>INSTAGRAM_USER_ID</code>; it defaults to whichever account the token belongs to.</p>'
+    );
+  }
+
   function sectionReels() {
     var reels = state.site.reels || { items: [] };
     var items = (reels.items || []).length
@@ -943,9 +959,13 @@
           '</div>' +
           textareaField({ label: 'Intro', path: 'reels.intro', value: reels.intro, rows: 2 })
       ) +
-      card('Reels', items, {
+      card('From your Instagram', igStatus(), {
         subtitle:
-          'An edge-to-edge grid at /reels. Each tile plays silently on a loop if you give it a video URL; with only an Instagram link it falls back to Instagram\u2019s own embed, which they do not allow to autoplay. Add “Reels” to the menu under Navigation to link it.',
+          'With an access token set, /reels fills itself from your account — captions, covers and the video files themselves, so the tiles really loop. Reels added below are pinned above the feed.'
+      }) +
+      card('Pinned reels', items, {
+        subtitle:
+          'Anything here shows before the feed. A tile plays silently on a loop if you give it a video URL; with only an Instagram link it falls back to Instagram\u2019s own embed, which they do not allow to autoplay.',
         actions:
           '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="reels.items">Add reel</button>'
       })
@@ -1360,6 +1380,14 @@
       state.baseline = data.site.meta && data.site.meta.updatedAt;
       markClean();
     });
+  }
+
+  /** Which integrations this deployment can actually see. Never blocks the panel. */
+  function loadHealth() {
+    return fetch('/healthz', { credentials: 'same-origin' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) { state.health = data; })
+      .catch(function () { state.health = null; });
   }
 
   function loadMedia() {
@@ -2004,7 +2032,7 @@
   }
 
   function start() {
-    return Promise.all([loadSite(), loadMedia(), loadBackups()]).then(function () {
+    return Promise.all([loadSite(), loadMedia(), loadBackups(), loadHealth()]).then(function () {
       el.login.hidden = true;
       el.app.hidden = false;
       var hash = location.hash.slice(1);
