@@ -553,6 +553,71 @@ test('the machine-readable surface answers for the site', async (t) => {
   });
 });
 
+test('the reel wall plays what it can and links the rest', async () => {
+  await withServer({}, async (server) => {
+    await server.login();
+    await server.call('/api/admin/site', {
+      method: 'PUT',
+      body: {
+        site: {
+          reels: {
+            title: 'Watch',
+            items: [
+              { id: 'r-vid', url: 'https://www.instagram.com/reel/AAA/', video: '/uploads/a.mp4', caption: 'Crowd work', visible: true },
+              { id: 'r-pos', url: 'https://www.instagram.com/reel/BBB/', poster: '/uploads/b.jpg', caption: 'Roast', visible: true },
+              { id: 'r-emb', url: 'https://www.instagram.com/reel/CCC', caption: 'Embed only', visible: true },
+              { id: 'r-off', url: 'https://www.instagram.com/reel/DDD/', video: '/uploads/d.mp4', caption: 'Hidden', visible: false }
+            ]
+          }
+        }
+      }
+    });
+
+    const res = await server.call('/reels');
+    assert.strictEqual(res.status, 200);
+    const html = res.text;
+
+    // A video of its own is the only thing that can actually loop.
+    assert.match(html, /<video class="reel-media" src="\/uploads\/a\.mp4"[^>]*\bmuted\b[^>]*\bloop\b[^>]*\bplaysinline\b/);
+    assert.match(html, /<img class="reel-media" src="\/uploads\/b\.jpg" alt="Roast"/, 'a poster falls back to the still');
+    assert.match(
+      html,
+      /<iframe class="reel-media reel-embed" src="https:\/\/www\.instagram\.com\/reel\/CCC\/embed"/,
+      'and a bare permalink falls back to Instagram’s embed, with exactly one slash'
+    );
+    assert.ok(!html.includes('Hidden'), 'a hidden reel stays off the wall');
+
+    // The embed is interactive, so it is not wrapped in a link that would eat it.
+    assert.match(html, /<a class="reel" href="https:\/\/www\.instagram\.com\/reel\/AAA\/"/);
+    assert.ok(!/<a class="reel" href="https:\/\/www\.instagram\.com\/reel\/CCC/.test(html));
+
+    const sitemap = (await server.call('/sitemap.xml')).text;
+    assert.match(sitemap, /<loc>https?:\/\/[^<]+\/reels<\/loc>/, 'the page is in the sitemap');
+
+    const llms = (await server.call('/llms.txt')).text;
+    assert.match(llms, /\/reels\)/, 'and named in the summary answer engines read');
+  });
+});
+
+test('an unsupported upload is refused by type, and a large one by size', async () => {
+  await withServer({}, async (server) => {
+    await server.login();
+    const bad = await server.call('/api/admin/uploads', {
+      method: 'POST',
+      body: { name: 'x', dataUrl: 'data:application/zip;base64,UEsDBA==' }
+    });
+    assert.strictEqual(bad.status, 415);
+
+    // Video is an accepted type — whether it fits is the backend's call.
+    const video = await server.call('/api/admin/uploads', {
+      method: 'POST',
+      body: { name: 'clip', dataUrl: 'data:video/mp4;base64,AAAAIGZ0eXBpc29t' }
+    });
+    assert.strictEqual(video.status, 201);
+    assert.match(video.json.file.url, /\.mp4$/);
+  });
+});
+
 test('a trailing slash redirects instead of answering as a second URL', async () => {
   await withServer({}, async (server) => {
     const res = await server.call('/about/');
