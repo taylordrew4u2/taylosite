@@ -661,6 +661,9 @@
                     ? '<div class="dtable-extra">' +
                       '<label class="mini-field"><span>Button label</span><input class="input input-sm" type="text" data-path="shows.' + i + '.ctaLabel" value="' + esc(show.ctaLabel || '') + '" placeholder="Tickets"></label>' +
                       '<label class="mini-field mini-field-wide"><span>Note</span><input class="input input-sm" type="text" data-path="shows.' + i + '.note" value="' + esc(show.note || '') + '" placeholder="Late show · 18+"></label>' +
+                      '<label class="mini-field mini-field-wide"><span>Venue street address</span><input class="input input-sm" type="text" data-path="shows.' + i + '.street" value="' + esc(show.street || '') + '" placeholder="117 MacDougal St"></label>' +
+                      '<label class="mini-field"><span>Postal code</span><input class="input input-sm" type="text" data-path="shows.' + i + '.postalCode" value="' + esc(show.postalCode || '') + '" placeholder="10012"></label>' +
+                      '<label class="mini-field"><span>Country</span><input class="input input-sm" type="text" data-path="shows.' + i + '.country" value="' + esc(show.country || '') + '" placeholder="US"></label>' +
                       '</div>'
                     : '') +
                   '</div>'
@@ -674,7 +677,7 @@
     return (
       stats +
       card('Tour dates', body, {
-        subtitle: 'Past dates leave the home page on their own and move to the bottom of the links page.',
+        subtitle: 'Past dates leave the home page on their own and move to the bottom of the links page. Open a row (+) to add the venue’s street address — a full address is what Google’s event listings actually want.',
         actions:
           '<div class="chips">' + filters + '</div>' +
           '<button class="btn btn-sm" type="button" data-action="sort-shows" title="Order by date, soonest first">Sort by date</button>' +
@@ -1233,7 +1236,7 @@
       return { id: uid('link'), label: 'New link', sublabel: '', url: '', visible: true, featured: false, clicks: 0 };
     },
     shows: function () {
-      return { id: uid('show'), date: '', time: '', venue: '', city: '', url: '', ctaLabel: 'Tickets', note: '', soldOut: false, visible: true };
+      return { id: uid('show'), date: '', time: '', venue: '', city: '', street: '', postalCode: '', country: '', url: '', ctaLabel: 'Tickets', note: '', soldOut: false, visible: true };
     },
     nav: function () {
       return { id: uid('nav'), label: 'New item', href: '/', visible: true };
