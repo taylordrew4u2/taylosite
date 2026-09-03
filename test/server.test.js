@@ -230,6 +230,8 @@ test('the machine-readable surface answers for the site', async (t) => {
       }
       assert.match(text, /Sitemap: https?:\/\/[^\s]+\/sitemap\.xml/);
       assert.ok(text.includes('Disallow: /admin'), 'the panel stays out of every group');
+      assert.ok(text.includes('Disallow: /api/'), 'and so does the JSON it talks to');
+      assert.match(text, /# llms\.txt: https?:\/\/[^\s]+\/llms\.txt/, 'the summary is pointed at where they all look');
     });
 
     await t.test('the sitemap carries each page’s photo', async () => {
@@ -258,6 +260,110 @@ test('the machine-readable surface answers for the site', async (t) => {
         { '@id': list['@id'] },
         'and the page points at it'
       );
+    });
+
+    await t.test('the questions she answers are published as questions', async () => {
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: {
+          site: {
+            about: {
+              faqLabel: 'Common questions',
+              faqs: [
+                { id: 'q-who', question: 'Who is Taylor Drew?', answer: 'A stand-up comedian in New York City.', visible: true },
+                { id: 'q-hid', question: 'Draft question', answer: 'Not ready.', visible: false }
+              ]
+            }
+          }
+        }
+      });
+
+      const html = (await server.call('/about')).text;
+      assert.match(html, /Who is Taylor Drew\?/, 'a visitor reads it on the page');
+      assert.ok(!html.includes('Draft question'), 'and a hidden one stays off it');
+
+      const graph = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)[1])['@graph'];
+      const faq = graph.find((n) => n['@type'] === 'FAQPage');
+      assert.ok(faq, 'and a machine reads it as an FAQPage');
+      assert.strictEqual(faq.mainEntity.length, 1, 'only the visible one');
+      assert.strictEqual(faq.mainEntity[0].acceptedAnswer.text, 'A stand-up comedian in New York City.');
+      assert.deepStrictEqual(
+        graph.find((n) => n['@type'] === 'AboutPage').hasPart,
+        { '@id': faq['@id'] },
+        'hung off the page it is on'
+      );
+
+      const llms = (await server.call('/llms.txt')).text;
+      assert.match(llms, /## Common questions/);
+      assert.match(llms, /### Who is Taylor Drew\?/);
+      assert.ok(!llms.includes('Draft question'), 'hidden here too');
+
+      const home = (await server.call('/')).text;
+      assert.ok(!home.includes('FAQPage'), 'the questions belong to the page that carries them');
+    });
+
+    await t.test('a press quote is attributed rather than left as decoration', async () => {
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: { site: { about: { quotes: [{ id: 'q1', text: 'Relentlessly funny.', source: 'Time Out' }] } } }
+      });
+
+      const graph = JSON.parse(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/about')).text)[1]
+      )['@graph'];
+      const quote = graph.find((n) => n['@type'] === 'Quotation');
+      const person = graph.find((n) => n['@type'] === 'Person');
+
+      assert.strictEqual(quote.text, 'Relentlessly funny.');
+      assert.strictEqual(quote.citation, 'Time Out');
+      assert.deepStrictEqual(quote.about, { '@id': person['@id'] });
+      assert.deepStrictEqual(person.subjectOf, [{ '@id': quote['@id'] }], 'and she is the subject of it');
+    });
+
+    await t.test('a show with a door time starts in the evening, not at midnight', async () => {
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: {
+          site: {
+            shows: [
+              { id: 's1', date: '2099-05-04', time: '8:00 PM', venue: 'Comedy Cellar', city: 'New York, NY', note: 'Late show', visible: true },
+              { id: 's2', date: '2099-06-01', time: 'doors vary', venue: 'The Bell House', visible: true }
+            ]
+          }
+        }
+      });
+
+      const graph = JSON.parse(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec((await server.call('/')).text)[1]
+      )['@graph'];
+      const events = graph.filter((n) => n['@type'] === 'Event');
+      const cellar = events.find((e) => /Comedy Cellar/.test(e.name));
+
+      assert.strictEqual(cellar.startDate, '2099-05-04T20:00');
+      assert.strictEqual(cellar.description, 'Late show', 'the note says what kind of night it is');
+      assert.strictEqual(
+        events.find((e) => /Bell House/.test(e.name)).startDate,
+        '2099-06-01',
+        'an unreadable time is left off rather than guessed at'
+      );
+    });
+
+    await t.test('search-engine verification is rendered, and only as a token', async () => {
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: {
+          site: {
+            seo: {
+              googleVerification: '<meta name="google-site-verification" content="abc-123_x" />',
+              bingVerification: '"><script>alert(1)</script>'
+            }
+          }
+        }
+      });
+
+      const html = (await server.call('/')).text;
+      assert.match(html, /<meta name="google-site-verification" content="abc-123_x">/, 'the tag is unwrapped to its token');
+      assert.ok(!/msvalidate/.test(html), 'and anything that is not a token is refused outright');
     });
 
     await t.test('awards and credits are published as data, not only as prose', async () => {
@@ -415,6 +521,7 @@ test('crawler directives and identity links are present', async () => {
 
     const html = (await server.call('/')).text;
     assert.match(html, /<meta name="robots" content="index, follow, max-image-preview:large/);
+    assert.match(html, /<link rel="alternate" type="text\/markdown" href="\/llms\.txt"/, 'the summary is discoverable from the page');
     assert.match(html, /<meta property="og:type" content="profile">/);
     assert.match(html, /<meta name="twitter:creator" content="@taylordrew">/);
     assert.match(html, /<link rel="me" href="https:\/\/x\.com\/taylordrew">/);

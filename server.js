@@ -441,18 +441,25 @@ const ANSWER_CRAWLERS = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Perp
 // their own: they govern what Apple and Google may train on, nothing else.
 const TRAINING_CRAWLERS = ['GPTBot', 'Google-Extended', 'Applebot-Extended', 'CCBot', 'anthropic-ai', 'Meta-ExternalAgent', 'Amazonbot', 'Bytespider'];
 
+// Nothing here is content: /admin is the panel, /api answers JSON to it, and
+// /go/ is a redirector whose destinations are already published as real URLs in
+// the links page's structured data. Crawled, they would only dilute the site.
+const OFF_LIMITS = ['Disallow: /admin', 'Disallow: /api/', 'Disallow: /go/'];
+
 function robotsTxt(origin) {
   const block = (agents, note) =>
-    [`# ${note}`, ...agents.map((a) => `User-agent: ${a}`), 'Allow: /', 'Disallow: /admin', 'Disallow: /go/', ''].join('\n');
+    [`# ${note}`, ...agents.map((a) => `User-agent: ${a}`), 'Allow: /', ...OFF_LIMITS, ''].join('\n');
   return [
     'User-agent: *',
     'Allow: /',
-    'Disallow: /admin',
-    'Disallow: /go/',
+    ...OFF_LIMITS,
     '',
     block(ANSWER_CRAWLERS, 'Answer engines — these cite the site and send people to it.'),
     block(TRAINING_CRAWLERS, 'Training crawlers — change Allow to Disallow to opt out.'),
     `Sitemap: ${origin}/sitemap.xml`,
+    // Not a standard directive, but it is where the crawlers that look for a
+    // plain-text summary look first, and robots.txt is the file they all fetch.
+    `# llms.txt: ${origin}/llms.txt`,
     ''
   ].join('\n');
 }

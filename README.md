@@ -39,11 +39,11 @@ credentials.
 | Section | What it controls |
 | --- | --- |
 | **Overview** | Live stats, most-clicked links, quick actions |
-| **Brand & SEO** | Name, logo text, location, booking email, page title, description, social share image, favicon |
+| **Brand & SEO** | Name, logo text, location, booking email, page title, description, social share image, favicon, Google/Bing verification codes |
 | **Home page** | Kicker, big headline, subhead, hero photo + alt text, both buttons (label / link / visibility), the "Upcoming" block |
 | **Links** | Add, edit, delete, reorder (drag or arrows), hide, feature; label, sub-label, URL; click counts per link |
 | **Shows** | Date, time, venue, city, ticket link, button label, note, sold-out and hidden flags |
-| **About page** | Kicker, title, photo, unlimited bio paragraphs, label/value facts, press quotes |
+| **About page** | Kicker, title, photo, unlimited bio paragraphs, label/value facts, credits and awards, press quotes, questions and answers |
 | **Navigation** | The header menu — labels, targets, order, visibility |
 | **Themes** | Every colour of every scheme, and which one the site is served with |
 | **Footer** | Left text, right text and its link, optional middle note |
@@ -92,11 +92,28 @@ All of this is machine-facing — none of it changes a single pixel of the page.
 
 Every page carries canonical, Open Graph and Twitter card tags built from the
 admin content, plus one `schema.org` graph rather than loose objects: a
-`WebSite`, the `Person`, the page itself (`ProfilePage` / `AboutPage` /
-`CollectionPage`), a `BreadcrumbList` on sub-pages, and an `Event` per upcoming
-show carrying a real `PostalAddress` and an `Offer` with its ticket link and
-sold-out status. The nodes cross-reference by `@id`, so a crawler can tell that
-the site, the page and the performer are one subject and the shows are hers.
+`WebSite`, the `Person` (with her booking `ContactPoint`), the page itself
+(`ProfilePage` / `AboutPage` / `CollectionPage`), a `BreadcrumbList` on
+sub-pages, a `Quotation` per press quote attributed to who said it, an
+`FAQPage` of her own answers on `/about`, and an `Event` per upcoming show
+carrying a real `PostalAddress`, its door time as a real start time, and an
+`Offer` with its ticket link and sold-out status. The nodes cross-reference by
+`@id`, so a crawler can tell that the site, the page and the performer are one
+subject and the shows are hers.
+
+The **Questions** section of the about page is the part aimed squarely at
+answer engines. Anything asked often enough to be worth answering — who she is,
+where to see her, how to book her — is answered there in her words, and the
+same text is published three ways: on the page, in `/llms.txt`, and as
+structured `Question` / `Answer` pairs. When a model is asked about her, that
+is what it has to repeat instead of guessing.
+
+`/llms.txt` is the plain-text summary answer engines fetch before crawling —
+generated from the same content the pages render, linked from every page's head
+and pointed at from `robots.txt`. Verification codes for Google Search Console
+and Bing Webmaster Tools go in **Brand & SEO**; either accepts the bare token
+or the whole `<meta>` tag pasted in, and anything that is not a token is
+refused rather than written into the head.
 
 Social profiles among the links become `sameAs` in the graph and `rel="me"` in
 the head, and a linked X profile supplies the Twitter card's `creator`. The
@@ -104,8 +121,9 @@ the head, and a linked X profile supplies the Twitter card's `creator`. The
 `/sitemap.xml` and `/robots.txt` are generated from the live content, and a URL
 with a trailing slash is redirected rather than answering as a duplicate.
 
-The hero image is marked `fetchpriority="high"` and images below the fold are
-lazy, which is what the Core Web Vitals measurement actually rewards.
+The hero image is preloaded and marked `fetchpriority="high"`, and images below
+the fold are lazy, which is what the Core Web Vitals measurement actually
+rewards.
 
 There is a skip link, `aria-current` on the active nav item, real `<time>`
 elements on show dates, visible focus rings, a keyboard-closable mobile menu,
