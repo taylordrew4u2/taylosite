@@ -986,10 +986,23 @@
           '</div>' +
           textareaField({ label: 'Intro', path: 'reels.intro', value: reels.intro, rows: 2 })
       ) +
-      card('From your Instagram', igStatus(), {
-        subtitle:
-          'With an access token set, /reels fills itself from your account — captions, covers and the video files themselves, so the tiles really loop. Reels added below are pinned above the feed.'
-      }) +
+      card(
+        'From your Instagram',
+        field({
+          label: 'Instagram feed URL',
+          path: 'reels.feedUrl',
+          value: reels.feedUrl,
+          placeholder: 'https://feeds.behold.so/…',
+          hint:
+            'Go to behold.so (free), click Connect Instagram, log in as @taylordrew4u, and copy the feed URL it gives you. Paste it here and save. That is the whole setup — /reels then fills itself with your reels, captions and covers.'
+        }) +
+          '<p class="hint">Leave it empty to use a Meta developer app instead:</p>' +
+          igStatus(),
+        {
+          subtitle:
+            'Instagram will not let any site read your account without a login somewhere. The quickest way is a connector that holds that login for you — one paste and you are done.'
+        }
+      ) +
       card('Pinned reels', items, {
         subtitle:
           'Anything here shows before the feed. A tile plays silently on a loop if you give it a video URL; with only an Instagram link it falls back to Instagram\u2019s own embed, which they do not allow to autoplay.',
