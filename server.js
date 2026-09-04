@@ -11,6 +11,7 @@ const { normalizeSite, publicSite } = require('./lib/schema');
 const { defaultSite } = require('./lib/defaults');
 const render = require('./lib/render');
 const instagram = require('./lib/instagram');
+const indexnow = require('./lib/indexnow');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -59,6 +60,20 @@ function clientIp(req) {
 
 function isSecure(req) {
   return req.headers['x-forwarded-proto'] === 'https' || Boolean(req.socket.encrypted);
+}
+
+/**
+ * Announce the changed pages to IndexNow. Fire-and-forget by design: this
+ * exists to shorten the wait for a re-crawl, never to make a save slower or
+ * to fail one.
+ */
+async function announceChange(req) {
+  if (process.env.INDEXNOW === 'off') return;
+  const origin = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host || 'localhost'}`;
+  if (/^https?:\/\/(localhost|127\.|\[?::1)/i.test(origin)) return; // nothing to crawl
+  const site = await store.readSite();
+  const key = await indexnow.ensureKey(store, site);
+  await indexnow.submit({ origin, key, urls: indexnow.siteUrls(origin) });
 }
 
 function send(res, status, body, headers = {}) {
@@ -275,6 +290,11 @@ async function handleApi(req, res, url) {
     }
     const next = normalizeSite(body.site, current);
     await store.writeSite(next);
+
+    // Tell the engines the pages changed rather than waiting to be re-crawled.
+    // Deliberately not awaited: a slow search engine must not hold up a save.
+    announceChange(req).catch(() => {});
+
     return sendJson(res, 200, { ok: true, site: publicSite(next), stats: await buildStats(next) });
   }
 
@@ -611,6 +631,15 @@ async function handle(req, res) {
   }
 
   const origin = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host || 'localhost'}`;
+
+  // The IndexNow key file. Serving it is what proves the site is ours, so it
+  // has to answer before anything that could 404 first.
+  if (/^\/[a-f0-9]{8,128}\.txt$/i.test(pathname)) {
+    const key = indexnow.stored(await store.readSite());
+    if (indexnow.keyFileFor(pathname, key)) {
+      return send(res, 200, key, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    }
+  }
 
   if (pathname === '/robots.txt') {
     return send(res, 200, robotsTxt(origin), { 'Content-Type': MIME['.txt'] });
