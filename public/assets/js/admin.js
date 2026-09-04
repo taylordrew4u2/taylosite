@@ -374,6 +374,13 @@
           field({ label: 'Logo text (header)', path: 'brand.logoText', value: site.brand.logoText, hint: 'Shown top-left on every page.' }) +
           field({ label: 'Location', path: 'brand.location', value: site.brand.location }) +
           field({ label: 'Booking email', path: 'brand.email', value: site.brand.email }) +
+          field({
+            label: 'Gender',
+            path: 'brand.gender',
+            value: site.brand.gender,
+            placeholder: 'Female',
+            hint: 'Optional, and only used in the structured data. It is what lets a search or an AI answer match you to a question like “female comedians in New York” instead of guessing from pronouns.'
+          }) +
           '</div>'
       ) +
       card(

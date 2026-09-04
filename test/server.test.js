@@ -834,6 +834,15 @@ test('a profile link is claimed by its canonical URL, and the handle counts as a
     assert.ok(!person.sameAs.some((u) => u.includes('ref_=')), 'no tracking left in the claim');
     assert.ok([].concat(person.alternateName).includes('@taylordrew4u'), 'searched by handle as much as by name');
     assert.match(person.disambiguatingDescription, /New York City/, 'and which Taylor Drew this is');
+
+    await server.call('/api/admin/site', { method: 'PUT', body: { site: { brand: { gender: 'Female' } } } });
+    const withGender = (await server.call('/about')).text;
+    const graph2 = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/s.exec(withGender)[1])['@graph'];
+    assert.strictEqual(
+      graph2.find((n) => n['@type'] === 'Person').gender,
+      'Female',
+      'stated, so it can be matched rather than inferred from pronouns'
+    );
   });
 });
 
