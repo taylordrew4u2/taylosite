@@ -788,6 +788,24 @@ test('a pasted feed URL fills the wall with no Meta app at all', async () => {
   }
 });
 
+test('a profile URL falls back to Instagram\u2019s own widget rather than an apology', async () => {
+  await withServer({ INSTAGRAM_TOKEN: null, IG_TOKEN: null }, async (server) => {
+    await server.login();
+    await server.call('/api/admin/site', {
+      method: 'PUT',
+      body: { site: { reels: { feedUrl: 'https://www.instagram.com/taylordrew4u/reels/', items: [] } } }
+    });
+
+    const html = (await server.call('/reels')).text;
+    assert.match(
+      html,
+      /<iframe[^>]+src="https:\/\/www\.instagram\.com\/taylordrew4u\/embed\/"/,
+      'their player does the work, so nothing has to be connected'
+    );
+    assert.match(html, /href="https:\/\/www\.instagram\.com\/taylordrew4u\/reels\/"/, 'with a way through to the rest');
+  });
+});
+
 test('a menu saved before a page existed still links to it', async () => {
   await withServer({}, async (server) => {
     await server.login();

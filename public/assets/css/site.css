@@ -613,6 +613,29 @@ img {
 
 /* Instagram will not let a site read an account, so when that is all we have
    the page says so plainly and sends people to the real thing. */
+/* Instagram's own widget, rendered in the visitor's browser. It sets its own
+   height once loaded, so the frame is given room rather than a fixed box. */
+.reel-frame {
+  background: var(--bg);
+  border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+}
+
+.reel-profile {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  min-height: 720px;
+  margin: 0 auto;
+  border: 0;
+  background: var(--bg);
+}
+
+@media (max-width: 700px) {
+  .reel-profile {
+    min-height: 560px;
+  }
+}
+
 .reel-offsite {
   display: flex;
   flex-direction: column;
