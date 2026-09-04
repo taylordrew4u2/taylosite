@@ -788,6 +788,45 @@ test('a pasted feed URL fills the wall with no Meta app at all', async () => {
   }
 });
 
+test('a menu saved before a page existed still links to it', async () => {
+  await withServer({}, async (server) => {
+    await server.login();
+    // A nav from before /reels existed — exactly what a live site would hold.
+    await server.call('/api/admin/site', {
+      method: 'PUT',
+      body: {
+        site: {
+          nav: [
+            { id: 'n1', label: 'Home', href: '/', visible: true },
+            { id: 'n2', label: 'About', href: '/about', visible: true },
+            { id: 'n3', label: 'Links', href: '/links', visible: true }
+          ]
+        }
+      }
+    });
+
+    const labels = (html) => [...html.matchAll(/<a class="nav-link[^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
+    assert.deepStrictEqual(labels((await server.call('/')).text), ['Home', 'About', 'Links', 'Reels']);
+
+    // On the page itself the link is marked current, like any other.
+    assert.match((await server.call('/reels')).text, /<a class="nav-link is-active" href="\/reels" aria-current="page">Reels<\/a>/);
+
+    // And it can still be turned off — by keeping a hidden entry, not by absence.
+    await server.call('/api/admin/site', {
+      method: 'PUT',
+      body: {
+        site: {
+          nav: [
+            { id: 'n1', label: 'Home', href: '/', visible: true },
+            { id: 'n4', label: 'Reels', href: '/reels', visible: false }
+          ]
+        }
+      }
+    });
+    assert.deepStrictEqual(labels((await server.call('/')).text), ['Home'], 'a hidden entry suppresses it');
+  });
+});
+
 test('an unsupported upload is refused by type, and a large one by size', async () => {
   await withServer({}, async (server) => {
     await server.login();
