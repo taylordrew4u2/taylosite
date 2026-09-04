@@ -128,3 +128,43 @@ test('a garbage payload still yields a usable document', () => {
     assert.ok(site.themes.options.length);
   }
 });
+
+test('an emptied URL field is cleared, not silently kept', () => {
+  const { normalizeSite } = require('../lib/schema');
+  const before = normalizeSite(
+    {
+      reels: { feedUrl: 'https://example.com/feed.json' },
+      home: { photo: '/uploads/hero.png' },
+      footer: { rightHref: 'mailto:a@b.c' },
+      links: { items: [{ id: 'l1', label: 'One', url: 'https://one.example' }] }
+    },
+    null
+  );
+
+  const cleared = normalizeSite(
+    {
+      reels: { feedUrl: '' },
+      home: { photo: '' },
+      footer: { rightHref: '' },
+      links: { items: [{ id: 'l1', label: 'One', url: '' }] }
+    },
+    before
+  );
+  assert.strictEqual(cleared.reels.feedUrl, '', 'a feed URL can be removed');
+  assert.strictEqual(cleared.home.photo, '', 'a photo can be removed');
+  assert.strictEqual(cleared.footer.rightHref, '', 'a footer link can be removed');
+  assert.strictEqual(cleared.links.items[0].url, '', 'a link can be emptied');
+
+  // A key that simply is not in the payload still falls back — partial saves.
+  const partial = normalizeSite({ brand: { name: 'Taylor Drew' } }, before);
+  assert.strictEqual(partial.reels.feedUrl, 'https://example.com/feed.json');
+  assert.strictEqual(partial.home.photo, '/uploads/hero.png');
+
+  // Controls that would break if pointed nowhere keep a target.
+  assert.strictEqual(normalizeSite({ nav: [{ id: 'n', label: 'N', href: '' }] }, before).nav[0].href, '/');
+  assert.strictEqual(
+    normalizeSite({ home: { primaryCta: { label: 'Go', href: '' } } }, before).home.primaryCta.href,
+    before.home.primaryCta.href,
+    'a button keeps its destination'
+  );
+});
