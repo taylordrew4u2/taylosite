@@ -331,38 +331,6 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
-  // Temporary: what does Instagram say to THIS network? The sandbox this was
-  // developed in is rate-limited by them; Vercel's egress may not be.
-  if (adminRoute === '/ig-probe' && req.method === 'GET') {
-    const UA =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-    const targets = {
-      webProfile: 'https://www.instagram.com/api/v1/users/web_profile_info/?username=taylordrew4u',
-      profileHtml: 'https://www.instagram.com/taylordrew4u/',
-      profileEmbed: 'https://www.instagram.com/taylordrew4u/embed/'
-    };
-    const out = {};
-    for (const [name, target] of Object.entries(targets)) {
-      try {
-        const r = await fetch(target, {
-          headers: { 'User-Agent': UA, 'x-ig-app-id': '936619743392459', Accept: '*/*' },
-          redirect: 'manual'
-        });
-        const text = await r.text().catch(() => '');
-        out[name] = {
-          status: r.status,
-          location: r.headers.get('location') || null,
-          bytes: text.length,
-          head: text.slice(0, 180),
-          shortcodes: [...new Set([...text.matchAll(/"(?:code|shortcode)":"([A-Za-z0-9_-]{6,})"/g)].map((m) => m[1]))].slice(0, 30)
-        };
-      } catch (err) {
-        out[name] = { error: err.message };
-      }
-    }
-    return sendJson(res, 200, out);
-  }
-
   if (adminRoute === '/uploads' && req.method === 'GET') {
     return sendJson(res, 200, { files: await store.listUploads() });
   }
