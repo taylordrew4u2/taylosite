@@ -806,6 +806,37 @@ test('a profile URL falls back to Instagram\u2019s own widget rather than an apo
   });
 });
 
+test('a profile link is claimed by its canonical URL, and the handle counts as a name', async () => {
+  await withServer({}, async (server) => {
+    await server.login();
+    await server.call('/api/admin/site', {
+      method: 'PUT',
+      body: {
+        site: {
+          links: {
+            items: [
+              { id: 'ig', label: 'Instagram', url: 'https://instagram.com/taylordrew4u' },
+              { id: 'imdb', label: 'IMDB', url: 'https://www.imdb.com/name/nm6287452/?ref_=tt_ov_1_1' }
+            ]
+          }
+        }
+      }
+    });
+
+    const html = (await server.call('/about')).text;
+    const graph = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/s.exec(html)[1])['@graph'];
+    const person = graph.find((n) => n['@type'] === 'Person');
+
+    assert.ok(
+      person.sameAs.includes('https://www.imdb.com/name/nm6287452/'),
+      'the profile, not the click that arrived at it'
+    );
+    assert.ok(!person.sameAs.some((u) => u.includes('ref_=')), 'no tracking left in the claim');
+    assert.ok([].concat(person.alternateName).includes('@taylordrew4u'), 'searched by handle as much as by name');
+    assert.match(person.disambiguatingDescription, /New York City/, 'and which Taylor Drew this is');
+  });
+});
+
 test('a menu saved before a page existed still links to it', async () => {
   await withServer({}, async (server) => {
     await server.login();
