@@ -73,7 +73,7 @@ async function announceChange(req) {
   if (/^https?:\/\/(localhost|127\.|\[?::1)/i.test(origin)) return; // nothing to crawl
   const site = await store.readSite();
   const key = await indexnow.ensureKey(store, site);
-  const result = await indexnow.submit({ origin, key, urls: indexnow.siteUrls(origin) });
+  const result = await indexnow.submit({ origin, key, urls: indexnow.siteUrls(origin), timeoutMs: 2500 });
   await indexnow.recordResult(store, result);
 }
 
@@ -293,8 +293,10 @@ async function handleApi(req, res, url) {
     await store.writeSite(next);
 
     // Tell the engines the pages changed rather than waiting to be re-crawled.
-    // Deliberately not awaited: a slow search engine must not hold up a save.
-    announceChange(req).catch(() => {});
+    // Awaited, because a serverless function is frozen the moment it answers:
+    // anything left running after the response simply never happens. It is
+    // capped well under the function's own limit and can never fail the save.
+    await announceChange(req).catch(() => {});
 
     return sendJson(res, 200, { ok: true, site: publicSite(next), stats: await buildStats(next) });
   }
