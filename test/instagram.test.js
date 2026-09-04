@@ -360,3 +360,31 @@ test('pasting the Instagram page itself is named, not left as a vague failure', 
   assert.match(instagram.feedUrlProblem('nonsense'), /does not look like a URL/);
   assert.strictEqual(instagram.feedUrlProblem('https://feeds.behold.so/abc'), '', 'a real feed URL passes');
 });
+
+test('the feed reader is not a bet on one vendor', () => {
+  const cases = {
+    'bare array': [{ id: '1', media_type: 'VIDEO', media_url: 'https://c/a.mp4', permalink: 'https://ig/reel/A/' }],
+    'data envelope': { data: [{ id: '2', mediaType: 'VIDEO', mediaUrl: 'https://c/b.mp4', permalink: 'https://ig/reel/B/' }] },
+    'nested posts.items': {
+      posts: { items: [{ id: '3', video: 'https://c/c.mp4', full_url: 'https://ig/reel/C/', message: 'Set #comedy', image: 'https://c/c.jpg' }] }
+    },
+    'posts array + text': { posts: [{ id: '4', type: 'video', video: 'https://c/d.mp4', url: 'https://ig/reel/D/', text: 'Roast' }] }
+  };
+  for (const [name, body] of Object.entries(cases)) {
+    const reels = instagram.feedItems(body).map(instagram.reelFromFeedItem).filter(Boolean);
+    assert.strictEqual(reels.length, 1, `${name}: one reel`);
+    assert.match(reels[0].video, /\.mp4$/, `${name}: the video is found`);
+  }
+
+  assert.strictEqual(instagram.feedItems({ meta: { ok: true } }).length, 0, 'junk yields nothing rather than a guess');
+  assert.strictEqual(instagram.feedItems(null).length, 0);
+  assert.strictEqual(
+    instagram.feedItems({ posts: { items: [{ id: '3', message: 'Set' }] } }).length,
+    1,
+    'nesting is found even when the post itself is thin'
+  );
+
+  // Captions come from whichever field the service used.
+  assert.strictEqual(instagram.reelFromFeedItem({ id: 'x', video: 'https://c/x.mp4', message: 'Crowd work #nyc' }).caption, 'Crowd work');
+  assert.strictEqual(instagram.reelFromFeedItem({ id: 'y', video: 'https://c/y.mp4', text: 'Cellar' }).caption, 'Cellar');
+});
