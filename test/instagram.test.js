@@ -347,3 +347,16 @@ test('no feed URL means simply not configured', async () => {
   instagram.resetCache();
   assert.deepStrictEqual(await instagram.fetchFeedUrl(''), { reels: [], configured: false, error: null });
 });
+
+test('pasting the Instagram page itself is named, not left as a vague failure', async () => {
+  instagram.resetCache();
+  const out = await instagram.fetchFeedUrl('https://www.instagram.com/taylordrew4u/reels/');
+  assert.strictEqual(out.configured, true, 'something was set, it is just the wrong thing');
+  assert.deepStrictEqual(out.reels, []);
+  assert.match(out.error, /your Instagram page, not a feed/);
+  assert.match(out.error, /behold\.so/, 'and it says where to get the right one');
+
+  assert.match(instagram.feedUrlProblem('https://instagram.com/x'), /not a feed/);
+  assert.match(instagram.feedUrlProblem('nonsense'), /does not look like a URL/);
+  assert.strictEqual(instagram.feedUrlProblem('https://feeds.behold.so/abc'), '', 'a real feed URL passes');
+});

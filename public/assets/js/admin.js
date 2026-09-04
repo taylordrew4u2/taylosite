@@ -994,7 +994,7 @@
           value: reels.feedUrl,
           placeholder: 'https://feeds.behold.so/…',
           hint:
-            'Go to behold.so (free), click Connect Instagram, log in as @taylordrew4u, and copy the feed URL it gives you. Paste it here and save. That is the whole setup — /reels then fills itself with your reels, captions and covers.'
+            'NOT your instagram.com page — Instagram blocks websites from reading that. Go to behold.so (free), click Connect Instagram, log in as @taylordrew4u, and copy the feed URL it hands back (it looks like https://feeds.behold.so/xxxxx). Paste that here and save.'
         }) +
           '<p class="hint">Leave it empty to use a Meta developer app instead:</p>' +
           igStatus(),
