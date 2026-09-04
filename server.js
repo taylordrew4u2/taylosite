@@ -73,7 +73,8 @@ async function announceChange(req) {
   if (/^https?:\/\/(localhost|127\.|\[?::1)/i.test(origin)) return; // nothing to crawl
   const site = await store.readSite();
   const key = await indexnow.ensureKey(store, site);
-  await indexnow.submit({ origin, key, urls: indexnow.siteUrls(origin) });
+  const result = await indexnow.submit({ origin, key, urls: indexnow.siteUrls(origin) });
+  await indexnow.recordResult(store, result);
 }
 
 function send(res, status, body, headers = {}) {
@@ -583,6 +584,7 @@ async function handle(req, res) {
         ok: true,
         storage: store.describe(),
         credentials: { ...store.credentials(), instagram: instagram.isConfigured(process.env, await store.readSite().catch(() => null)) },
+        indexnow: indexnow.status(await store.readSite().catch(() => null)),
         build
       });
     } catch (err) {
