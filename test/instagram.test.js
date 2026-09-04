@@ -258,3 +258,92 @@ test('the authorize URL asks for the documented scope and comes back to /admin',
   assert.strictEqual(url.searchParams.get('redirect_uri'), 'https://www.taylordrew4u.com/admin');
   assert.strictEqual(instagram.authorizeUrl('https://x.com', {}), '', 'and nothing without an app ID');
 });
+
+// ------------------------------------------------- the one-paste feed URL
+
+const http = require('node:http');
+
+async function serveFeed(payload, { status = 200 } = {}) {
+  const server = http.createServer((req, res) => {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(typeof payload === 'string' ? payload : JSON.stringify(payload));
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  return { url: `http://127.0.0.1:${server.address().port}/feed.json`, stop: () => new Promise((r) => server.close(r)) };
+}
+
+test('one pasted feed URL is the whole setup', async () => {
+  instagram.resetCache();
+  const feed = await serveFeed([
+    {
+      id: 'abc',
+      mediaType: 'VIDEO',
+      mediaUrl: 'https://cdn.example/a.mp4',
+      thumbnailUrl: 'https://cdn.example/a.jpg',
+      permalink: 'https://www.instagram.com/reel/AAA/',
+      caption: 'Crowd work at the Cellar #comedy #nyc'
+    },
+    { id: 'pic', mediaType: 'IMAGE', imageUrl: 'https://cdn.example/p.jpg', permalink: 'https://www.instagram.com/p/P/' }
+  ]);
+
+  try {
+    const out = await instagram.fetchFeedUrl(feed.url);
+    assert.strictEqual(out.configured, true);
+    assert.strictEqual(out.error, null);
+    assert.strictEqual(out.reels.length, 1, 'the photo is not a reel');
+    assert.deepStrictEqual(out.reels[0], {
+      id: 'ig-abc',
+      url: 'https://www.instagram.com/reel/AAA/',
+      video: 'https://cdn.example/a.mp4',
+      poster: 'https://cdn.example/a.jpg',
+      caption: 'Crowd work at the Cellar',
+      visible: true,
+      source: 'instagram'
+    });
+  } finally {
+    await feed.stop();
+    instagram.resetCache();
+  }
+});
+
+test('a feed wrapped in an envelope works too', async () => {
+  instagram.resetCache();
+  const feed = await serveFeed({
+    data: [{ id: '1', media_type: 'VIDEO', media_url: 'https://cdn.example/x.mp4', permalink: 'https://ig/reel/X/' }]
+  });
+  try {
+    const out = await instagram.fetchFeedUrl(feed.url);
+    assert.strictEqual(out.reels.length, 1);
+    assert.strictEqual(out.reels[0].video, 'https://cdn.example/x.mp4');
+  } finally {
+    await feed.stop();
+    instagram.resetCache();
+  }
+});
+
+test('a feed that breaks says so rather than showing a blank wall', async () => {
+  instagram.resetCache();
+  const dead = await serveFeed({ error: 'nope' }, { status: 500 });
+  try {
+    const out = await instagram.fetchFeedUrl(dead.url);
+    assert.deepStrictEqual(out.reels, []);
+    assert.match(out.error, /answered 500/);
+  } finally {
+    await dead.stop();
+  }
+
+  instagram.resetCache();
+  const odd = await serveFeed([{ id: 'z', somethingElse: true }]);
+  try {
+    const out = await instagram.fetchFeedUrl(odd.url);
+    assert.match(out.error, /none looked like reels/, 'an unrecognised shape is named, not silently empty');
+  } finally {
+    await odd.stop();
+    instagram.resetCache();
+  }
+});
+
+test('no feed URL means simply not configured', async () => {
+  instagram.resetCache();
+  assert.deepStrictEqual(await instagram.fetchFeedUrl(''), { reels: [], configured: false, error: null });
+});

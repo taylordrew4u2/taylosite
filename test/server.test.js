@@ -752,6 +752,42 @@ test('connecting Instagram needs a session and a CSRF token', async () => {
   });
 });
 
+test('a pasted feed URL fills the wall with no Meta app at all', async () => {
+  const http = require('node:http');
+  const feed = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify([
+        {
+          id: 'r1',
+          mediaType: 'VIDEO',
+          mediaUrl: 'https://cdn.example/one.mp4',
+          thumbnailUrl: 'https://cdn.example/one.jpg',
+          permalink: 'https://www.instagram.com/reel/ONE/',
+          caption: 'Roast battle #skankfest'
+        }
+      ])
+    );
+  });
+  await new Promise((r) => feed.listen(0, '127.0.0.1', r));
+  const feedUrl = `http://127.0.0.1:${feed.address().port}/feed.json`;
+
+  try {
+    // No INSTAGRAM_* variables anywhere — the point of this path.
+    await withServer({ INSTAGRAM_TOKEN: null, IG_TOKEN: null, INSTAGRAM_APP_ID: null, INSTAGRAM_APP_SECRET: null }, async (server) => {
+      await server.login();
+      await server.call('/api/admin/site', { method: 'PUT', body: { site: { reels: { feedUrl } } } });
+
+      const html = (await server.call('/reels')).text;
+      assert.match(html, /<video class="reel-media" src="https:\/\/cdn\.example\/one\.mp4"[^>]*\bloop\b/, 'it loops');
+      assert.match(html, /aria-label="Roast battle"/, 'caption kept, hashtag dropped');
+      assert.match(html, /href="https:\/\/www\.instagram\.com\/reel\/ONE\/"/, 'and links back to the post');
+    });
+  } finally {
+    await new Promise((r) => feed.close(r));
+  }
+});
+
 test('an unsupported upload is refused by type, and a large one by size', async () => {
   await withServer({}, async (server) => {
     await server.login();

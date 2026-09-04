@@ -167,7 +167,17 @@ behind each reel — which is the whole point, because that file is what makes a
 silent autoplaying loop possible. Instagram's embed cannot be made to autoplay
 from another site; their own API is the only route to a wall that moves.
 
-Set these two and a **Connect Instagram** button appears in **Admin → Reels**:
+**The short way.** Paste one URL into **Admin → Reels → Instagram feed URL**.
+Hosted connectors (Behold and the like) keep the Meta app on your behalf: you
+log in with Instagram once on their site and they hand you a JSON feed URL.
+That is the entire setup — no developer account, no app, no token to renew.
+The feed's shape is read loosely (both `mediaUrl` and `media_url` spellings,
+bare arrays and `data`/`media`/`posts` envelopes), so it is not tied to one
+vendor, and a feed in a shape nothing recognises says so rather than rendering
+an empty wall.
+
+**The long way**, for anyone who would rather hold their own Meta app: set
+these two and a **Connect Instagram** button appears in **Admin → Reels**.
 
 | Variable | |
 | --- | --- |

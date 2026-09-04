@@ -654,7 +654,10 @@ async function handle(req, res) {
 
   if (pathname === '/reels') {
     const site = await store.readSite();
-    const feed = await instagram.fetchReels({ store, site });
+    // A pasted feed URL is the one-login path and takes precedence; a Meta app
+    // token is the other way in for anyone who has one.
+    const feedUrl = (site.reels && site.reels.feedUrl) || '';
+    const feed = feedUrl ? await instagram.fetchFeedUrl(feedUrl) : await instagram.fetchReels({ store, site });
     return sendHtml(res, 200, render.renderReels(site, { origin, remote: feed.reels, error: feed.error }));
   }
 
