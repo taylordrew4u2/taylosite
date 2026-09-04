@@ -857,6 +857,40 @@ test('a profile link is claimed by its canonical URL, and the handle counts as a
   });
 });
 
+test('exactly one image is the representative one, and it is the one on the page', async () => {
+  await withServer({}, async (server) => {
+    await server.login();
+    await server.call('/api/admin/site', {
+      method: 'PUT',
+      body: {
+        site: {
+          home: { photo: '/uploads/home.jpg', photoAlt: 'on stage' },
+          about: { photo: '/uploads/about.jpg', photoAlt: 'portrait' }
+        }
+      }
+    });
+
+    const shot = (path) => {
+      const html = path;
+      return JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/s.exec(html)[1])['@graph'].filter(
+        (n) => n['@type'] === 'ImageObject'
+      );
+    };
+
+    const home = shot((await server.call('/')).text);
+    const about = shot((await server.call('/about')).text);
+
+    const flagged = (nodes) => nodes.filter((n) => n.representativeOfPage);
+    assert.strictEqual(flagged(home).length, 1, 'the home page has one representative image');
+    assert.strictEqual(flagged(about).length, 1, 'and so does the about page');
+    assert.notStrictEqual(
+      flagged(home)[0]['@id'],
+      flagged(about)[0]['@id'],
+      'and they are different photographs, because the pages are'
+    );
+  });
+});
+
 test('a menu saved before a page existed still links to it', async () => {
   await withServer({}, async (server) => {
     await server.login();
