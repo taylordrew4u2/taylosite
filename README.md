@@ -6,6 +6,8 @@ pages can be edited.
 
 No build step, no framework, no npm dependencies. Node 18+ and `node server.js`.
 
+Production is `main`: pushing to it deploys the live site.
+
 ## Running it
 
 ```bash
