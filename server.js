@@ -309,16 +309,38 @@ async function handleApi(req, res, url) {
     const site = await store.readSite();
     return sendJson(res, 200, {
       ...instagram.status(site, process.env),
-      authorizeUrl: instagram.authorizeUrl(origin),
+      authorizeUrl: instagram.authorizeUrl(origin, process.env, site),
       redirectUri: instagram.redirectUri(origin)
     });
+  }
+
+  // The app id and secret, pasted here rather than into a hosting dashboard.
+  if (adminRoute === '/instagram/app' && req.method === 'POST') {
+    const body = await readJson(req);
+    try {
+      await instagram.saveApp({ store, appId: body.appId, appSecret: body.appSecret });
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message });
+    }
+    const site = await store.readSite();
+    const origin = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host || 'localhost'}`;
+    return sendJson(res, 200, {
+      ok: true,
+      ...instagram.status(site, process.env),
+      authorizeUrl: instagram.authorizeUrl(origin, process.env, site)
+    });
+  }
+
+  if (adminRoute === '/instagram/app' && req.method === 'DELETE') {
+    await instagram.forgetApp(store);
+    return sendJson(res, 200, { ok: true });
   }
 
   if (adminRoute === '/instagram' && req.method === 'POST') {
     const body = await readJson(req);
     const origin = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host || 'localhost'}`;
     try {
-      const out = await instagram.connect({ store, code: body.code, origin });
+      const out = await instagram.connect({ store, code: body.code, origin, site: await store.readSite() });
       return sendJson(res, 200, { ok: true, expiresAt: out.expiresAt });
     } catch (err) {
       // Meta's own wording is more use here than anything invented.

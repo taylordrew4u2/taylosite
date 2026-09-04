@@ -917,18 +917,56 @@
         '<p class="hint">Not connected — /reels shows only the pinned reels below.</p>' +
         '<p><a class="btn btn-sm btn-accent" href="' + esc(ig.authorizeUrl) + '">Connect Instagram</a></p>' +
         '<p class="hint">Opens Instagram, asks for read access to your reels, and brings you back here. ' +
-        'The redirect URI registered with your Meta app must be exactly <code>' + esc(ig.redirectUri) + '</code>.</p>'
+        'The redirect URI registered with your Meta app must be exactly <code>' + esc(ig.redirectUri) + '</code>.</p>' +
+        '<details class="ig-details"><summary>App details</summary>' + igAppForm(ig) + '</details>'
       );
     }
 
     return (
-      '<p class="hint">Not connected — /reels shows only the pinned reels below.</p>' +
-      '<p class="hint">To switch this on, set <code>INSTAGRAM_APP_ID</code> and <code>INSTAGRAM_APP_SECRET</code> ' +
-      'in the Vercel project (from <em>Meta App Dashboard → Instagram → API setup with Instagram login → ' +
-      'Set up Instagram business login</em>), add <code>' + esc(location.origin) + '/admin</code> to that app’s ' +
-      'OAuth redirect URIs, and redeploy. A “Connect Instagram” button appears here once they are set.</p>' +
-      '<p class="hint">The account must be an Instagram <strong>Business</strong> or <strong>Creator</strong> account. ' +
-      'Already have a long-lived token? Set it as <code>INSTAGRAM_TOKEN</code> instead and it will be adopted and kept alive.</p>'
+      '<p class="hint">Not connected — /reels shows only the pinned reels below.</p>' + igAppForm(ig)
+    );
+  }
+
+  /**
+   * The app id and secret, entered here rather than in the hosting dashboard.
+   * They are stored server-side with the admin password and never sent back
+   * down, so the secret box is always blank on a fresh load.
+   */
+  function igAppForm(ig) {
+    var redirect = (ig && ig.redirectUri) || location.origin + '/admin';
+    return (
+      '<ol class="ig-steps">' +
+      '<li>Make sure @taylordrew4u is a <strong>Business</strong> or <strong>Creator</strong> account ' +
+      '(Instagram app → Settings → Account type and tools). A personal account cannot be read by any app.</li>' +
+      '<li>Open <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">developers.facebook.com/apps</a> ' +
+      'and click <em>Create app</em>. Give it any name. When it asks what you are building, choose ' +
+      '<em>Other</em>, then <em>Business</em>.</li>' +
+      '<li>In the new app, add the <strong>Instagram</strong> product, then open ' +
+      '<em>API setup with Instagram login</em>.</li>' +
+      '<li>Under step 3, <em>Set up Instagram business login</em>, paste this into ' +
+      '<em>OAuth redirect URIs</em> — it has to match exactly:' +
+      '<br><code class="ig-copy">' + esc(redirect) + '</code> ' +
+      '<button class="btn btn-sm btn-ghost" type="button" data-action="ig-copy-redirect" ' +
+      'data-value="' + esc(redirect) + '">Copy</button></li>' +
+      '<li>Copy the <strong>Instagram app ID</strong> and <strong>Instagram app secret</strong> from step 1 ' +
+      'on that same page into the boxes below and save.</li>' +
+      '</ol>' +
+      '<div class="grid-2">' +
+      '<label class="field"><span class="label">Instagram app ID</span>' +
+      '<input class="input" id="ig-app-id" type="text" inputmode="numeric" autocomplete="off" ' +
+      'placeholder="1234567890123456" value="' + esc((ig && ig.appId) || '') + '"></label>' +
+      '<label class="field"><span class="label">Instagram app secret</span>' +
+      '<input class="input" id="ig-app-secret" type="password" autocomplete="off" ' +
+      'placeholder="' + (ig && ig.appSecretSet ? 'Saved — leave blank to keep it' : '32 hex characters') + '"></label>' +
+      '</div>' +
+      '<p><button class="btn btn-sm btn-accent" type="button" data-action="ig-save-app">Save app details</button>' +
+      (ig && ig.appSource === 'panel'
+        ? ' <button class="btn btn-sm btn-ghost" type="button" data-action="ig-forget-app">Forget them</button>'
+        : '') +
+      '</p>' +
+      '<p class="hint">The secret is kept with your password and is never shown again. ' +
+      'Once both are saved, a <em>Connect Instagram</em> button appears here — one login and the wall fills itself, ' +
+      'renewing its own access from then on.</p>'
     );
   }
 
@@ -1789,6 +1827,41 @@
       markDirty();
       toast('Sorted by date — save to keep it', 'info');
       return render({ preserveFocus: false });
+    }
+    if (action === 'ig-copy-redirect') {
+      var value = trigger.dataset.value || '';
+      var done = function () { toast('Redirect URI copied.'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(value).then(done, function () {
+          toast('Copy it by hand: ' + value, 'info');
+        });
+      }
+      toast('Copy it by hand: ' + value, 'info');
+      return;
+    }
+    if (action === 'ig-save-app') {
+      var idBox = document.getElementById('ig-app-id');
+      var secretBox = document.getElementById('ig-app-secret');
+      return api('/admin/instagram/app', {
+        method: 'POST',
+        body: { appId: idBox ? idBox.value.trim() : '', appSecret: secretBox ? secretBox.value.trim() : '' }
+      })
+        .then(function () {
+          toast('App details saved.');
+          return loadInstagram();
+        })
+        .then(function () { render({ preserveFocus: false }); })
+        .catch(function (err) { toast(err.message || 'Could not save the app details.', 'error'); });
+    }
+    if (action === 'ig-forget-app') {
+      if (!confirm('Forget the Instagram app ID and secret?')) return;
+      return api('/admin/instagram/app', { method: 'DELETE' })
+        .then(function () {
+          toast('App details removed.');
+          return loadInstagram();
+        })
+        .then(function () { render({ preserveFocus: false }); })
+        .catch(function (err) { toast(err.message || 'Could not remove them.', 'error'); });
     }
     if (action === 'ig-disconnect') {
       if (!confirm('Disconnect Instagram? /reels will fall back to the pinned reels.')) return;

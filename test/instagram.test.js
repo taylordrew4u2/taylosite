@@ -259,6 +259,53 @@ test('the authorize URL asks for the documented scope and comes back to /admin',
   assert.strictEqual(instagram.authorizeUrl('https://x.com', {}), '', 'and nothing without an app ID');
 });
 
+// ------------------------------------------------------ the app's own keys
+
+test('an app ID and secret pasted into the panel are enough to connect', async () => {
+  await withApi({ media: [REEL] }, async (api, env) => {
+    const store = fakeStore();
+    await instagram.saveApp({ store, appId: '990602627938098', appSecret: 'a1b2c3d4e5f60718' });
+
+    const before = instagram.status(store.site, {});
+    assert.strictEqual(before.canConnect, true, 'no dashboard visit required');
+    assert.strictEqual(before.appId, '990602627938098');
+    assert.strictEqual(before.appSecretSet, true);
+    assert.strictEqual(before.appSource, 'panel');
+    assert.ok(!JSON.stringify(before).includes('a1b2c3d4e5f60718'), 'the secret stays on the server');
+
+    const url = new URL(instagram.authorizeUrl('https://example.com', {}, store.site));
+    assert.strictEqual(url.searchParams.get('client_id'), '990602627938098');
+
+    await instagram.connect({ store, code: 'AQB', origin: 'https://example.com', env, site: store.site });
+    assert.strictEqual(store.site.auth.instagram.token, 'long-token');
+    const exchange = api.calls.find((c) => c.path === '/oauth/access_token');
+    assert.ok(exchange.body.includes('client_secret=a1b2c3d4e5f60718'), 'and the pasted secret is the one used');
+  });
+});
+
+test('the panel wins over the environment, and keeps a secret it was not given again', async () => {
+  const store = fakeStore();
+  await instagram.saveApp({ store, appId: '111111', appSecret: 'abcdef0123456789' });
+  await instagram.saveApp({ store, appId: '222222', appSecret: '' });
+
+  const merged = instagram.envWithApp({ INSTAGRAM_APP_ID: '999', INSTAGRAM_APP_SECRET: 'env' }, store.site);
+  assert.strictEqual(merged.INSTAGRAM_APP_ID, '222222', 'the newer ID');
+  assert.strictEqual(merged.INSTAGRAM_APP_SECRET, 'abcdef0123456789', 'the secret it already had');
+
+  await instagram.forgetApp(store);
+  assert.strictEqual(instagram.status(store.site, {}).canConnect, false);
+});
+
+test('a mistyped app ID or secret is refused rather than stored', async () => {
+  const store = fakeStore();
+  await assert.rejects(() => instagram.saveApp({ store, appId: 'my-app' }), /all digits/);
+  await assert.rejects(
+    () => instagram.saveApp({ store, appId: '123456', appSecret: 'not a secret' }),
+    /app secret/
+  );
+  assert.ok(!(store.site.auth || {}).instagramApp, 'nothing half-saved');
+});
+
 // ------------------------------------------------- the one-paste feed URL
 
 const http = require('node:http');
