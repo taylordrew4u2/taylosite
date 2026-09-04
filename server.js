@@ -303,6 +303,34 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie({ secure: isSecure(req) }) });
   }
 
+  // --- instagram --------------------------------------------------------
+  if (adminRoute === '/instagram' && req.method === 'GET') {
+    const origin = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host || 'localhost'}`;
+    const site = await store.readSite();
+    return sendJson(res, 200, {
+      ...instagram.status(site, process.env),
+      authorizeUrl: instagram.authorizeUrl(origin),
+      redirectUri: instagram.redirectUri(origin)
+    });
+  }
+
+  if (adminRoute === '/instagram' && req.method === 'POST') {
+    const body = await readJson(req);
+    const origin = `${isSecure(req) ? 'https' : 'http'}://${req.headers.host || 'localhost'}`;
+    try {
+      const out = await instagram.connect({ store, code: body.code, origin });
+      return sendJson(res, 200, { ok: true, expiresAt: out.expiresAt });
+    } catch (err) {
+      // Meta's own wording is more use here than anything invented.
+      return sendJson(res, 400, { error: err.message });
+    }
+  }
+
+  if (adminRoute === '/instagram' && req.method === 'DELETE') {
+    await instagram.disconnect(store);
+    return sendJson(res, 200, { ok: true });
+  }
+
   if (adminRoute === '/uploads' && req.method === 'GET') {
     return sendJson(res, 200, { files: await store.listUploads() });
   }
@@ -512,7 +540,7 @@ async function handle(req, res) {
       return sendJson(res, 200, {
         ok: true,
         storage: store.describe(),
-        credentials: { ...store.credentials(), instagram: instagram.isConfigured() },
+        credentials: { ...store.credentials(), instagram: instagram.isConfigured(process.env, await store.readSite().catch(() => null)) },
         build
       });
     } catch (err) {
@@ -625,8 +653,9 @@ async function handle(req, res) {
   }
 
   if (pathname === '/reels') {
-    const feed = await instagram.fetchReels();
-    return sendHtml(res, 200, render.renderReels(await store.readSite(), { origin, remote: feed.reels, error: feed.error }));
+    const site = await store.readSite();
+    const feed = await instagram.fetchReels({ store, site });
+    return sendHtml(res, 200, render.renderReels(site, { origin, remote: feed.reels, error: feed.error }));
   }
 
   const page = PAGES[pathname];

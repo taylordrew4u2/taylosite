@@ -15,7 +15,18 @@ async function startFakeInstagram({ media = [], state = {} } = {}) {
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
-    calls.push({ path: url.pathname, token: url.searchParams.get('access_token'), fields: url.searchParams.get('fields') });
+    let body = '';
+    if (req.method === 'POST') {
+      for await (const chunk of req) body += chunk;
+    }
+    calls.push({
+      path: url.pathname,
+      method: req.method,
+      token: url.searchParams.get('access_token'),
+      fields: url.searchParams.get('fields'),
+      grant: url.searchParams.get('grant_type'),
+      body
+    });
 
     const json = (status, body) => {
       res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -25,11 +36,29 @@ async function startFakeInstagram({ media = [], state = {} } = {}) {
     if (state.down) return json(500, { error: { message: 'Internal server error' } });
     if (state.hangMs) await new Promise((r) => setTimeout(r, state.hangMs));
 
-    if (!url.searchParams.get('access_token')) {
+    if (!url.searchParams.get('access_token') && url.pathname !== '/oauth/access_token') {
       return json(400, { error: { message: 'Missing access token' } });
     }
     if (state.expired) {
       return json(401, { error: { message: 'Error validating access token: Session has expired' } });
+    }
+
+    // The token dance: code -> short-lived -> long-lived -> refreshed.
+    if (url.pathname === '/oauth/access_token') {
+      return json(200, { data: [{ access_token: 'short-token', user_id: '1020', permissions: 'instagram_business_basic' }] });
+    }
+    if (url.pathname === '/access_token') {
+      if (url.searchParams.get('grant_type') !== 'ig_exchange_token') {
+        return json(400, { error: { message: 'Bad grant_type' } });
+      }
+      return json(200, { access_token: 'long-token', token_type: 'bearer', expires_in: 5183944 });
+    }
+    if (url.pathname === '/refresh_access_token') {
+      if (url.searchParams.get('grant_type') !== 'ig_refresh_token') {
+        return json(400, { error: { message: 'Bad grant_type' } });
+      }
+      if (state.refuseRefresh) return json(400, { error: { message: 'Cannot refresh' } });
+      return json(200, { access_token: 'refreshed-token', token_type: 'bearer', expires_in: 5183944 });
     }
 
     const match = /^\/([^/]+)\/media$/.exec(url.pathname);

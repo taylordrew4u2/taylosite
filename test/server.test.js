@@ -700,6 +700,58 @@ test('an Instagram outage leaves the rest of the page standing', async () => {
   }
 });
 
+test('a stored Instagram token never reaches a visitor', async () => {
+  const api = await startFakeInstagram({ media: [] });
+  try {
+    await withServer(
+      { INSTAGRAM_APP_ID: '99', INSTAGRAM_APP_SECRET: 'sh', INSTAGRAM_API_BASE: api.base, INSTAGRAM_OAUTH_BASE: api.base },
+      async (server) => {
+        await server.login();
+
+        const connected = await server.call('/api/admin/instagram', { method: 'POST', body: { code: 'abc' } });
+        assert.strictEqual(connected.status, 200);
+
+        // The token now lives in site.auth, which is the branch publicSite strips.
+        const content = await server.call('/api/content');
+        assert.strictEqual(content.status, 200);
+        assert.ok(!JSON.stringify(content.json).includes('long-token'), 'not in the public site document');
+        assert.strictEqual(content.json.auth, undefined, 'because auth never leaves the server at all');
+
+        const status = (await server.call('/api/admin/instagram')).json;
+        assert.strictEqual(status.connected, true);
+        assert.ok(!JSON.stringify(status).includes('long-token'), 'and not even the panel is told the token');
+        assert.match(status.redirectUri, /\/admin$/);
+
+        for (const path of ['/', '/about', '/links', '/reels', '/llms.txt']) {
+          assert.ok(!(await server.call(path)).text.includes('long-token'), `not on ${path}`);
+        }
+
+        const gone = await server.call('/api/admin/instagram', { method: 'DELETE' });
+        assert.strictEqual(gone.status, 200);
+        assert.strictEqual((await server.call('/api/admin/instagram')).json.connected, false);
+      }
+    );
+  } finally {
+    await api.stop();
+  }
+});
+
+test('connecting Instagram needs a session and a CSRF token', async () => {
+  await withServer({ INSTAGRAM_APP_ID: '99', INSTAGRAM_APP_SECRET: 'sh' }, async (server) => {
+    // Signed out entirely.
+    assert.strictEqual(
+      (await server.call('/api/admin/instagram', { method: 'POST', body: { code: 'abc' } })).status,
+      401
+    );
+
+    // Signed in, but without the per-session CSRF token a form post would carry.
+    await server.login();
+    server.forgetCsrf();
+    const res = await server.call('/api/admin/instagram', { method: 'POST', body: { code: 'abc' }, csrf: false });
+    assert.strictEqual(res.status, 403, 'a cookie alone must not be enough to bind an account');
+  });
+});
+
 test('an unsupported upload is refused by type, and a large one by size', async () => {
   await withServer({}, async (server) => {
     await server.login();

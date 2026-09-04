@@ -162,18 +162,42 @@ asked for reduced motion gets controls instead of movement.
 
 ### Connecting the Instagram account
 
-Set `INSTAGRAM_TOKEN` and `/reels` fills itself from the account: captions,
-cover frames, and the MP4 behind each reel — which is the whole point, because
-that file is what makes a silent autoplaying loop possible. Instagram's embed
-cannot be made to autoplay from another site; their own API is the only route
-to a wall that actually moves.
+`/reels` fills itself from the account: captions, cover frames, and the MP4
+behind each reel — which is the whole point, because that file is what makes a
+silent autoplaying loop possible. Instagram's embed cannot be made to autoplay
+from another site; their own API is the only route to a wall that moves.
+
+Set these two and a **Connect Instagram** button appears in **Admin → Reels**:
 
 | Variable | |
 | --- | --- |
-| `INSTAGRAM_TOKEN` | **required** — a long-lived token for an Instagram Business or Creator account |
-| `INSTAGRAM_USER_ID` | optional, defaults to `me` — whichever account the token belongs to |
+| `INSTAGRAM_APP_ID` | Instagram app ID |
+| `INSTAGRAM_APP_SECRET` | Instagram app secret — read server-side only, never sent to the browser |
+| `INSTAGRAM_USER_ID` | optional, defaults to `me` |
 | `INSTAGRAM_LIMIT` | optional, defaults to 24 |
-| `INSTAGRAM_API_BASE` | optional — only used to point the tests at a stand-in |
+| `INSTAGRAM_TOKEN` | optional seed: an existing long-lived token, adopted on first sight |
+
+Both come from **Meta App Dashboard → Instagram → API setup with Instagram
+login → Set up Instagram business login**. Add `https://<your-domain>/admin` to
+that app's **OAuth redirect URIs** — the panel prints the exact string it will
+send. The button opens Meta's authorization window asking for
+`instagram_business_basic`; approving it returns to `/admin?code=…`, and the
+panel redeems that code, exchanges it for a 60-day token and wipes it from the
+address bar. The account must be a **Business** or **Creator** account.
+
+**Why the token is not simply an environment variable.** A long-lived token
+lasts 60 days, and Meta's rule is that one not refreshed inside that window can
+never be refreshed again. A token pasted into the environment and forgotten
+would work all summer and break in the autumn, silently. So the site stores it
+and renews it: any token within ten days of expiry (and older than the 24 hours
+Meta requires) is refreshed on the next request, and a failed refresh keeps the
+working token rather than discarding it. An `INSTAGRAM_TOKEN` is adopted into
+the same store on first sight so that it, too, is kept alive.
+
+It lives at `site.auth.instagram` — `auth` is the one branch `publicSite()`
+strips before anything is served and that `normalizeSite()` never takes from
+user input, so it cannot leak through `/api/content` or be overwritten by a
+form post. The admin panel is told the connection's *state*, never the token.
 
 Reels added by hand in the admin panel are **pinned above** the feed, and a
 pinned reel is matched against the feed by permalink so the same one never
