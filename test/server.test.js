@@ -835,6 +835,17 @@ test('a profile link is claimed by its canonical URL, and the handle counts as a
     assert.ok([].concat(person.alternateName).includes('@taylordrew4u'), 'searched by handle as much as by name');
     assert.match(person.disambiguatingDescription, /New York City/, 'and which Taylor Drew this is');
 
+    // However the ID was copied, the claim it makes is the same one.
+    for (const pasted of ['Q141283452', 'https://www.wikidata.org/wiki/Q141283452']) {
+      await server.call('/api/admin/site', { method: 'PUT', body: { site: { seo: { wikidata: pasted } } } });
+      const graphW = JSON.parse(
+        /<script type="application\/ld\+json">(.*?)<\/script>/s.exec((await server.call('/about')).text)[1]
+      )['@graph'];
+      const p2 = graphW.find((n) => n['@type'] === 'Person');
+      assert.strictEqual(p2.sameAs[0], 'https://www.wikidata.org/wiki/Q141283452', 'the strongest claim leads');
+      assert.strictEqual(p2.identifier.value, 'Q141283452');
+    }
+
     await server.call('/api/admin/site', { method: 'PUT', body: { site: { brand: { gender: 'Female' } } } });
     const withGender = (await server.call('/about')).text;
     const graph2 = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/s.exec(withGender)[1])['@graph'];

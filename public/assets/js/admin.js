@@ -428,6 +428,20 @@
           subtitle:
             'Verifying proves the site is yours. It is how you submit the sitemap, ask for a page to be re-crawled the day you change it, and see what people searched to find you.'
         }
+      ) +
+      card(
+        'Wikidata item',
+        field({
+          label: 'Item ID',
+          path: 'seo.wikidata',
+          value: site.seo.wikidata,
+          placeholder: 'Q141283452',
+          hint: 'The Q number, or paste the whole wikidata.org address — either works.'
+        }),
+        {
+          subtitle:
+            'Wikidata is the record Google’s knowledge panel and the AI answer engines are built from. Naming your item here is what turns a site that describes you into a site that resolves to a known person.'
+        }
       )
     );
   }
