@@ -20,6 +20,7 @@
     usingDefaultPassword: false,
     storage: '',
     health: null,
+    instagram: null,
     mediaTarget: null,
     showFilter: 'all',
     expandedShows: {}
@@ -892,16 +893,42 @@
 
   /** Whether the deployment can read the account, in plain words. */
   function igStatus() {
-    var connected = state.health && state.health.credentials && state.health.credentials.instagram;
-    if (connected) {
-      return '<p class="hint">Connected. The wall is rebuilt from your account every 20 minutes. ' +
-        'If a token expires, /reels keeps showing the last good wall for a day and then falls back to the pinned reels below.</p>';
+    var ig = state.instagram;
+    if (!ig) return '<p class="hint">Checking…</p>';
+
+    if (ig.connected) {
+      var until = ig.expiresAt ? new Date(ig.expiresAt) : null;
+      var days = until ? Math.round((until - new Date()) / 86400000) : null;
+      return (
+        '<p class="hint"><strong>Connected.</strong> The wall is rebuilt from your account every 20 minutes.' +
+        (days !== null
+          ? ' The access token renews itself automatically; as it stands it is good for another ' +
+            days + ' day' + (days === 1 ? '' : 's') + '.'
+          : '') +
+        '</p>' +
+        '<p class="hint">If Instagram is ever unreachable, /reels keeps showing the last good wall for a day, ' +
+        'then falls back to the pinned reels below.</p>' +
+        '<button class="btn btn-sm btn-danger" type="button" data-action="ig-disconnect">Disconnect</button>'
+      );
     }
+
+    if (ig.canConnect) {
+      return (
+        '<p class="hint">Not connected — /reels shows only the pinned reels below.</p>' +
+        '<p><a class="btn btn-sm btn-accent" href="' + esc(ig.authorizeUrl) + '">Connect Instagram</a></p>' +
+        '<p class="hint">Opens Instagram, asks for read access to your reels, and brings you back here. ' +
+        'The redirect URI registered with your Meta app must be exactly <code>' + esc(ig.redirectUri) + '</code>.</p>'
+      );
+    }
+
     return (
-      '<p class="hint">Not connected — /reels currently shows only the pinned reels below.</p>' +
-      '<p class="hint">To connect it, set <code>INSTAGRAM_TOKEN</code> in the Vercel project to a long-lived token ' +
-      'for an Instagram <strong>Business</strong> or <strong>Creator</strong> account, then redeploy. ' +
-      'Optionally set <code>INSTAGRAM_USER_ID</code>; it defaults to whichever account the token belongs to.</p>'
+      '<p class="hint">Not connected — /reels shows only the pinned reels below.</p>' +
+      '<p class="hint">To switch this on, set <code>INSTAGRAM_APP_ID</code> and <code>INSTAGRAM_APP_SECRET</code> ' +
+      'in the Vercel project (from <em>Meta App Dashboard → Instagram → API setup with Instagram login → ' +
+      'Set up Instagram business login</em>), add <code>' + esc(location.origin) + '/admin</code> to that app’s ' +
+      'OAuth redirect URIs, and redeploy. A “Connect Instagram” button appears here once they are set.</p>' +
+      '<p class="hint">The account must be an Instagram <strong>Business</strong> or <strong>Creator</strong> account. ' +
+      'Already have a long-lived token? Set it as <code>INSTAGRAM_TOKEN</code> instead and it will be adopted and kept alive.</p>'
     );
   }
 
@@ -1382,6 +1409,40 @@
     });
   }
 
+  function loadInstagram() {
+    return api('/admin/instagram')
+      .then(function (data) { state.instagram = data; })
+      .catch(function () { state.instagram = { connected: false, canConnect: false }; });
+  }
+
+  /**
+   * Meta sends the app user back to /admin?code=… after they approve. The code
+   * is good for one hour and one use, so it is handed straight to the server
+   * and wiped from the address bar — it should not sit in history or in a
+   * shared screenshot.
+   */
+  function finishInstagramConnect() {
+    var params = new URLSearchParams(location.search);
+    var code = params.get('code');
+    var denied = params.get('error');
+    if (!code && !denied) return Promise.resolve();
+
+    history.replaceState(null, '', location.pathname + location.hash);
+
+    if (denied) {
+      toast(params.get('error_description') || 'Instagram connection was cancelled.', 'error');
+      return Promise.resolve();
+    }
+    return api('/admin/instagram', { method: 'POST', body: { code: code } })
+      .then(function () {
+        toast('Instagram connected.');
+        return loadInstagram();
+      })
+      .catch(function (err) {
+        toast(err.message || 'Could not connect Instagram.', 'error');
+      });
+  }
+
   /** Which integrations this deployment can actually see. Never blocks the panel. */
   function loadHealth() {
     return fetch('/healthz', { credentials: 'same-origin' })
@@ -1716,6 +1777,16 @@
       toast('Sorted by date — save to keep it', 'info');
       return render({ preserveFocus: false });
     }
+    if (action === 'ig-disconnect') {
+      if (!confirm('Disconnect Instagram? /reels will fall back to the pinned reels.')) return;
+      return api('/admin/instagram', { method: 'DELETE' })
+        .then(function () {
+          toast('Instagram disconnected.');
+          return loadInstagram();
+        })
+        .then(function () { render({ preserveFocus: false }); })
+        .catch(function (err) { toast(err.message || 'Could not disconnect.', 'error'); });
+    }
     if (action === 'list-add') return listAdd(trigger.dataset.list);
     if (action === 'list-remove') {
       if (!confirm('Delete this item?')) return;
@@ -2032,12 +2103,16 @@
   }
 
   function start() {
-    return Promise.all([loadSite(), loadMedia(), loadBackups(), loadHealth()]).then(function () {
+    return Promise.all([loadSite(), loadMedia(), loadBackups(), loadHealth(), loadInstagram()]).then(function () {
       el.login.hidden = true;
       el.app.hidden = false;
       var hash = location.hash.slice(1);
       state.section = RENDERERS[hash] ? hash : 'overview';
       render({ preserveFocus: false });
+      // Meta may have just sent us back here with a code to redeem.
+      return finishInstagramConnect().then(function () {
+        if (state.section === 'reels') render({ preserveFocus: false });
+      });
     });
   }
 
