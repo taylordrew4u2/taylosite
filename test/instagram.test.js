@@ -353,10 +353,12 @@ test('pasting the Instagram page itself is named, not left as a vague failure', 
   const out = await instagram.fetchFeedUrl('https://www.instagram.com/taylordrew4u/reels/');
   assert.strictEqual(out.configured, true, 'something was set, it is just the wrong thing');
   assert.deepStrictEqual(out.reels, []);
-  assert.match(out.error, /your Instagram page, not a feed/);
-  assert.match(out.error, /behold\.so/, 'and it says where to get the right one');
+  // Nothing can read a profile, so this is not an error — it is a signpost.
+  assert.strictEqual(out.error, null);
+  assert.strictEqual(out.profile, 'taylordrew4u');
+  assert.strictEqual(out.profileUrl, 'https://www.instagram.com/taylordrew4u/reels/');
 
-  assert.match(instagram.feedUrlProblem('https://instagram.com/x'), /not a feed/);
+  assert.strictEqual(instagram.feedUrlProblem('https://instagram.com/x'), 'instagram-profile');
   assert.match(instagram.feedUrlProblem('nonsense'), /does not look like a URL/);
   assert.strictEqual(instagram.feedUrlProblem('https://feeds.behold.so/abc'), '', 'a real feed URL passes');
 });
@@ -387,4 +389,13 @@ test('the feed reader is not a bet on one vendor', () => {
   // Captions come from whichever field the service used.
   assert.strictEqual(instagram.reelFromFeedItem({ id: 'x', video: 'https://c/x.mp4', message: 'Crowd work #nyc' }).caption, 'Crowd work');
   assert.strictEqual(instagram.reelFromFeedItem({ id: 'y', video: 'https://c/y.mp4', text: 'Cellar' }).caption, 'Cellar');
+});
+
+test('a handle is read from a profile URL, and only from a profile URL', () => {
+  assert.strictEqual(instagram.instagramHandle('https://www.instagram.com/taylordrew4u/'), 'taylordrew4u');
+  assert.strictEqual(instagram.instagramHandle('https://instagram.com/taylordrew4u/reels/'), 'taylordrew4u');
+  assert.strictEqual(instagram.instagramHandle('https://www.instagram.com/reel/ABC123/'), '', 'a post is not a person');
+  assert.strictEqual(instagram.instagramHandle('https://www.instagram.com/explore/'), '');
+  assert.strictEqual(instagram.instagramHandle('https://feeds.behold.so/abc'), '');
+  assert.strictEqual(instagram.instagramHandle('nonsense'), '');
 });

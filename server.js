@@ -658,7 +658,11 @@ async function handle(req, res) {
     // token is the other way in for anyone who has one.
     const feedUrl = (site.reels && site.reels.feedUrl) || '';
     const feed = feedUrl ? await instagram.fetchFeedUrl(feedUrl) : await instagram.fetchReels({ store, site });
-    return sendHtml(res, 200, render.renderReels(site, { origin, remote: feed.reels, error: feed.error }));
+    return sendHtml(
+      res,
+      200,
+      render.renderReels(site, { origin, remote: feed.reels, error: feed.error, profile: feed.profile, profileUrl: feed.profileUrl })
+    );
   }
 
   const page = PAGES[pathname];
