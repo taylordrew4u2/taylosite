@@ -11,6 +11,7 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@vercel/blob": "^0.27.0"
   },
   "engines": {

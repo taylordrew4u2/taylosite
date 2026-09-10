@@ -23,7 +23,9 @@
     instagram: null,
     mediaTarget: null,
     showFilter: 'all',
-    expandedShows: {}
+    expandedShows: {},
+    flyer: null,
+    flyerBusy: false
   };
 
   function icon(paths) {
@@ -688,6 +690,9 @@
                       '<label class="mini-field mini-field-wide"><span>Venue street address</span><input class="input input-sm" type="text" data-path="shows.' + i + '.street" value="' + esc(show.street || '') + '" placeholder="117 MacDougal St"></label>' +
                       '<label class="mini-field"><span>Postal code</span><input class="input input-sm" type="text" data-path="shows.' + i + '.postalCode" value="' + esc(show.postalCode || '') + '" placeholder="10012"></label>' +
                       '<label class="mini-field"><span>Country</span><input class="input input-sm" type="text" data-path="shows.' + i + '.country" value="' + esc(show.country || '') + '" placeholder="US"></label>' +
+                      '<div class="mini-field mini-field-wide">' +
+                      imageField({ label: 'Flyer', path: 'shows.' + i + '.flyer', value: show.flyer, hint: 'Shown beside the date on the links page and published as the event’s picture.' }) +
+                      '</div>' +
                       '</div>'
                     : '') +
                   '</div>'
@@ -699,6 +704,7 @@
       : emptyState('No dates yet. The home page shows your “coming soon” text until there are some.');
 
     return (
+      flyerCard() +
       stats +
       card('Tour dates', body, {
         subtitle: 'Past dates leave the home page on their own and move to the bottom of the links page. Open a row (+) to add the venue’s street address — a full address is what Google’s event listings actually want.',
@@ -708,6 +714,100 @@
           '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="shows">Add show</button>'
       })
     );
+  }
+
+  /**
+   * Post a flyer, get a show. The image goes to the server, which has the
+   * model read the date, venue, city, address, time and ticket link off it and
+   * hands back a filled-in row.
+   */
+  function flyerCard() {
+    var info = state.flyer || {};
+    var body;
+    if (state.flyerBusy) {
+      body =
+        '<div class="upload-drop flyer-drop is-busy" aria-busy="true">' +
+        '<span class="flyer-spinner" aria-hidden="true"></span>' +
+        '<span>Reading the flyer…</span>' +
+        '<small>Usually ten seconds or so.</small></div>';
+    } else if (info.configured) {
+      body =
+        '<label class="upload-drop flyer-drop" data-flyer-drop="1">' +
+        '<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden data-flyer-input="1">' +
+        '<span>Drop a flyer here or click to post one</span>' +
+        '<small>PNG, JPG, WebP or GIF · the date, venue, city, time and ticket link are read off it and a show is added</small>' +
+        '</label>' +
+        '<p class="hint">Read by ' + esc(info.model || 'Claude') + ' with the API key ' +
+        (info.source === 'panel' ? 'saved here' : 'from the server environment') + '. Check the row it adds — a flyer can be ambiguous about the year or the city.' +
+        (info.source === 'panel'
+          ? ' <button class="btn btn-sm btn-ghost" type="button" data-action="flyer-forget-key">Forget key</button>'
+          : '') +
+        '</p>';
+    } else {
+      body =
+        '<p class="hint">Reading a flyer takes an Anthropic API key. Make one at console.anthropic.com, paste it here, and from then on a flyer is all a show needs.</p>' +
+        '<div class="field"><label class="label" for="flyer-key">Anthropic API key</label>' +
+        '<input class="input" type="password" id="flyer-key" autocomplete="off" placeholder="sk-ant-…"></div>' +
+        '<button class="btn btn-sm btn-accent" type="button" data-action="flyer-save-key">Save key</button>';
+    }
+    return card('Post a flyer', body, {
+      subtitle: 'The quick way in: post the flyer and the show is filled in for you, flyer attached.'
+    });
+  }
+
+  function postFlyer(file) {
+    if (!file || !/^image\/(png|jpe?g|webp|gif)$/.test(file.type)) {
+      return toast('A flyer has to be a PNG, JPG, WebP or GIF image.', 'error');
+    }
+    state.flyerBusy = true;
+    render({ preserveFocus: false });
+    var wasClean = !state.dirty;
+    prepareImage(file)
+      .then(function (prepared) {
+        return api('/admin/shows/flyer', { method: 'POST', body: { name: file.name, dataUrl: prepared.dataUrl } });
+      })
+      .then(function (data) {
+        state.flyerBusy = false;
+        var show = data.show;
+        state.site.shows = state.site.shows || [];
+        state.site.shows.push(show);
+        state.expandedShows[show.id] = true;
+        state.showFilter = 'all';
+        markDirty();
+        loadMedia().catch(function () {});
+        var missing = (data.missing || []).filter(function (m) {
+          return m === 'date' || m === 'venue';
+        });
+        var label = [show.venue, show.date].filter(Boolean).join(' · ') || 'a show';
+        if (missing.length) {
+          render({ preserveFocus: false });
+          scrollToShow(show.id);
+          return toast('Added ' + label + ' — could not read the ' + missing.join(' or ') + ', fill it in and save.', 'info');
+        }
+        if (wasClean) {
+          // Nothing else was pending, so the show can go straight up.
+          return save().then(function () {
+            render({ preserveFocus: false });
+            scrollToShow(show.id);
+            // save() reports its own failure; only claim a publish that happened.
+            if (!state.dirty) toast('Added ' + label + ' and published it.', 'ok');
+          });
+        }
+        render({ preserveFocus: false });
+        scrollToShow(show.id);
+        toast('Added ' + label + ' — save to publish it with your other changes.', 'ok');
+      })
+      .catch(function (err) {
+        state.flyerBusy = false;
+        render({ preserveFocus: false });
+        toast(err.message || 'Could not read the flyer.', 'error');
+      });
+  }
+
+  function scrollToShow(id) {
+    var button = el.panel.querySelector('[data-action="toggle-show"][data-id="' + id.replace(/"/g, '\\"') + '"]');
+    var row = button && button.closest('.dtable-row');
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
   // Touch screens never fire the drag events the reorder handle relies on, so
@@ -1420,7 +1520,7 @@
       return { id: uid('link'), label: 'New link', sublabel: '', url: '', visible: true, featured: false, clicks: 0 };
     },
     shows: function () {
-      return { id: uid('show'), date: '', time: '', venue: '', city: '', street: '', postalCode: '', country: '', url: '', ctaLabel: 'Tickets', note: '', soldOut: false, visible: true };
+      return { id: uid('show'), date: '', time: '', venue: '', city: '', street: '', postalCode: '', country: '', url: '', ctaLabel: 'Tickets', note: '', flyer: '', soldOut: false, visible: true };
     },
     nav: function () {
       return { id: uid('nav'), label: 'New item', href: '/', visible: true };
@@ -1473,6 +1573,7 @@
     return api('/admin/site').then(function (data) {
       state.site = data.site;
       state.stats = data.stats;
+      state.flyer = data.flyer || null;
       state.sessions = data.sessions;
       state.usingDefaultPassword = data.usingDefaultPassword;
       state.storage = data.storage || '';
@@ -1765,6 +1866,11 @@
       });
       target.value = '';
     }
+    if (target.dataset && target.dataset.flyerInput) {
+      var flyerFile = target.files[0];
+      target.value = '';
+      postFlyer(flyerFile);
+    }
     if (target.dataset && target.dataset.importInput) {
       var file = target.files[0];
       if (!file) return;
@@ -1893,6 +1999,26 @@
         })
         .then(function () { render({ preserveFocus: false }); })
         .catch(function (err) { toast(err.message || 'Could not disconnect.', 'error'); });
+    }
+    if (action === 'flyer-save-key') {
+      var keyBox = document.getElementById('flyer-key');
+      return api('/admin/flyer/key', { method: 'POST', body: { apiKey: keyBox ? keyBox.value.trim() : '' } })
+        .then(function (data) {
+          state.flyer = data;
+          toast('Key saved — post a flyer.', 'ok');
+          render({ preserveFocus: false });
+        })
+        .catch(function (err) { toast(err.message || 'Could not save the key.', 'error'); });
+    }
+    if (action === 'flyer-forget-key') {
+      if (!confirm('Forget the Anthropic API key? Flyers cannot be read until another is saved.')) return;
+      return api('/admin/flyer/key', { method: 'DELETE' })
+        .then(function (data) {
+          state.flyer = data;
+          toast('Key removed.');
+          render({ preserveFocus: false });
+        })
+        .catch(function (err) { toast(err.message || 'Could not remove the key.', 'error'); });
     }
     if (action === 'list-add') return listAdd(trigger.dataset.list);
     if (action === 'list-remove') {
@@ -2056,6 +2182,27 @@
     el.panel.querySelectorAll('.is-drop-target').forEach(function (n) {
       n.classList.remove('is-drop-target');
     });
+  });
+
+  // drag-and-drop a flyer onto the shows page
+  el.panel.addEventListener('dragover', function (event) {
+    var drop = event.target.closest('[data-flyer-drop]');
+    if (!drop) return;
+    event.preventDefault();
+    drop.classList.add('is-over');
+  });
+
+  el.panel.addEventListener('dragleave', function (event) {
+    var drop = event.target.closest('[data-flyer-drop]');
+    if (drop) drop.classList.remove('is-over');
+  });
+
+  el.panel.addEventListener('drop', function (event) {
+    var drop = event.target.closest('[data-flyer-drop]');
+    if (!drop || !event.dataTransfer.files.length) return;
+    event.preventDefault();
+    drop.classList.remove('is-over');
+    postFlyer(event.dataTransfer.files[0]);
   });
 
   // drag-and-drop upload onto the drop zone

@@ -10,6 +10,7 @@ const { spawn } = require('node:child_process');
 const { startFakeRedis } = require('./helpers/fake-redis');
 const { startFakeGithub } = require('./helpers/fake-github');
 const { startFakeInstagram } = require('./helpers/fake-instagram');
+const { startFakeAnthropic } = require('./helpers/fake-anthropic');
 
 const ROOT = path.join(__dirname, '..');
 const PNG = Buffer.from(
@@ -1424,4 +1425,195 @@ test('on Vercel without a store, the site explains itself instead of crashing', 
 
     assert.strictEqual((await server.call('/assets/css/site.css')).status, 200, 'static assets still serve');
   });
+});
+
+// ---------------------------------------------------------------- flyers
+
+const FLYER_ANSWER = {
+  title: 'Late Night Laughs',
+  date: '2031-10-03',
+  time: '9:30 PM',
+  venue: 'The Comedy Cellar',
+  city: 'New York, NY',
+  street: '117 MacDougal St',
+  postalCode: '10012',
+  country: 'US',
+  url: 'comedycellar.com/tickets',
+  note: 'With Jane Doe · 21+',
+  soldOut: false,
+  confidence: 'high',
+  missing: []
+};
+
+test('posting a flyer reads the show off it and keeps the image', async () => {
+  const ai = await startFakeAnthropic({ answer: FLYER_ANSWER });
+  try {
+    await withServer({ ANTHROPIC_API_KEY: 'sk-ant-env-key-0123456789abcdef', ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      await server.login();
+
+      const status = await server.call('/api/admin/site');
+      assert.deepStrictEqual(status.json.flyer, { configured: true, source: 'environment', model: 'claude-opus-5' });
+
+      const res = await server.call('/api/admin/shows/flyer', {
+        method: 'POST',
+        body: { name: 'Cellar Flyer.png', dataUrl: `data:image/png;base64,${PNG.toString('base64')}` }
+      });
+      assert.strictEqual(res.status, 200, res.text);
+      const { show, file } = res.json;
+      assert.match(show.id, /^show-/);
+      assert.strictEqual(show.date, '2031-10-03');
+      assert.strictEqual(show.time, '9:30 PM');
+      assert.strictEqual(show.venue, 'The Comedy Cellar');
+      assert.strictEqual(show.city, 'New York, NY');
+      assert.strictEqual(show.street, '117 MacDougal St');
+      assert.strictEqual(show.postalCode, '10012');
+      assert.strictEqual(show.url, 'https://comedycellar.com/tickets', 'a bare domain on the flyer becomes a link');
+      assert.strictEqual(show.note, 'With Jane Doe · 21+');
+      assert.strictEqual(show.visible, true);
+      assert.strictEqual(show.ctaLabel, 'Tickets');
+      assert.match(file.name, /^cellar-flyer-[0-9a-f]{8}\.png$/, 'the flyer is kept as an upload');
+      assert.strictEqual(show.flyer, file.url, 'and attached to the show');
+      assert.deepStrictEqual(res.json.missing, []);
+      assert.strictEqual(res.json.confidence, 'high');
+
+      // What the model was asked.
+      assert.strictEqual(ai.calls.length, 1);
+      const call = ai.calls[0];
+      assert.strictEqual(call.key, 'sk-ant-env-key-0123456789abcdef');
+      assert.strictEqual(call.body.model, 'claude-opus-5');
+      assert.strictEqual(call.body.output_config.format.type, 'json_schema', 'the answer is constrained to the show shape');
+      assert.ok(call.body.output_config.format.schema.properties.venue);
+      const blocks = call.body.messages[0].content;
+      assert.strictEqual(blocks[0].type, 'image');
+      assert.strictEqual(blocks[0].source.media_type, 'image/png');
+      assert.strictEqual(blocks[0].source.data, PNG.toString('base64'));
+      assert.match(blocks[1].text, /Today is \d{4}-\d{2}-\d{2}/, 'the date is given so a year-less flyer lands in the right year');
+      assert.match(blocks[1].text, /Taylor Drew/, 'and whose site it is');
+
+      // The row saves like any other and the flyer reaches the page.
+      const saved = await server.call('/api/admin/site', { method: 'PUT', body: { site: { shows: [show] } } });
+      assert.strictEqual(saved.status, 200);
+      assert.strictEqual(saved.json.site.shows[0].flyer, file.url);
+      assert.strictEqual(saved.json.stats.upcomingShows, 1);
+
+      const links = await server.call('/links');
+      assert.match(links.text, new RegExp(`<a class="show-flyer" href="${file.url}"[^>]*><img src="${file.url}" alt="Flyer for The Comedy Cellar"`));
+      assert.match(links.text, /THE COMEDY CELLAR|The Comedy Cellar/);
+      const ld = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(links.text);
+      const event = JSON.parse(ld[1])['@graph'].find((n) => n['@type'] === 'Event');
+      assert.strictEqual(event.image, `http://127.0.0.1:${new URL(server.base).port}${file.url}`, 'the flyer is the event picture');
+      assert.strictEqual(event.startDate, '2031-10-03T21:30');
+
+      const home = await server.call('/');
+      assert.doesNotMatch(home.text, /show-flyer/, 'the compact home rows stay text-only');
+    });
+  } finally {
+    await ai.stop();
+  }
+});
+
+test('the API key can be pasted into the panel, and never leaves the server', async () => {
+  const ai = await startFakeAnthropic({ answer: FLYER_ANSWER });
+  try {
+    await withServer({ ANTHROPIC_API_KEY: null, ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      await server.login();
+      assert.deepStrictEqual((await server.call('/api/admin/site')).json.flyer, { configured: false, source: null, model: 'claude-opus-5' });
+
+      const without = await server.call('/api/admin/shows/flyer', {
+        method: 'POST',
+        body: { name: 'f.png', dataUrl: `data:image/png;base64,${PNG.toString('base64')}` }
+      });
+      assert.strictEqual(without.status, 400);
+      assert.match(without.json.error, /API key/);
+      assert.strictEqual(ai.calls.length, 0, 'nothing is sent without a key');
+      assert.strictEqual((await server.call('/api/admin/uploads')).json.files.length, 0, 'and nothing is kept');
+
+      const bad = await server.call('/api/admin/flyer/key', { method: 'POST', body: { apiKey: 'hunter2' } });
+      assert.strictEqual(bad.status, 400);
+      assert.match(bad.json.error, /sk-ant-/);
+
+      const good = await server.call('/api/admin/flyer/key', { method: 'POST', body: { apiKey: ' sk-ant-panel-key-0123456789abcdef ' } });
+      assert.strictEqual(good.status, 200);
+      assert.strictEqual(good.json.configured, true);
+      assert.strictEqual(good.json.source, 'panel');
+
+      const read = await server.call('/api/admin/shows/flyer', {
+        method: 'POST',
+        body: { name: 'f.png', dataUrl: `data:image/png;base64,${PNG.toString('base64')}` }
+      });
+      assert.strictEqual(read.status, 200, read.text);
+      assert.strictEqual(ai.calls[0].key, 'sk-ant-panel-key-0123456789abcdef', 'the pasted key is the one used');
+
+      for (const pathname of ['/api/content', '/api/admin/site', '/api/admin/export']) {
+        const res = await server.call(pathname);
+        assert.doesNotMatch(res.text, /sk-ant-panel/, `${pathname} never carries the key`);
+      }
+
+      const gone = await server.call('/api/admin/flyer/key', { method: 'DELETE' });
+      assert.strictEqual(gone.json.configured, false);
+      assert.strictEqual((await server.call('/api/admin/site')).json.flyer.source, null);
+    });
+  } finally {
+    await ai.stop();
+  }
+});
+
+test('a flyer the model cannot fully read says what is missing; a failed read keeps nothing', async () => {
+  const ai = await startFakeAnthropic({
+    answer: { ...FLYER_ANSWER, date: 'Friday', url: 'javascript:alert(1)', missing: ['url'], confidence: 'low' }
+  });
+  try {
+    await withServer({ ANTHROPIC_API_KEY: 'sk-ant-env-key-0123456789abcdef', ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      await server.login();
+      const post = () =>
+        server.call('/api/admin/shows/flyer', {
+          method: 'POST',
+          body: { name: 'f.jpg', dataUrl: `data:image/jpeg;base64,${PNG.toString('base64')}` }
+        });
+
+      const partial = await post();
+      assert.strictEqual(partial.status, 200);
+      assert.strictEqual(partial.json.show.date, '', 'a date that is not a date is left blank');
+      assert.strictEqual(partial.json.show.url, '', 'and an unsafe link is dropped');
+      assert.deepStrictEqual(partial.json.missing, ['url', 'date']);
+      assert.strictEqual(partial.json.confidence, 'low');
+
+      const notImage = await server.call('/api/admin/shows/flyer', {
+        method: 'POST',
+        body: { name: 'f.svg', dataUrl: 'data:image/svg+xml;base64,PHN2Zy8+' }
+      });
+      assert.strictEqual(notImage.status, 415, 'vectors cannot be read as a picture');
+
+      ai.state.badKey = true;
+      const rejected = await post();
+      assert.strictEqual(rejected.status, 400);
+      assert.match(rejected.json.error, /rejected the API key/);
+      delete ai.state.badKey;
+
+      ai.state.rateLimited = true;
+      assert.strictEqual((await post()).status, 429);
+      delete ai.state.rateLimited;
+
+      ai.state.down = true;
+      const down = await post();
+      assert.strictEqual(down.status, 502);
+      assert.match(down.json.error, /Could not read the flyer/);
+      delete ai.state.down;
+
+      ai.state.refuse = true;
+      assert.strictEqual((await post()).status, 422);
+      delete ai.state.refuse;
+
+      ai.state.garbage = true;
+      const garbage = await post();
+      assert.strictEqual(garbage.status, 502);
+      assert.match(garbage.json.error, /Try again/);
+      delete ai.state.garbage;
+
+      const files = (await server.call('/api/admin/uploads')).json.files;
+      assert.strictEqual(files.length, 1, 'only the read that worked left a flyer behind');
+    });
+  } finally {
+    await ai.stop();
+  }
 });

@@ -45,7 +45,7 @@ credentials.
 | **Home page** | Kicker, big headline, subhead, hero photo + alt text, both buttons (label / link / visibility), the "Upcoming" block |
 | **Reels** | The wall at `/reels` — pulled from the connected Instagram account, plus any reels pinned by hand |
 | **Links** | Add, edit, delete, reorder (drag or arrows), hide, feature; label, sub-label, URL; click counts per link |
-| **Shows** | Date, time, venue, city, ticket link, button label, note, sold-out and hidden flags |
+| **Shows** | Date, time, venue, city, street address, ticket link, button label, note, flyer, sold-out and hidden flags — or post the flyer and have all of that read off it |
 | **About page** | Kicker, title, photo, unlimited bio paragraphs, label/value facts, credits and awards, press quotes, questions and answers |
 | **Navigation** | The header menu — labels, targets, order, visibility |
 | **Themes** | Every colour of every scheme, and which one the site is served with |
@@ -68,6 +68,16 @@ Editing notes:
   visitor lands on the real URL.
 - Shows whose date has passed drop off the home page and move to a "Past"
   list at the bottom of the links page automatically.
+- **Shows → Post a flyer** takes the flyer image and adds the show for you: the
+  date, time, venue, city, street address, ticket link and a one-line note are
+  read off it by Claude, the flyer is kept in the media library and attached to
+  the row, and it goes live at once if nothing else was waiting to be saved.
+  When the flyer leaves out the date or the venue, the row is added but held
+  for you to fill in. A flyer on a show is drawn beside the date on the links
+  page and published as the event's picture in the structured data. Reading a
+  flyer needs an Anthropic API key — paste one into that card, or set
+  `ANTHROPIC_API_KEY` on the server. `ANTHROPIC_MODEL` overrides the model
+  (default `claude-opus-5`).
 
 ## How it is put together
 

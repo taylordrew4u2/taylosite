@@ -829,6 +829,37 @@ a {
   opacity: 0.75;
 }
 
+/* The flyer zone on the Shows page: one image in, one show out. */
+.flyer-drop {
+  margin-bottom: 14px;
+}
+
+.flyer-drop.is-busy {
+  cursor: progress;
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.flyer-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: flyer-spin 0.8s linear infinite;
+}
+
+@keyframes flyer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dtable-extra .image-field {
+  margin-top: 4px;
+}
+
 .media-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));

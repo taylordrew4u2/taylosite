@@ -168,3 +168,18 @@ test('an emptied URL field is cleared, not silently kept', () => {
     'a button keeps its destination'
   );
 });
+
+test('a show keeps its flyer only when it is an upload or an https URL', () => {
+  const site = normalizeSite(
+    {
+      shows: [
+        { id: 'a', venue: 'A', flyer: '/uploads/flyer-1a2b3c4d.png' },
+        { id: 'b', venue: 'B', flyer: 'https://cdn.example.com/b.jpg' },
+        { id: 'c', venue: 'C', flyer: 'javascript:alert(1)' },
+        { id: 'd', venue: 'D' }
+      ]
+    },
+    base()
+  );
+  assert.deepStrictEqual(site.shows.map((s) => s.flyer), ['/uploads/flyer-1a2b3c4d.png', 'https://cdn.example.com/b.jpg', '', '']);
+});
