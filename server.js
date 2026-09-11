@@ -794,6 +794,11 @@ async function handle(req, res) {
     );
   }
 
+  // Not in PAGES on purpose: the game is noindex and stays out of the sitemap.
+  if (pathname === '/play') {
+    return sendHtml(res, 200, render.renderPlay(await store.readSite(), { origin }));
+  }
+
   const page = PAGES[pathname];
   if (page) return sendHtml(res, 200, page(await store.readSite(), { origin }));
 
