@@ -910,7 +910,7 @@ test('a menu saved before a page existed still links to it', async () => {
     });
 
     const labels = (html) => [...html.matchAll(/<a class="nav-link[^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
-    assert.deepStrictEqual(labels((await server.call('/')).text), ['Home', 'About', 'Links', 'Reels']);
+    assert.deepStrictEqual(labels((await server.call('/')).text), ['Home', 'About', 'Links', 'Reels', 'Play']);
 
     // On the page itself the link is marked current, like any other.
     assert.match((await server.call('/reels')).text, /<a class="nav-link is-active" href="\/reels" aria-current="page">Reels<\/a>/);
@@ -922,7 +922,8 @@ test('a menu saved before a page existed still links to it', async () => {
         site: {
           nav: [
             { id: 'n1', label: 'Home', href: '/', visible: true },
-            { id: 'n4', label: 'Reels', href: '/reels', visible: false }
+            { id: 'n4', label: 'Reels', href: '/reels', visible: false },
+            { id: 'n5', label: 'Play', href: '/play', visible: false }
           ]
         }
       }
@@ -1616,4 +1617,20 @@ test('a flyer the model cannot fully read says what is missing; a failed read ke
   } finally {
     await ai.stop();
   }
+});
+
+test('the game page renders, is in the menu, and stays out of the index', async () => {
+  await withServer({}, async (server) => {
+    const res = await server.call('/play');
+    assert.strictEqual(res.status, 200);
+    assert.match(res.text, /<h1 class="display display-sm">Shush the heckler<\/h1>/);
+    assert.strictEqual((res.text.match(/<button class="seat"/g) || []).length, 12, 'twelve seats in the crowd');
+    assert.match(res.text, /<script src="\/assets\/js\/play\.js" defer><\/script>/);
+    assert.match(res.text, /<a class="nav-link is-active" href="\/play" aria-current="page">Play<\/a>/, 'linked from the default menu');
+    assert.match(res.text, /<meta name="robots" content="noindex/, 'a bit of fun is not a page to find');
+    assert.doesNotMatch((await server.call('/sitemap.xml')).text, /\/play</, 'and not in the sitemap');
+    assert.doesNotMatch((await server.call('/llms.txt')).text, /\/play\)/, 'nor in the summary answer engines read');
+    assert.strictEqual((await server.call('/assets/js/play.js')).status, 200);
+    assert.strictEqual((await server.call('/play/')).status, 301, 'one canonical spelling, like every page');
+  });
 });

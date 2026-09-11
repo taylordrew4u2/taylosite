@@ -68,6 +68,10 @@ Editing notes:
   visitor lands on the real URL.
 - Shows whose date has passed drop off the home page and move to a "Past"
   list at the bottom of the links page automatically.
+- `/play` is a small game, for no reason: hecklers pop up in a grid of seats
+  and the visitor taps them before they get a word in. It is in the menu by
+  default (hide it under Navigation if you like), out of the sitemap, and
+  marked noindex.
 - **Shows → Post a flyer** takes the flyer image and adds the show for you: the
   date, time, venue, city, street address, ticket link and a one-line note are
   read off it by Claude, the flyer is kept in the media library and attached to
