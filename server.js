@@ -12,6 +12,7 @@ const { defaultSite } = require('./lib/defaults');
 const render = require('./lib/render');
 const instagram = require('./lib/instagram');
 const indexnow = require('./lib/indexnow');
+const flyer = require('./lib/flyer');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -51,6 +52,18 @@ const IMAGE_TYPES = {
 };
 
 // ------------------------------------------------------------------ helpers
+
+/** An upload's file name, from whatever it was called on the way in. */
+function slugName(name, fallback) {
+  return (
+    String(name || fallback)
+      .toLowerCase()
+      .replace(/\.[^.]+$/, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || fallback
+  );
+}
 
 function clientIp(req) {
   const fwd = req.headers['x-forwarded-for'];
@@ -272,7 +285,8 @@ async function handleApi(req, res, url) {
       stats: await buildStats(site),
       sessions: await auth.listSessions(ctx.token),
       usingDefaultPassword: await auth.usingDefaultPassword(),
-      storage: store.describe()
+      storage: store.describe(),
+      flyer: flyer.status(site, process.env)
     });
   }
 
@@ -376,6 +390,72 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true });
   }
 
+  // --- flyers -------------------------------------------------------------
+  // A flyer goes in, a show comes out. The image is kept as an upload so the
+  // row can carry it; the fields are read off it by the model.
+  if (adminRoute === '/shows/flyer' && req.method === 'POST') {
+    const body = await readJson(req);
+    const match = /^data:([\w/+.-]+);base64,(.+)$/s.exec(String(body.dataUrl || ''));
+    if (!match) return sendJson(res, 400, { error: 'Expected a base64 data URL' });
+    const contentType = match[1].toLowerCase();
+    if (!flyer.IMAGE_TYPES.includes(contentType)) {
+      return sendJson(res, 415, { error: 'A flyer has to be a PNG, JPEG, WebP or GIF image.' });
+    }
+    const buffer = Buffer.from(match[2], 'base64');
+    const site = await store.readSite();
+    let details;
+    try {
+      details = await flyer.extract({ buffer, contentType, env: process.env, site });
+    } catch (err) {
+      return sendJson(res, err.status || 502, { error: err.message });
+    }
+    // Only keep the image once it has been read; a refused key should not
+    // litter the library.
+    let file = null;
+    if (buffer.length <= store.maxImageBytes()) {
+      const base = slugName(body.name, 'flyer');
+      file = await store.putUpload(`${base}-${crypto.randomBytes(4).toString('hex')}${IMAGE_TYPES[contentType]}`, buffer, contentType);
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      file,
+      show: {
+        id: `show-${Date.now().toString(36)}-${crypto.randomBytes(2).toString('hex')}`,
+        date: details.date,
+        time: details.time,
+        venue: details.venue,
+        city: details.city,
+        street: details.street,
+        postalCode: details.postalCode,
+        country: details.country,
+        url: details.url,
+        ctaLabel: 'Tickets',
+        note: details.note,
+        soldOut: details.soldOut,
+        visible: true,
+        flyer: file ? file.url : ''
+      },
+      title: details.title,
+      confidence: details.confidence,
+      missing: details.missing
+    });
+  }
+
+  if (adminRoute === '/flyer/key' && req.method === 'POST') {
+    const body = await readJson(req);
+    try {
+      await flyer.saveKey({ store, apiKey: body.apiKey });
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message });
+    }
+    return sendJson(res, 200, { ok: true, ...flyer.status(await store.readSite(), process.env) });
+  }
+
+  if (adminRoute === '/flyer/key' && req.method === 'DELETE') {
+    await flyer.forgetKey(store);
+    return sendJson(res, 200, { ok: true, ...flyer.status(await store.readSite(), process.env) });
+  }
+
   if (adminRoute === '/uploads' && req.method === 'GET') {
     return sendJson(res, 200, { files: await store.listUploads() });
   }
@@ -396,13 +476,7 @@ async function handleApi(req, res, url) {
         )} KB. Images fit; a video usually needs Vercel Blob storage, or host it elsewhere and paste the URL.`
       });
     }
-    const base = String(body.name || 'image')
-      .toLowerCase()
-      .replace(/\.[^.]+$/, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 40) || 'image';
-    const name = `${base}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+    const name = `${slugName(body.name, 'image')}-${crypto.randomBytes(4).toString('hex')}${ext}`;
     const file = await store.putUpload(name, buffer, contentType);
     return sendJson(res, 201, { ok: true, file });
   }
