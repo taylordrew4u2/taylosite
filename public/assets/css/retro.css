@@ -1507,6 +1507,11 @@ body {
   cursor: pointer;
 }
 
+.boot-skip:focus-visible {
+  outline: 1px dotted rgba(255, 255, 255, 0.35);
+  outline-offset: 0;
+}
+
 .boot[data-stage='os'] .boot-skip,
 .boot[data-stage='user'] .boot-skip,
 .boot[data-stage='welcome'] .boot-skip {
@@ -1521,25 +1526,59 @@ body {
   }
 }
 
-/* On a phone the self-test wraps and the welcome screen stacks. */
+/* On a phone: the self-test wraps its long lines with a hanging indent so no
+   punchline is lost off the right edge, the skip moves to the top corner out
+   of the text's way, the logo screen's footer stacks, and the welcome screen
+   sets everything smaller and stacks it so a small phone still sees the whole
+   family. */
 @media (max-width: 719px) {
   .boot {
     position: fixed;
   }
 
   .boot-post {
+    padding: 34px 12px 10px;
     font-size: 11px;
-    padding-right: 60px;
+    line-height: 1.3;
+  }
+
+  .boot-post-text {
+    white-space: pre-wrap;
+  }
+
+  .boot-line {
+    padding-left: 2ch;
+    text-indent: -2ch;
+    overflow-wrap: anywhere;
+  }
+
+  .boot-post-foot {
+    padding-right: 0;
   }
 
   .boot-estar {
     display: none;
   }
 
+  .boot-os-copy {
+    left: 14px;
+    right: 14px;
+    bottom: 12px;
+    font-size: 10px;
+  }
+
+  .boot-os-brand {
+    right: 14px;
+    bottom: 30px;
+    font-size: 14px;
+  }
+
   .boot-welcome-mid {
     flex-direction: column;
     justify-content: center;
-    gap: 26px;
+    gap: 14px;
+    padding: 10px 0;
+    overflow: hidden;
   }
 
   .boot-welcome-mid::after {
@@ -1550,7 +1589,30 @@ body {
   .boot-welcome-right {
     flex: 0 0 auto;
     align-items: center;
-    padding: 0;
+    padding: 0 16px;
+  }
+
+  .boot-welcome-left .boot-flag {
+    width: 62px;
+    height: 51px;
+  }
+
+  .boot-welcome-left .boot-wm-small {
+    font-size: 13px;
+  }
+
+  .boot-welcome-left .boot-wm-big {
+    font-size: 36px;
+  }
+
+  .boot-welcome-left .boot-wm-big sup {
+    font-size: 20px;
+  }
+
+  .boot-welcome-hint {
+    margin-top: 12px;
+    font-size: 12px;
+    text-align: center;
   }
 
   .boot-welcome-right {
@@ -1558,30 +1620,76 @@ body {
     flex-direction: column;
   }
 
-  .boot-welcome-hint {
-    margin-top: 18px;
-    text-align: center;
-  }
-
-  .boot-welcome-right {
-    align-items: center;
-  }
-
   .boot-users {
+    gap: 3px;
     align-items: flex-start;
   }
 
-  .boot-skip {
-    bottom: auto;
-    top: 10px;
+  .boot-user {
+    gap: 10px;
+    padding: 4px 20px 4px 5px;
+  }
+
+  .boot-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .boot-user-text {
+    gap: 2px;
+  }
+
+  .boot-user-text b {
+    font-size: 14px;
+  }
+
+  .boot-user-text small {
+    font-size: 11px;
+  }
+
+  .boot-welcome-word {
+    font-size: 40px;
+  }
+
+  .boot-welcome-foot {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 16px;
+    font-size: 11px;
+    line-height: 1.25;
   }
 
   .boot-poweroff {
     white-space: normal;
   }
 
+  .boot-poweroff i {
+    width: 20px;
+    height: 20px;
+  }
+
+  .boot-poweroff i::before {
+    left: 4px;
+    top: 4px;
+  }
+
+  .boot-poweroff i::after {
+    left: 9px;
+    top: 3px;
+  }
+
   .boot-welcome-note {
-    display: none;
+    text-align: left;
+    font-size: 10px;
+    color: #dbe6ff;
+  }
+
+  .boot-skip {
+    bottom: auto;
+    top: 8px;
+    right: 8px;
   }
 }
 
