@@ -213,6 +213,15 @@ send. The button opens Meta's authorization window asking for
 panel redeems that code, exchanges it for a 60-day token and wipes it from the
 address bar. The account must be a **Business** or **Creator** account.
 
+**A token you already hold.** If a long-lived token was minted elsewhere —
+Meta's dashboard hands one out directly — paste it into **Admin → Reels →
+Paste a long-lived access token** instead of setting `INSTAGRAM_TOKEN` and
+redeploying. It is checked against the account before it is saved, so a typo
+or a dead token cannot replace a working connection, and from then on it is
+refreshed like any other rather than dying at 60 days. Its permissions are not
+stated by Meta on that check, so the panel does not second-guess what it can
+do: a send it was not granted is refused by Meta, in Meta's words.
+
 **Why the token is not simply an environment variable.** A long-lived token
 lasts 60 days, and Meta's rule is that one not refreshed inside that window can
 never be refreshed again. A token pasted into the environment and forgotten

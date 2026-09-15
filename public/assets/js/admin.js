@@ -1021,7 +1021,8 @@
       var until = ig.expiresAt ? new Date(ig.expiresAt) : null;
       var days = until ? Math.round((until - new Date()) / 86400000) : null;
       return (
-        '<p class="hint"><strong>Connected.</strong> The wall is rebuilt from your account every 20 minutes.' +
+        '<p class="hint"><strong>Connected' + (ig.username ? ' as @' + esc(ig.username) : '') +
+        '.</strong> The wall is rebuilt from your account every 20 minutes.' +
         (days !== null
           ? ' The access token renews itself automatically; as it stands it is good for another ' +
             days + ' day' + (days === 1 ? '' : 's') + '.'
@@ -1040,12 +1041,32 @@
         '<p><a class="btn btn-sm btn-accent" href="' + esc(ig.authorizeUrl) + '">Connect Instagram</a></p>' +
         '<p class="hint">Opens Instagram, asks for read access to your reels, and brings you back here. ' +
         'The redirect URI registered with your Meta app must be exactly <code>' + esc(ig.redirectUri) + '</code>.</p>' +
+        igTokenForm() +
         '<details class="ig-details"><summary>App details</summary>' + igAppForm(ig) + '</details>'
       );
     }
 
     return (
-      '<p class="hint">Not connected — /reels shows only the pinned reels below.</p>' + igAppForm(ig)
+      '<p class="hint">Not connected — /reels shows only the pinned reels below.</p>' +
+      igTokenForm() +
+      igAppForm(ig)
+    );
+  }
+
+  /**
+   * A token minted somewhere else — Meta's dashboard hands one out directly —
+   * adopted here instead of through a hosting environment variable and a
+   * redeploy. From then on the site refreshes it like any other.
+   */
+  function igTokenForm() {
+    return (
+      '<details class="ig-details"><summary>Paste a long-lived access token</summary>' +
+      '<label class="field"><span class="label">Instagram access token</span>' +
+      '<input class="input" id="ig-token" type="password" autocomplete="off" placeholder="IGAA…"></label>' +
+      '<p><button class="btn btn-sm btn-accent" type="button" data-action="ig-save-token">Save token</button></p>' +
+      '<p class="hint">Checked against the account before it is saved, then kept alive here — a long-lived ' +
+      'token dies for good after 60 days without a refresh. It is stored with your password and never shown again.</p>' +
+      '</details>'
     );
   }
 
@@ -2026,6 +2047,20 @@
         })
         .then(function () { render({ preserveFocus: false }); })
         .catch(function (err) { toast(err.message || 'Could not save the app details.', 'error'); });
+    }
+    if (action === 'ig-save-token') {
+      var tokenBox = document.getElementById('ig-token');
+      return api('/admin/instagram/token', {
+        method: 'POST',
+        body: { token: tokenBox ? tokenBox.value.trim() : '' }
+      })
+        .then(function (out) {
+          toast('Token saved' + (out && out.username ? ' — connected as @' + out.username : '') + '.');
+          if (tokenBox) tokenBox.value = '';
+          return loadInstagram();
+        })
+        .then(function () { render({ preserveFocus: false }); })
+        .catch(function (err) { toast(err.message || 'Could not save that token.', 'error'); });
     }
     if (action === 'ig-send-dm') {
       var toBox = document.getElementById('ig-dm-to');

@@ -390,6 +390,19 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // A long-lived token minted elsewhere — Meta's dashboard, say — adopted
+  // here rather than through an environment variable and a redeploy. It is
+  // checked against the account before it replaces anything.
+  if (adminRoute === '/instagram/token' && req.method === 'POST') {
+    const body = await readJson(req);
+    try {
+      const out = await instagram.saveToken({ store, token: body.token });
+      return sendJson(res, 200, { ok: true, ...out });
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message });
+    }
+  }
+
   if (adminRoute === '/instagram' && req.method === 'DELETE') {
     await instagram.disconnect(store);
     return sendJson(res, 200, { ok: true });

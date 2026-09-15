@@ -96,6 +96,11 @@ async function startFakeInstagram({ media = [], state = {} } = {}) {
       return json(200, { recipient_id: String(to), message_id: 'mid.fake-1' });
     }
 
+    // GET /me — what a pasted token is checked against.
+    if (url.pathname === '/me') {
+      return json(200, { id: '29103222949269958', username: 'taylordrew4u' });
+    }
+
     const match = /^\/([^/]+)\/media$/.exec(url.pathname);
     if (!match) return json(404, { error: { message: 'Unsupported get request' } });
 

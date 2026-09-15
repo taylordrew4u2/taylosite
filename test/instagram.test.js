@@ -622,11 +622,28 @@ test('a narrow grant is believed even when the box is ticked', async () => {
 });
 
 test('a token that predates the permissions list falls back to what it asked for', () => {
-  assert.strictEqual(instagram.tokenCanMessage({ token: 't', messaging: true }), true);
-  assert.strictEqual(instagram.tokenCanMessage({ token: 't', messaging: false }), false);
-  assert.strictEqual(instagram.tokenCanMessage(null), false);
+  const minted = (messaging, scopes) => ({ token: 't', source: 'connected', messaging, scopes });
+
+  // A token this site minted: we know what was asked for, so the flag decides.
+  assert.strictEqual(instagram.tokenCanMessage(minted(true)), true);
+  assert.strictEqual(instagram.tokenCanMessage(minted(false)), false);
   // An empty list means "not stated", so the flag still decides.
-  assert.strictEqual(instagram.tokenCanMessage({ token: 't', messaging: true, scopes: [] }), true);
+  assert.strictEqual(instagram.tokenCanMessage(minted(true, [])), true);
+  // A stated list always wins over it.
+  assert.strictEqual(instagram.tokenCanMessage(minted(false, [instagram.MESSAGING_SCOPE])), true);
+  assert.strictEqual(instagram.tokenCanMessage(minted(true, ['instagram_business_basic'])), false);
+
+  // A token handed to us had its grant negotiated elsewhere, so an unstated
+  // list is not read as a refusal — Meta gets to say so at the send.
+  assert.strictEqual(instagram.tokenCanMessage({ token: 't', source: 'pasted' }), true);
+  assert.strictEqual(instagram.tokenCanMessage({ token: 't', source: 'environment' }), true);
+  assert.strictEqual(
+    instagram.tokenCanMessage({ token: 't', source: 'pasted', scopes: ['instagram_business_basic'] }),
+    false,
+    'unless it did state one'
+  );
+
+  assert.strictEqual(instagram.tokenCanMessage(null), false);
 });
 
 test('Meta states permissions two ways and neither is lost', () => {
@@ -655,5 +672,55 @@ test('renewing a token keeps the permissions it was issued with', async () => {
       true,
       'and the renewed token still knows it can send'
     );
+  });
+});
+
+test('a token pasted into the panel is checked, then kept alive like any other', async () => {
+  await withApi({}, async (api, env) => {
+    const store = fakeStore();
+    const out = await instagram.saveToken({ store, token: 'IGAA' + 'x'.repeat(60), env });
+    assert.strictEqual(out.username, 'taylordrew4u');
+
+    const state = instagram.status(store.site, env);
+    assert.strictEqual(state.connected, true);
+    assert.strictEqual(state.source, 'pasted');
+    assert.strictEqual(state.username, 'taylordrew4u');
+    // Its grant was negotiated elsewhere, so it is not assumed unable to send.
+    assert.strictEqual(state.messagingScope, true);
+    assert.ok(!JSON.stringify(state).includes('IGAA'), 'and the panel is never told the token');
+
+    // It is a normal stored token from here on: refreshed like the rest.
+    const now = Date.now();
+    const held = store.site.auth.instagram;
+    held.obtainedAt = new Date(now - 40 * 24 * 3600 * 1000).toISOString();
+    held.expiresAt = new Date(now + 3 * 24 * 3600 * 1000).toISOString();
+    assert.strictEqual(
+      await instagram.currentToken({ store, site: store.site, env, now }),
+      'refreshed-token'
+    );
+  });
+});
+
+test('a token Instagram will not accept never replaces a working one', async () => {
+  await withApi({ state: { expired: true } }, async (api, env) => {
+    const store = fakeStore({ auth: { instagram: { token: 'working', source: 'connected' } } });
+    await assert.rejects(
+      instagram.saveToken({ store, token: 'IGAA' + 'x'.repeat(60), env }),
+      /would not accept that token/
+    );
+    assert.strictEqual(store.site.auth.instagram.token, 'working', 'the good one is still there');
+  });
+});
+
+test('an obviously wrong token is refused without asking Instagram', async () => {
+  await withApi({}, async (api, env) => {
+    const store = fakeStore();
+    await assert.rejects(instagram.saveToken({ store, token: '  ', env }), /Paste the access token/);
+    await assert.rejects(instagram.saveToken({ store, token: 'IGAAshort', env }), /too short/);
+    await assert.rejects(
+      instagram.saveToken({ store, token: 'IGAA' + 'x'.repeat(30) + '\n' + 'y'.repeat(30), env }),
+      /no spaces in it/
+    );
+    assert.strictEqual(api.calls.length, 0);
   });
 });
