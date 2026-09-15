@@ -1,3 +1,13 @@
+// Keep real destinations in HTML for crawlers and visitors without JavaScript.
+// Ordinary clicks use the existing counter; modified clicks keep native behavior.
+document.addEventListener('click', function (event) {
+  var link = event.target.closest && event.target.closest('a[data-tracked-link]');
+  if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  var destination = link.getAttribute('href');
+  link.setAttribute('href', link.getAttribute('data-tracked-link'));
+  setTimeout(function () { link.setAttribute('href', destination); }, 0);
+});
+
 /* The reel wall: play only what is on screen.
 
    Twenty videos all decoding at once will stall a phone and burn its battery,

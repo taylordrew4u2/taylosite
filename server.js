@@ -680,6 +680,7 @@ async function handleClickThrough(req, res, url) {
 const PAGES = {
   '/': render.renderHome,
   '/about': render.renderAbout,
+  '/shows': render.renderShows,
   '/links': render.renderLinks,
   '/reels': render.renderReels,
   '/contact': render.renderContact
@@ -866,7 +867,7 @@ async function handle(req, res) {
           .filter((p) => p.url)
           .map(
             (p) =>
-              `<image:image><image:loc>${escapeXml(origin + p.url)}</image:loc>` +
+              `<image:image><image:loc>${escapeXml(new URL(p.url, origin).href)}</image:loc>` +
               `<image:title>${escapeXml(site.brand.name)}</image:title>` +
               // The caption is the alt text — the one sentence that says what is
               // in the picture, which is all image search has to go on.
