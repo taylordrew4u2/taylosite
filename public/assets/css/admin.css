@@ -539,6 +539,12 @@ a {
   cursor: pointer;
 }
 
+.search-generators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .seo-generate:hover,
 .seo-generate:focus-visible {
   border-color: var(--accent);

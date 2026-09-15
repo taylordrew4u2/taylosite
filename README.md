@@ -57,13 +57,16 @@ credentials.
 
 Editing notes:
 
-- Public-facing text inputs include a **Generate SEO version** button. It uses
+- Public-facing text inputs include separate **Generate SEO version** and
+  **Generate GEO version** buttons. SEO targets traditional search wording;
+  GEO produces a self-contained, factual block that AI answer engines can
+  extract and attribute. Both use
   the same Anthropic key as flyer reading, preserves the supplied facts, and
   places the draft in the field without saving it. Review the wording and press
   Save to publish it. Technical or factual inputs such as URLs, email addresses,
   dates, venues, IDs, verification codes and colours are not rewritten.
-- Hero, About, social-share and reel-cover images include **Generate photo
-  SEO**. Claude looks at the selected media-library image and drafts factual alt
+- Hero, About, social-share and reel-cover images include **Generate photo SEO
+  + GEO**. Claude looks at the selected media-library image and drafts factual alt
   text or a cover description. The draft remains unsaved until it is reviewed.
 - Changes are held locally until **Save changes** (or `⌘/Ctrl+S`); the tab warns
   before you navigate away with unsaved work. The sidebar marks which sections

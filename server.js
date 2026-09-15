@@ -581,6 +581,7 @@ async function handleApi(req, res, url) {
         text: body.text,
         path: String(body.path || '').slice(0, 160),
         label: String(body.label || '').slice(0, 120),
+        mode: body.mode === 'geo' ? 'geo' : 'seo',
         site,
         env: process.env
       });
