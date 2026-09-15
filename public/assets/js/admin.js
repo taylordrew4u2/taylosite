@@ -259,6 +259,7 @@
       '<input class="input" type="text" data-path="' + esc(opts.path) + '" data-image-input="1" placeholder="/uploads/photo.jpg" value="' + esc(value) + '">' +
       '<span class="image-buttons">' +
       '<button class="btn btn-sm" type="button" data-action="pick-image" data-target="' + esc(opts.path) + '">Choose or upload</button>' +
+      (value && opts.seoTarget ? '<button class="btn btn-sm" type="button" data-action="seo-photo" data-target="' + esc(opts.seoTarget) + '" data-image-path="' + esc(opts.path) + '">Generate photo SEO</button>' : '') +
       (value ? '<button class="btn btn-sm btn-danger" type="button" data-action="clear-image" data-target="' + esc(opts.path) + '">Remove</button>' : '') +
       '</span>' +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
@@ -410,7 +411,7 @@
         field({ label: 'Page title', path: 'seo.title', value: site.seo.title, hint: 'Shown in the browser tab and in Google results.' }) +
           textareaField({ label: 'Description', path: 'seo.description', value: site.seo.description, rows: 3, hint: 'Around 150 characters works best.' }) +
           '<div class="grid-2">' +
-          imageField({ label: 'Social share image', path: 'seo.ogImage', value: site.seo.ogImage, hint: 'What shows when someone pastes your link. 1200 × 630 is ideal.' }) +
+          imageField({ label: 'Social share image', path: 'seo.ogImage', value: site.seo.ogImage, seoTarget: 'seo.ogImageAlt', hint: 'What shows when someone pastes your link. 1200 × 630 is ideal.' }) +
           imageField({
             label: 'App icon',
             path: 'seo.favicon',
@@ -487,7 +488,7 @@
         field({ label: 'Kicker', path: 'home.kicker', value: home.kicker, hint: 'Small line above the name.' }) +
           field({ label: 'Big headline', path: 'home.headline', value: home.headline, hint: 'Each word stacks on its own line.' }) +
           field({ label: 'Subhead', path: 'home.subhead', value: home.subhead }) +
-          imageField({ label: 'Hero photo', path: 'home.photo', value: home.photo }) +
+          imageField({ label: 'Hero photo', path: 'home.photo', value: home.photo, seoTarget: 'home.photoAlt' }) +
           '<div class="grid-2">' +
           field({ label: 'Photo alt text', path: 'home.photoAlt', value: home.photoAlt, hint: 'Described for screen readers.' }) +
           field({ label: 'Empty photo placeholder', path: 'home.photoPlaceholder', value: home.photoPlaceholder }) +
@@ -986,7 +987,7 @@
           field({ label: 'Kicker', path: 'about.kicker', value: about.kicker }) +
           field({ label: 'Title', path: 'about.title', value: about.title, hint: 'Each word stacks on its own line.' }) +
           '</div>' +
-          imageField({ label: 'Photo', path: 'about.photo', value: about.photo }) +
+          imageField({ label: 'Photo', path: 'about.photo', value: about.photo, seoTarget: 'about.photoAlt' }) +
           field({ label: 'Photo alt text', path: 'about.photoAlt', value: about.photoAlt })
       ) +
       card('Bio', paragraphs, {
@@ -1201,7 +1202,7 @@
                   placeholder: 'https://…/clip.mp4',
                   hint: 'A tile only plays on a loop when it has its own video. Instagram will not let their embed autoplay here.'
                 }) +
-                imageField({ label: 'Poster / cover frame', path: base + '.poster', value: r.poster }) +
+                imageField({ label: 'Poster / cover frame', path: base + '.poster', value: r.poster, seoTarget: base + '.caption' }) +
                 '</div>' +
                 field({
                   label: 'Description',
@@ -2265,6 +2266,27 @@
         .finally(function () {
           trigger.disabled = false;
           trigger.textContent = 'Generate SEO version';
+        });
+    }
+
+    if (action === 'seo-photo') {
+      var photoTarget = trigger.dataset.target;
+      var imageUrl = String(getPath(state.site, trigger.dataset.imagePath) || '');
+      trigger.disabled = true;
+      trigger.textContent = 'Analyzing…';
+      return api('/admin/seo-photo', {
+        method: 'POST', body: { imageUrl: imageUrl, target: photoTarget }
+      })
+        .then(function (data) {
+          setPath(state.site, photoTarget, data.text);
+          markDirty();
+          render({ preserveFocus: false });
+          toast('Photo description added. Review it, then save.', 'ok');
+        })
+        .catch(function (err) {
+          trigger.disabled = false;
+          trigger.textContent = 'Generate photo SEO';
+          toast(err.message || 'Could not analyze the photo.', 'error');
         });
     }
 
