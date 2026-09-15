@@ -15,7 +15,7 @@ npm start          # http://localhost:3000
 PORT=8080 npm start
 ```
 
-- Public site: `/`, `/about`, `/reels`, `/links`
+- Public site: `/`, `/about`, `/reels`, `/links`, `/contact`
 - Admin panel: `/admin`
 - Default password: **`weed`** — change it in **Admin → Security**. (Set
   `ADMIN_PASSWORD` before the very first run to seed a different one.)
@@ -46,6 +46,7 @@ credentials.
 | **Reels** | The wall at `/reels` — pulled from the connected Instagram account, plus any reels pinned by hand |
 | **Links** | Add, edit, delete, reorder (drag or arrows), hide, feature; label, sub-label, URL; click counts per link |
 | **Shows** | Date, time, venue, city, street address, ticket link, button label, note, flyer, sold-out and hidden flags — or post the flyer and have all of that read off it |
+| **Contact page** | Kicker, title, intro, the address and subject the Send button opens, the message hint and the button's label |
 | **About page** | Kicker, title, photo, unlimited bio paragraphs, label/value facts, credits and awards, press quotes, questions and answers |
 | **Navigation** | The header menu — labels, targets, order, visibility |
 | **Themes** | Every colour of every scheme, and which one the site is served with |
@@ -122,6 +123,13 @@ every page in it and `public/assets/css/retro.css` dresses it:
 | Status bar | the footer, behind an invented `C:\TAYLOR\…` path |
 | Taskbar | start button, the open window, a clock |
 | Shortcuts | the menu again, plus two folders that refuse to open |
+
+Contact is a message being composed rather than a form: there is no handler
+behind it and there is not meant to be. The fields show what the message will
+say and **Send** is a `mailto:` carrying the address, the subject and the body,
+so the draft opens in whatever the visitor writes mail in. With no contact
+address set it falls back to the brand's booking address, and with neither it
+says so instead of showing a button that goes nowhere.
 
 `public/assets/js/desktop.js` runs the parts a static page cannot: the clock,
 the start menu, minimise / maximise / close, dragging the window by its title

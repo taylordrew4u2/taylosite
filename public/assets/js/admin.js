@@ -49,6 +49,7 @@
     about: '<circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14.5a5.5 5.5 0 0 1 11 0"/>',
     nav: '<path d="M2 4h12M2 8h12M2 12h12"/>',
     themes: '<circle cx="8" cy="8" r="6.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13Z" fill="currentColor" stroke="none"/>',
+    contact: '<rect x="1.5" y="3" width="13" height="10"/><path d="M1.5 4 8 9l6.5-5"/>',
     footer: '<rect x="1.5" y="1.5" width="13" height="13"/><path d="M1.5 11h13"/>',
     media: '<rect x="1.5" y="2.5" width="13" height="11"/><circle cx="5.5" cy="6" r="1.2"/><path d="M2 12l3.5-3.5 3 3L11 8l3 3.5"/>',
     data: '<path d="M2 5h9l-2-2M14 11H5l2 2"/><path d="M2 5l2-2M14 11l-2 2"/>',
@@ -63,6 +64,7 @@
     { id: 'shows', label: 'Shows', hint: 'Tour dates shown on the home and links pages.', keys: ['shows'] },
     { id: 'reels', label: 'Reels', hint: 'The wall of clips.', keys: ['reels'] },
     { id: 'about', label: 'About page', hint: 'Bio, facts, credits, press quotes and questions.', keys: ['about'] },
+    { id: 'contact', label: 'Contact page', hint: 'The message people send you.', keys: ['contact'] },
     { id: 'nav', label: 'Navigation', hint: 'The menu in the header.', keys: ['nav'] },
     { id: 'themes', label: 'Themes', hint: 'The colours the site is built from.', keys: ['themes'] },
     { id: 'footer', label: 'Footer', hint: 'The line at the bottom of every page.', keys: ['footer'] },
@@ -1312,6 +1314,35 @@
     );
   }
 
+  function sectionContact() {
+    var contact = state.site.contact;
+    return card(
+      'Contact page',
+      '<div class="grid-2">' +
+        field({ label: 'Kicker', path: 'contact.kicker', value: contact.kicker }) +
+        field({ label: 'Title', path: 'contact.title', value: contact.title }) +
+        '</div>' +
+        textareaField({ label: 'Intro', path: 'contact.intro', value: contact.intro, rows: 2 }) +
+        '<div class="grid-2">' +
+        field({
+          label: 'To',
+          path: 'contact.to',
+          value: contact.to,
+          hint: 'The address the Send button opens a message to.'
+        }) +
+        field({ label: 'Subject', path: 'contact.subject', value: contact.subject }) +
+        '</div>' +
+        textareaField({
+          label: 'Message hint',
+          path: 'contact.placeholder',
+          value: contact.placeholder,
+          rows: 3,
+          hint: 'What to tell people to include. Shown on the page above the button.'
+        }) +
+        field({ label: 'Send button', path: 'contact.sendLabel', value: contact.sendLabel })
+    );
+  }
+
   function sectionFooter() {
     var footer = state.site.footer;
     return card(
@@ -1504,6 +1535,7 @@
     shows: sectionShows,
     about: sectionAbout,
     reels: sectionReels,
+    contact: sectionContact,
     nav: sectionNav,
     themes: sectionThemes,
     footer: sectionFooter,

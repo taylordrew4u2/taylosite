@@ -575,6 +575,58 @@ body {
   color: #9fd8ff;
 }
 
+/* ------------------------------------------------------- the message */
+
+/*
+ * Contact is a message being composed. The values are text, not inputs —
+ * there is no form behind them — but a mail window is what they look like,
+ * so they sit in the sunken white boxes that in this era meant "typed here".
+ */
+.compose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 28px 28px;
+}
+
+.compose-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+.compose-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.compose-row dt {
+  font: 700 12px Tahoma, Verdana, sans-serif;
+  color: var(--xp-deep);
+}
+
+.compose-row dd,
+.compose-body {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #9fb3cd;
+  background: #fff;
+  font: 12px/1.6 var(--xp-mono);
+  color: #33465f;
+}
+
+.compose-body {
+  flex: 1;
+  min-height: 120px;
+  color: #8797ad;
+}
+
+.compose .cta-row {
+  padding: 0;
+}
+
 /* Photographs sit in the hatched wells an image control gave an empty slot. */
 .hero-photo-wrap,
 .side-photo,

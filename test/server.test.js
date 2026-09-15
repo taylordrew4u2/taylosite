@@ -952,6 +952,39 @@ test('exactly one image is the representative one, and it is the one on the page
   });
 });
 
+test('the contact page hands the whole message to a mail client', async () => {
+  await withServer({}, async (server) => {
+    const res = await server.call('/contact');
+    assert.strictEqual(res.status, 200);
+    // Address and subject both travel in the link, so the draft opens filled in.
+    assert.match(res.text, /href="mailto:booking%40taylordrew\.com\?subject=Booking%20enquiry"/);
+    assert.match(res.text, /C:\\TAYLOR\\MAIL/, 'and the status bar says where the window is');
+
+    await server.login();
+    await server.call('/api/admin/site', {
+      method: 'PUT',
+      body: { site: { contact: { to: 'hi@example.com', subject: 'Hello', sendLabel: 'Send it' } } }
+    });
+    const edited = await server.call('/contact');
+    assert.match(edited.text, /href="mailto:hi%40example\.com\?subject=Hello"/, 'every word of it is editable');
+    assert.match(edited.text, />Send it</);
+
+    // Cleared, it falls back to the booking address the brand already holds
+    // rather than to nothing — the page has an address either way.
+    await server.call('/api/admin/site', { method: 'PUT', body: { site: { contact: { to: '' } } } });
+    assert.match((await server.call('/contact')).text, /href="mailto:booking%40taylordrew\.com/);
+
+    // With neither, there is nothing to send to, so no button pretends there is.
+    await server.call('/api/admin/site', { method: 'PUT', body: { site: { brand: { email: '' } } } });
+    const empty = await server.call('/contact');
+    assert.strictEqual(empty.status, 200, 'the page still stands');
+    assert.match(empty.text, /Add a booking address in the admin panel/, 'and says what is missing');
+    // The footer's own mailto is still on the page, so the check is for the
+    // send button in particular rather than for any mail link anywhere.
+    assert.doesNotMatch(empty.text, /class="btn btn-accent"/);
+  });
+});
+
 test('a menu saved before a page existed still links to it', async () => {
   await withServer({}, async (server) => {
     await server.login();
@@ -975,7 +1008,7 @@ test('a menu saved before a page existed still links to it', async () => {
       const sidebar = html.slice(html.indexOf('<div class="sidebar">'), html.indexOf('<div class="win-doc">'));
       return [...sidebar.matchAll(/<a class="nav-link[^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
     };
-    assert.deepStrictEqual(labels((await server.call('/')).text), ['Home', 'About', 'Links', 'Reels', 'Play']);
+    assert.deepStrictEqual(labels((await server.call('/')).text), ['Home', 'About', 'Links', 'Reels', 'Play', 'Contact']);
 
     // On the page itself the link is marked current, like any other.
     assert.match((await server.call('/reels')).text, /<a class="nav-link is-active" href="\/reels" aria-current="page">Reels<\/a>/);
@@ -993,7 +1026,11 @@ test('a menu saved before a page existed still links to it', async () => {
         }
       }
     });
-    assert.deepStrictEqual(labels((await server.call('/')).text), ['Home'], 'a hidden entry suppresses it');
+    assert.deepStrictEqual(
+      labels((await server.call('/')).text),
+      ['Home', 'Contact'],
+      'a hidden entry suppresses it, and a page with no entry at all still adds itself'
+    );
   });
 });
 
