@@ -94,7 +94,7 @@ img {
 .display {
   margin: 0;
   font-weight: 900;
-  font-size: clamp(3.4rem, 11vw, 6rem);
+  font-size: clamp(2.6rem, 8vw, 4.25rem);
   line-height: 0.84;
   letter-spacing: -0.035em;
   text-transform: uppercase;
@@ -103,18 +103,18 @@ img {
 }
 
 .display-sm {
-  font-size: clamp(2.2rem, 5vw, 2.8rem);
+  font-size: clamp(1.8rem, 4vw, 2.1rem);
 }
 
 /* Headings of three words or more wrap instead of stacking one word per line. */
 .display-flow {
-  font-size: clamp(2.4rem, 6vw, 3.6rem);
+  font-size: clamp(1.9rem, 4.4vw, 2.5rem);
   line-height: 0.92;
   max-width: 16ch;
 }
 
 .display-sm.display-flow {
-  font-size: clamp(1.8rem, 3.4vw, 2.1rem);
+  font-size: clamp(1.5rem, 2.6vw, 1.7rem);
 }
 
 .eyebrow {
@@ -353,12 +353,24 @@ img {
 .hero-photo-wrap {
   position: relative;
   flex: 1;
+  /* Only a floor for the empty state; a photo sizes the panel itself. */
   min-height: 320px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--surface);
   overflow: hidden;
+}
+
+.hero-side:has(img) {
+  /* The panel now shrinks to the photo, so centre it rather than letting it
+     sit at the top with the column's whole height empty beneath it. */
+  justify-content: center;
+}
+
+.hero-side:has(img) .hero-photo-wrap {
+  flex: 0 0 auto;
+  min-height: 0;
 }
 
 /* An empty photo panel reads as deliberate rather than broken. */
@@ -379,10 +391,23 @@ img {
   position: relative;
 }
 
+/* Sized by the photo, not by the column it sits in. Filling the panel made the
+   picture the loudest thing on the page; a cap on both sides keeps it a
+   portrait on a wall rather than the wall. */
 .hero-photo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: auto;
+  height: auto;
+  max-width: min(100%, 360px);
+  max-height: 46svh;
+  object-fit: contain;
+}
+
+/* With a photo in it the panel is just background — no tinted block behind a
+   picture that no longer fills it. */
+.hero-side:has(img) .hero-photo-wrap,
+.split-side .side-photo:has(img) {
+  background: transparent;
+  padding: 32px 28px;
 }
 
 .photo-placeholder {
@@ -470,13 +495,16 @@ img {
   flex-direction: column;
 }
 
-/* An `img` at height:100% inside an auto-height column falls back to its own
-   intrinsic height, so a portrait photo dragged the whole row down with it. A
-   ratio gives the panel a height of its own to fill. */
+/* The panel takes the photo's shape instead of imposing one.
+   A fixed ratio was simpler and it cropped: a landscape stage shot dropped into
+   a portrait panel loses everything either side of the face, and nothing on the
+   page said so or offered a say in it. Sizing from the image means what was
+   uploaded is what shows. `align-self: start` keeps the flex row from
+   stretching it back, and the cap below still stops a very tall photo eating a
+   whole screen — `contain` letterboxes at that point rather than cropping. */
 .side-photo {
-  flex: 1;
-  min-height: 300px;
-  aspect-ratio: 1 / 1;
+  flex: 0 0 auto;
+  align-self: start;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -485,9 +513,11 @@ img {
 }
 
 .side-photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: auto;
+  height: auto;
+  max-width: min(100%, 360px);
+  max-height: 46svh;
+  object-fit: contain;
 }
 
 .prose p {
@@ -838,9 +868,9 @@ a.credit-title {
   flex-direction: column;
   justify-content: center;
   gap: 6px;
-  min-height: 104px;
-  padding: 26px 28px;
-  border-bottom: 2px solid var(--line);
+  min-height: 62px;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--line);
   transition: background 0.15s ease, color 0.15s ease;
 }
 
@@ -874,7 +904,7 @@ a.credit-title {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 6px;
+  width: 3px;
   background: var(--accent);
 }
 
@@ -884,9 +914,12 @@ a.credit-title {
 }
 
 .link-label {
-  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
-  font-weight: 900;
-  letter-spacing: -0.02em;
+  /* Was clamp(1.5rem, 2.4vw, 2.1rem) — 34px of black uppercase per row, eight
+     rows deep, which read as shouting rather than as a list. Small, tracked
+     and lighter carries the same structure without the volume. */
+  font-size: clamp(0.95rem, 1.05vw, 1.1rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   /* Keeps a long label clear of the arrow parked at the end of the row. */
   padding-right: 56px;
@@ -1188,14 +1221,21 @@ a.show-cta:active {
     padding-top: 40px;
   }
 
-  /* Left to itself the photo panel grows to the image's full height and eats a
-     whole screen of scrolling. A fixed ratio keeps it a deliberate block. */
+  /* The cap, not a shape. Left to itself a tall photo eats a whole screen of
+     scrolling, so the height is bounded — but bounding it is not a reason to
+     crop it to a ratio it was never shot in. */
   .hero-photo-wrap,
   .side-photo {
     flex: none;
-    aspect-ratio: 4 / 5;
     min-height: 0;
-    max-height: 70svh;
+  }
+
+  /* One column now, so the photo may take a little more width than it does
+     beside text — still capped, still its own shape. */
+  .hero-photo,
+  .side-photo img {
+    max-width: min(100%, 320px);
+    max-height: 42svh;
   }
 
   .hero-upcoming,
@@ -1291,10 +1331,6 @@ a.show-cta:active {
     padding-top: 32px;
   }
 
-  .hero-photo-wrap {
-    aspect-ratio: 1 / 1;
-  }
-
   .split-main,
   .dates {
     padding-top: 32px;
@@ -1307,11 +1343,11 @@ a.show-cta:active {
   }
 
   .link-card {
-    padding: 24px 18px;
+    padding: 15px 18px;
   }
 
   .link-label {
-    font-size: 1.3rem;
+    font-size: 0.95rem;
     padding-right: 38px;
   }
 
