@@ -21,25 +21,6 @@ html[data-theme] {
   --muted: #5b6d86;
   --line: #b9c7da;
 
-  --xp-ink: #1d2a3c;
-  --xp-deep: #0b2b5e;
-  --xp-blue: #0b3a92;
-  --xp-line: #b9c7da;
-  --xp-face: #eef3fb;
-  --xp-edge: #08316f;
-  --xp-mute: #5b6d86;
-
-  --xp-title: linear-gradient(
-    180deg,
-    #63a5ec 0%,
-    #2b6fd0 10%,
-    #134ba8 48%,
-    #0d3f96 56%,
-    #3d84dd 100%
-  );
-  --xp-gloss: linear-gradient(180deg, #ffffff, #dde8f6 48%, #bed3ee);
-
-  --xp-mono: 'Courier New', monospace;
 }
 
 html {
@@ -56,7 +37,7 @@ body {
      here postdates the machine it is pretending to be — Segoe UI, which used
      to close this stack, arrived with Vista and is the wrong decade's face.
      Same rule for --xp-mono: Courier New, 1955. */
-  font-family: Tahoma, Verdana, sans-serif;
+  font-family: var(--xp-font);
   font-size: 15px;
 }
 
@@ -92,35 +73,14 @@ body {
   overflow: hidden;
 }
 
-/*
- * The wallpaper: sky, cloud and a green hill, drawn in gradients rather than
- * photographed. Five layers, back to front — the sky, the hill as an ellipse
- * rising past the bottom of the screen so its top edge curves, and three soft
- * clouds. No image file, so it stays sharp at any size and costs one paint.
- */
+/* The wallpaper itself is defined in desktop.css, which the admin panel reads
+   from too, so the two halves of the machine cannot drift apart. */
 .wall {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background-color: #3585d8;
-  background-image:
-    radial-gradient(ellipse 30% 11% at 19% 21%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
-    radial-gradient(ellipse 19% 8% at 28% 28%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 72%),
-    radial-gradient(ellipse 13% 6% at 11% 27%, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 72%),
-    radial-gradient(ellipse 22% 9% at 70% 12%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 70%),
-    radial-gradient(ellipse 15% 6% at 79% 18%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 72%),
-    radial-gradient(ellipse 17% 7% at 92% 33%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 72%),
-    radial-gradient(ellipse 12% 5% at 48% 9%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 72%),
-    radial-gradient(
-      ellipse 132% 62% at 50% 122%,
-      #2e6b26 0%,
-      #43882f 44%,
-      #5aa53c 66%,
-      #7ec550 79%,
-      #8fd35d 81%,
-      rgba(0, 0, 0, 0) 82%
-    ),
-    linear-gradient(180deg, #1552b4 0%, #2a76cd 22%, #57a3e2 48%, #93c9ef 66%, #c2e0f7 74%, #d7ecfb 100%);
+  background-color: var(--xp-wall-color);
+  background-image: var(--xp-wallpaper);
 }
 
 .icons {

@@ -126,7 +126,17 @@ every page in it and `public/assets/css/retro.css` dresses it:
 
 The wallpaper is sky, cloud and a green hill, drawn in layered CSS gradients
 rather than photographed — no image file, so it stays sharp at any size and
-costs one paint.
+costs one paint. It lives in `public/assets/css/desktop.css` along with the
+window palette, because the admin panel reads the same file: the two halves of
+the machine cannot drift apart.
+
+The panel at `/admin` is a window on that same desktop —
+`public/assets/css/admin-desktop.css` re-points the variables `admin.css`
+already builds everything from, and adds the chrome: a title bar, group boxes
+with captions, fields that sink and buttons that rise. Signing in is a dialog
+on the wallpaper. Above 860px the frame takes the screen and the panel scrolls
+inside it; below that, the sidebar is still the drawer `admin.css` makes it,
+untouched.
 
 The shortcuts are drawn too, not set in a font: a CRT, a dog-eared document, a
 strip of film, a manila folder, a joystick, an envelope and a cog. Each is 32

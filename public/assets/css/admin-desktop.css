@@ -1,0 +1,511 @@
+/* Taylor Drew — the control panel, as a window on the same desktop.
+ *
+ * admin.css builds the whole panel out of a handful of variables, so most of
+ * this sheet is re-pointing those: a dark editor becomes a light one in the
+ * machine's own greys and blues. The rest is chrome — the panel gets a title
+ * bar and a frame, its cards become group boxes with captions, its fields sink
+ * into the page and its buttons rise off it.
+ *
+ * It loads after admin.css and changes no markup behaviour: every id, class
+ * and control is the one admin.js already drives.
+ */
+
+:root {
+  --bg: #eef3fb;
+  --panel: #f3f7fc;
+  --card: #ffffff;
+  --card-2: #eef3fb;
+  --line: #b9c7da;
+  --line-soft: #d6e0ec;
+  --text: #1d2a3c;
+  --muted: #5b6d86;
+  --radius: 0;
+}
+
+body {
+  background-color: var(--xp-wall-color);
+  background-image: var(--xp-wallpaper);
+  background-attachment: fixed;
+  font-family: var(--xp-font);
+  -webkit-font-smoothing: auto;
+}
+
+/* ------------------------------------------------------------- the window */
+
+.app {
+  /* A title bar spanning both columns, then the sidebar and the workspace. */
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: 216px minmax(0, 1fr);
+  margin: 14px;
+  min-height: calc(100vh - 28px);
+  overflow: hidden;
+  background: var(--xp-face);
+  border: 1px solid var(--xp-edge);
+  border-radius: 9px 9px 4px 4px;
+  box-shadow: 0 8px 22px rgba(4, 18, 44, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.win-title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 5px 5px 9px;
+  background: var(--xp-title);
+  border-bottom: 1px solid var(--xp-edge);
+  user-select: none;
+}
+
+.win-title-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Minimise, maximise and close. A page cannot minimise itself and closing it
+ * would only leave a blank tab, so these are drawn rather than wired — which
+ * is why they are spans and why the row is hidden from a screen reader.
+ */
+.win-title-buttons {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.win-title-buttons span {
+  width: 21px;
+  height: 18px;
+  border: 1px solid #0a3d8f;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #f8fcff, #a9cbf2 52%, #6ea6e2);
+}
+
+.win-title-buttons span:last-child {
+  border-color: #8f1c12;
+  background: linear-gradient(180deg, #ffdad5, #e8705f 52%, #c0301c);
+}
+
+/* ------------------------------------------------------------ the sidebar */
+
+.sidebar {
+  border-right: 1px solid var(--xp-line);
+  background: linear-gradient(180deg, #fbfcfe, #dde6f2);
+}
+
+/*
+ * A window is pinned to the screen and its contents scroll inside it, so above
+ * the drawer breakpoint the frame takes the viewport exactly and the panel
+ * does the scrolling. Below it, admin.css turns the sidebar into a fixed
+ * drawer and the page scrolls as a page — nothing here may touch that.
+ */
+@media (min-width: 861px) {
+  .app {
+    height: calc(100vh - 28px);
+    min-height: 0;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .workspace,
+  .workspace-body,
+  .panel {
+    min-height: 0;
+  }
+}
+
+.sidebar-head {
+  padding: 10px 12px 9px;
+  border-bottom: 1px solid var(--xp-line);
+  box-shadow: 0 1px 0 #fff;
+}
+
+.sidebar-logo {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--xp-deep);
+}
+
+.sidebar-sub {
+  font-family: var(--xp-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--xp-mute);
+}
+
+.sidebar-nav {
+  padding: 6px;
+  gap: 2px;
+}
+
+.side-item {
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #22334c;
+}
+
+.side-item:hover {
+  background: #dbe8fa;
+  color: var(--xp-deep);
+}
+
+.side-item.is-active {
+  border-color: #7ba2d4;
+  background: linear-gradient(180deg, #ffffff, #d3e3f8 55%, #b7d1ef);
+  box-shadow: inset 0 1px 0 #fff;
+  font-weight: 700;
+  color: var(--xp-deep);
+}
+
+.side-count,
+.side-item .side-count {
+  font-family: var(--xp-mono);
+  font-size: 10px;
+  color: var(--xp-mute);
+}
+
+.sidebar-foot {
+  border-top: 1px solid var(--xp-line);
+  box-shadow: 0 -1px 0 #fff;
+}
+
+.sidebar-link {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--xp-blue);
+}
+
+/* ------------------------------------------------------------- the toolbar */
+
+/* Below the title bar this is a toolbar, so it reads as one: a shallow band
+   with a groove under it rather than a heavy rule. */
+.topbar {
+  position: static;
+  padding: 7px 10px;
+  gap: 12px;
+  background: linear-gradient(180deg, #fbfcfe, #e6edf6);
+  border-bottom: 1px solid var(--xp-line);
+  box-shadow: 0 1px 0 #fff;
+}
+
+.topbar-title h1 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--xp-deep);
+}
+
+.topbar-hint {
+  font-family: var(--xp-mono);
+  font-size: 11px;
+  color: var(--xp-mute);
+}
+
+.save-state {
+  font-family: var(--xp-mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ------------------------------------------------------------- push buttons */
+
+.btn {
+  min-height: 0;
+  padding: 6px 16px;
+  border: 1px solid #6f8fb8;
+  border-radius: 5px;
+  background: var(--xp-gloss);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--xp-blue);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  transition: none;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: #6f8fb8;
+  background: linear-gradient(180deg, #ffffff, #d5e5fb 50%, #b8d2f1);
+  color: var(--xp-blue);
+}
+
+.btn:active:not(:disabled) {
+  background: linear-gradient(180deg, #bed3ee, #dde8f6 48%, #ffffff);
+  padding: 7px 15px 5px 17px;
+}
+
+.btn:disabled {
+  border-color: #c3cedd;
+  background: linear-gradient(180deg, #fbfcfd, #e9edf2);
+  color: #9aa7b8;
+}
+
+/* The accent keeps the default button marked without swallowing it. */
+.btn-accent {
+  border-left: 3px solid var(--accent);
+}
+
+.btn-ghost {
+  background: linear-gradient(180deg, #fdfdfd, #e8ecf2 48%, #d3d9e3);
+  border-color: #9fb3cd;
+  color: #3c4a60;
+}
+
+.btn-danger {
+  border-left: 3px solid var(--danger);
+  color: #8f1c12;
+}
+
+.icon-btn {
+  border: 1px solid #6f8fb8;
+  border-radius: 4px;
+  background: var(--xp-gloss);
+  color: var(--xp-blue);
+}
+
+/* ---------------------------------------------------------- the group boxes */
+
+.panel {
+  padding: 14px 14px 60px;
+  background: linear-gradient(180deg, #fdfeff, #eaf0f9);
+}
+
+.section-intro {
+  font-size: 12px;
+  color: var(--xp-mute);
+}
+
+.card {
+  margin-bottom: 12px;
+  border: 1px solid var(--xp-line);
+  background: var(--card);
+  box-shadow: 0 1px 0 #fff;
+}
+
+/* A group box was captioned, not headed. */
+.card-head {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--xp-line);
+  background: linear-gradient(180deg, #f3f7fc, #dfe8f4);
+}
+
+.card-head h2 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--xp-deep);
+}
+
+.card-head p {
+  font-family: var(--xp-mono);
+  font-size: 11px;
+  color: var(--xp-mute);
+}
+
+.card-body {
+  padding: 12px;
+}
+
+/* --------------------------------------------------------------- the fields */
+
+.label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--xp-deep);
+}
+
+/* A field is a well you type into, so it sinks rather than sits. */
+.input,
+.textarea,
+.select {
+  padding: 5px 7px;
+  background: #fff;
+  border: 1px solid;
+  border-color: #7d8da1 #c9d5e3 #c9d5e3 #7d8da1;
+  color: var(--xp-ink);
+  font-size: 12px;
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  border-color: var(--xp-blue);
+  outline: 1px dotted var(--xp-deep);
+  outline-offset: -3px;
+}
+
+.textarea {
+  min-height: 74px;
+  font-family: var(--xp-mono);
+  line-height: 1.6;
+}
+
+.hint {
+  font-family: var(--xp-mono);
+  font-size: 11px;
+  color: var(--xp-mute);
+}
+
+.switch input {
+  border: 1px solid #7d8da1;
+  background: #fff;
+}
+
+.switch input:checked {
+  background: var(--xp-blue);
+  border-color: var(--xp-deep);
+}
+
+.color-field .input {
+  font-family: var(--xp-mono);
+}
+
+/* ------------------------------------------------------------- the preview */
+
+.preview {
+  border-left: 1px solid var(--xp-line);
+}
+
+.preview-head {
+  background: linear-gradient(180deg, #fbfcfe, #e6edf6);
+  border-bottom: 1px solid var(--xp-line);
+}
+
+.preview-tab {
+  border: 1px solid transparent;
+  border-radius: 4px 4px 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #22334c;
+}
+
+.preview-tab.is-active {
+  border-color: var(--xp-line);
+  border-bottom-color: transparent;
+  background: #fff;
+  font-weight: 700;
+  color: var(--xp-deep);
+}
+
+/* --------------------------------------------------- sign in, and dialogs */
+
+/*
+ * Signing in is a dialog on the wallpaper, so the card grows a title bar of
+ * its own. It is a pseudo-element because the bar says nothing the form does
+ * not already say — the card's own kicker and heading carry that.
+ */
+.login-card {
+  position: relative;
+  /* Room at the top for the title bar, which is painted over it. */
+  padding: 40px 26px 24px;
+  overflow: hidden;
+  border: 1px solid var(--xp-edge);
+  border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(180deg, #fdfeff, #eef2f8);
+  box-shadow: 0 12px 30px rgba(4, 18, 44, 0.5);
+}
+
+.login-card::before {
+  content: 'Sign in';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 6px 10px;
+  background: var(--xp-title);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.55);
+}
+
+.login-card > .btn-block {
+  width: auto;
+}
+
+.login-kicker {
+  font-family: var(--xp-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+}
+
+.login-title {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  color: var(--xp-deep);
+}
+
+.login-rule {
+  height: 2px;
+}
+
+.modal-card {
+  overflow: hidden;
+  border: 1px solid var(--xp-edge);
+  border-radius: 8px 8px 4px 4px;
+  box-shadow: 0 12px 30px rgba(4, 18, 44, 0.5);
+}
+
+.modal-head {
+  padding: 5px 5px 5px 9px;
+  background: var(--xp-title);
+  border-bottom: 1px solid var(--xp-edge);
+}
+
+.modal-head h2 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #fff;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.55);
+}
+
+.modal-head .icon-btn {
+  border-color: #8f1c12;
+  background: linear-gradient(180deg, #ffdad5, #e8705f 52%, #c0301c);
+  color: #fff;
+}
+
+.modal-foot {
+  background: linear-gradient(180deg, #f3f6fb, #e3eaf4);
+  border-top: 1px solid var(--xp-line);
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+/* One column, and the window gives up its margin to the screen. */
+@media (max-width: 860px) {
+  .app {
+    margin: 4px;
+    min-height: calc(100vh - 8px);
+  }
+}
