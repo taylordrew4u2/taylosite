@@ -1794,6 +1794,17 @@ test('public copy can be rewritten for SEO without changing it before Save', asy
       assert.match(prompt, /Field path: about\.body\.0/);
       assert.match(prompt, /Taylor Drew/);
 
+      const geo = await server.call('/api/admin/seo-copy', {
+        method: 'POST',
+        body: { text: before, path: 'about.body.0', label: 'Text', mode: 'geo' }
+      });
+      assert.strictEqual(geo.status, 200);
+      const geoPrompt = ai.calls[1].body.messages[0].content;
+      assert.match(geoPrompt, /generative engine optimization \(GEO\)/);
+      assert.match(geoPrompt, /self-contained semantic block/);
+      assert.match(geoPrompt, /AI answer engines/);
+      assert.match(geoPrompt, /Do not add a freshness date/);
+
       const empty = await server.call('/api/admin/seo-copy', {
         method: 'POST', body: { text: '', path: 'about.body.0', label: 'Text' }
       });

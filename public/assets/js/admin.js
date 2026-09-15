@@ -205,8 +205,12 @@
 
   function seoButton(opts) {
     if (!seoEligible(opts)) return '';
-    return '<button class="seo-generate" type="button" data-action="seo-generate" data-target="' +
-      esc(opts.path) + '" data-label="' + esc(opts.label || 'Text') + '">Generate SEO version</button>';
+    var shared = ' type="button" data-action="seo-generate" data-target="' + esc(opts.path) +
+      '" data-label="' + esc(opts.label || 'Text') + '"';
+    return '<span class="search-generators">' +
+      '<button class="seo-generate"' + shared + ' data-mode="seo">Generate SEO version</button>' +
+      '<button class="seo-generate"' + shared + ' data-mode="geo">Generate GEO version</button>' +
+      '</span>';
   }
 
   function field(opts) {
@@ -259,7 +263,7 @@
       '<input class="input" type="text" data-path="' + esc(opts.path) + '" data-image-input="1" placeholder="/uploads/photo.jpg" value="' + esc(value) + '">' +
       '<span class="image-buttons">' +
       '<button class="btn btn-sm" type="button" data-action="pick-image" data-target="' + esc(opts.path) + '">Choose or upload</button>' +
-      (value && opts.seoTarget ? '<button class="btn btn-sm" type="button" data-action="seo-photo" data-target="' + esc(opts.seoTarget) + '" data-image-path="' + esc(opts.path) + '">Generate photo SEO</button>' : '') +
+      (value && opts.seoTarget ? '<button class="btn btn-sm" type="button" data-action="seo-photo" data-target="' + esc(opts.seoTarget) + '" data-image-path="' + esc(opts.path) + '">Generate photo SEO + GEO</button>' : '') +
       (value ? '<button class="btn btn-sm btn-danger" type="button" data-action="clear-image" data-target="' + esc(opts.path) + '">Remove</button>' : '') +
       '</span>' +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
@@ -2247,25 +2251,26 @@
 
     if (action === 'seo-generate') {
       var target = trigger.dataset.target;
+      var mode = trigger.dataset.mode === 'geo' ? 'geo' : 'seo';
       var input = document.getElementById(target);
       var original = input ? input.value : String(getPath(state.site, target) || '');
       if (!original.trim()) return toast('Write something first, then generate its SEO version.', 'error');
       trigger.disabled = true;
-      trigger.textContent = 'Generating…';
+      trigger.textContent = 'Generating ' + mode.toUpperCase() + '…';
       return api('/admin/seo-copy', {
         method: 'POST',
-        body: { text: original, path: target, label: trigger.dataset.label || 'Text' }
+        body: { text: original, path: target, label: trigger.dataset.label || 'Text', mode: mode }
       })
         .then(function (data) {
           if (input) input.value = data.text;
           setPath(state.site, target, data.text);
           markDirty();
-          toast('SEO version added. Review it, then save.', 'ok');
+          toast(mode.toUpperCase() + ' version added. Review it, then save.', 'ok');
         })
         .catch(function (err) { toast(err.message || 'Could not generate SEO copy.', 'error'); })
         .finally(function () {
           trigger.disabled = false;
-          trigger.textContent = 'Generate SEO version';
+          trigger.textContent = 'Generate ' + mode.toUpperCase() + ' version';
         });
     }
 
@@ -2285,7 +2290,7 @@
         })
         .catch(function (err) {
           trigger.disabled = false;
-          trigger.textContent = 'Generate photo SEO';
+          trigger.textContent = 'Generate photo SEO + GEO';
           toast(err.message || 'Could not analyze the photo.', 'error');
         });
     }
