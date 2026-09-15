@@ -127,63 +127,42 @@ body {
   cursor: pointer;
 }
 
-.icon:focus-visible,
-.icon:active {
-  border-color: rgba(255, 255, 255, 0.55);
-  background: rgba(11, 58, 146, 0.35);
+.icon:focus-visible {
+  border-color: #fff;
+  border-style: dotted;
 }
 
-.icon-tile {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid #2c5f9e;
-  border-radius: 9px;
-  box-shadow: inset 0 1px 0 #fff, 0 2px 5px rgba(0, 0, 0, 0.35);
-  font-size: 15px;
-  line-height: 1;
-}
-
-.icon-blue {
-  background: linear-gradient(160deg, #fdfeff, #bcd8f5 45%, #7fb0e6);
-  color: var(--xp-blue);
-}
-
-.icon-red {
-  background: linear-gradient(160deg, #fff6f6, #f3bcbc 45%, #d97878);
-  color: #7d1f1f;
-}
-
-.icon-violet {
-  background: linear-gradient(160deg, #fbf6ff, #dcc4f3 45%, #b088dd);
-  color: #4c2278;
-}
-
-.icon-slate {
-  background: linear-gradient(160deg, #f4f7fb, #c9d3e0 45%, #8d9bb0);
-  color: #2c3950;
-}
-
-.icon-teal {
-  background: linear-gradient(160deg, #f1fbfa, #b6e2dd 45%, #6fb5ae);
-  color: #10534d;
-}
-
-.icon-gold {
-  background: linear-gradient(160deg, #fffdf0, #f0e2a8 45%, #cdb45c);
-  color: #6b5a14;
+/*
+ * 32 pixels square and nothing else: no tile behind it, no gradient, no
+ * rounded corner, no shadow. `crispEdges` turns off antialiasing so the
+ * outlines stay one hard pixel wide, which is the whole difference between
+ * a drawing of the era and a modern app icon.
+ */
+.icon-art {
+  display: block;
+  width: 32px;
+  height: 32px;
+  shape-rendering: crispEdges;
 }
 
 .icon-label {
+  padding: 1px 3px;
   font-size: 11px;
   line-height: 1.25;
   color: #fff;
   text-align: center;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  /* A hard one-pixel shadow, not a blur — the machine had no blur. */
+  text-shadow: 1px 1px 0 #000;
   overflow-wrap: anywhere;
 }
+
+/* Selecting a shortcut washed its picture blue and boxed its name in navy. */
+.icon:focus-visible .icon-label,
+.icon:active .icon-label,
+.icon[aria-current='page'] .icon-label {
+  background: #0a246a;
+}
+
 
 /* ----------------------------------------------------------- the window */
 

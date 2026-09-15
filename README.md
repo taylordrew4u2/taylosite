@@ -124,6 +124,13 @@ every page in it and `public/assets/css/retro.css` dresses it:
 | Taskbar | start button, the open window, a clock |
 | Shortcuts | the menu again, plus two folders that refuse to open |
 
+The shortcuts are drawn, not set in a font: a CRT, a dog-eared document, a
+strip of film, a manila folder, a joystick, an envelope and a cog, each 32
+pixels square in flat sixteen-colour fills with a one-pixel black outline and
+the little white badge that marked a shortcut rather than the thing itself.
+Every coordinate is a whole number and the stylesheet asks for `crispEdges`,
+so nothing gets smoothed back into a modern app icon.
+
 The home page's photo is not in the home page. On a desktop a picture is a
 file, and opening one gets you a second window — so it sits on the wallpaper
 in a viewer of its own, with its own title bar, its own taskbar button, the
