@@ -13,6 +13,7 @@ const render = require('./lib/render');
 const instagram = require('./lib/instagram');
 const indexnow = require('./lib/indexnow');
 const flyer = require('./lib/flyer');
+const seoCopy = require('./lib/seo-copy');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -556,6 +557,23 @@ async function handleApi(req, res, url) {
   if (adminRoute === '/flyer/key' && req.method === 'DELETE') {
     await flyer.forgetKey(store);
     return sendJson(res, 200, { ok: true, ...flyer.status(await store.readSite(), process.env) });
+  }
+
+  if (adminRoute === '/seo-copy' && req.method === 'POST') {
+    const body = await readJson(req);
+    try {
+      const site = await store.readSite();
+      const text = await seoCopy.rewrite({
+        text: body.text,
+        path: String(body.path || '').slice(0, 160),
+        label: String(body.label || '').slice(0, 120),
+        site,
+        env: process.env
+      });
+      return sendJson(res, 200, { ok: true, text });
+    } catch (err) {
+      return sendJson(res, err.status || 502, { error: err.message });
+    }
   }
 
   if (adminRoute === '/uploads' && req.method === 'GET') {

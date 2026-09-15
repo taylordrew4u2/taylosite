@@ -198,6 +198,17 @@
 
   // ------------------------------------------------------------ field HTML
 
+  function seoEligible(opts) {
+    if (opts.seo === false || (opts.type && opts.type !== 'text')) return false;
+    return !/(?:^|\.)(?:id|name|logoText|location|source|url|href|email|to|date|time|year|venue|street|city|country|postalCode|photo|video|poster|feedUrl|favicon|googleVerification|bingVerification|wikidata|rightHref|color|hash|salt|apiKey|maxItems)$/i.test(opts.path || '');
+  }
+
+  function seoButton(opts) {
+    if (!seoEligible(opts)) return '';
+    return '<button class="seo-generate" type="button" data-action="seo-generate" data-target="' +
+      esc(opts.path) + '" data-label="' + esc(opts.label || 'Text') + '">Generate SEO version</button>';
+  }
+
   function field(opts) {
     var value = opts.value == null ? '' : opts.value;
     return (
@@ -208,6 +219,7 @@
       (opts.titleSource ? ' data-title-source="1"' : '') +
       (opts.attrs || '') +
       ' placeholder="' + esc(opts.placeholder || '') + '" value="' + esc(value) + '">' +
+      seoButton(opts) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</div>'
     );
@@ -220,6 +232,7 @@
       '<textarea class="textarea" id="' + esc(opts.path) + '" data-path="' + esc(opts.path) + '"' +
       (opts.rows ? ' rows="' + opts.rows + '"' : '') +
       ' placeholder="' + esc(opts.placeholder || '') + '">' + esc(opts.value || '') + '</textarea>' +
+      seoButton(opts) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</div>'
     );
@@ -2230,6 +2243,30 @@
     var action = trigger.dataset.action;
 
     if (action === 'goto') return go(trigger.dataset.section);
+
+    if (action === 'seo-generate') {
+      var target = trigger.dataset.target;
+      var input = document.getElementById(target);
+      var original = input ? input.value : String(getPath(state.site, target) || '');
+      if (!original.trim()) return toast('Write something first, then generate its SEO version.', 'error');
+      trigger.disabled = true;
+      trigger.textContent = 'Generating…';
+      return api('/admin/seo-copy', {
+        method: 'POST',
+        body: { text: original, path: target, label: trigger.dataset.label || 'Text' }
+      })
+        .then(function (data) {
+          if (input) input.value = data.text;
+          setPath(state.site, target, data.text);
+          markDirty();
+          toast('SEO version added. Review it, then save.', 'ok');
+        })
+        .catch(function (err) { toast(err.message || 'Could not generate SEO copy.', 'error'); })
+        .finally(function () {
+          trigger.disabled = false;
+          trigger.textContent = 'Generate SEO version';
+        });
+    }
 
     if (action === 'show-filter') {
       state.showFilter = trigger.dataset.filter;

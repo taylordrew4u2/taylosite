@@ -526,6 +526,30 @@ a {
   color: var(--muted);
 }
 
+.seo-generate {
+  align-self: flex-start;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.seo-generate:hover,
+.seo-generate:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.seo-generate:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .switch {
   display: inline-flex;
   align-items: center;

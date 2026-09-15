@@ -57,6 +57,11 @@ credentials.
 
 Editing notes:
 
+- Public-facing text inputs include a **Generate SEO version** button. It uses
+  the same Anthropic key as flyer reading, preserves the supplied facts, and
+  places the draft in the field without saving it. Review the wording and press
+  Save to publish it. Technical or factual inputs such as URLs, email addresses,
+  dates, venues, IDs, verification codes and colours are not rewritten.
 - Changes are held locally until **Save changes** (or `⌘/Ctrl+S`); the tab warns
   before you navigate away with unsaved work. The sidebar marks which sections
   have unsaved edits, and edits you undo by hand clear themselves.
