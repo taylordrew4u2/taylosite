@@ -1,6 +1,6 @@
 # taylosite
 
-The Taylor Drew website — a black / white / red brutalist site with a full admin
+The Taylor Drew website — a retro desktop-window site with a full admin
 panel at `/admin` where every word, link, photo, date and colour on the public
 pages can be edited.
 
@@ -105,8 +105,25 @@ lib/auth.js          scrypt password hashing, sessions, login rate limiting
 lib/render.js        server-side HTML for the three public pages
 public/admin.html    the admin panel shell
 public/assets/       site + admin CSS and JS
+                     (css/retro.css is the skin — delete it and the link
+                      in lib/render.js to get the plain site back)
 data/                site.json, sessions, snapshots, uploads (git-ignored)
 ```
+
+### The retro skin
+
+`public/assets/css/retro.css` loads after `site.css` and after the theme block,
+and turns the page into one desktop window: the logo is the title bar, the menu
+is the menu bar, the content is a sunken client area and the footer is a status
+bar of sunken panes. Buttons, links, shows, reels and the game's seats become
+raised tiles that push in when pressed.
+
+It is a skin and nothing else. No page markup changed, the admin panel is
+untouched, and the only edit outside the file is the one `<link>` that loads it.
+The sheet re-points the theme's four neutral variables (`--bg`, `--surface`,
+`--text`, `--line`) at the classic system greys but leaves `--accent` alone, so
+whichever scheme is served still colours the title bar, the active menu item,
+the section captions and the default button.
 
 Pages are rendered on the server, so the site works with JavaScript disabled and
 reads correctly to search engines and link previews. The admin panel is a
