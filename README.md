@@ -124,6 +124,28 @@ every page in it and `public/assets/css/retro.css` dresses it:
 | Taskbar | start button, the open window, a clock |
 | Shortcuts | the menu again, plus two folders that refuse to open |
 
+The wallpaper is sky, cloud and a green hill, drawn in layered CSS gradients
+rather than photographed — no image file, so it stays sharp at any size and
+costs one paint.
+
+The shortcuts are drawn too, not set in a font: a CRT, a dog-eared document, a
+strip of film, a manila folder, a joystick, an envelope and a cog. Each is 32
+pixels square, shaded with a gradient, outlined in a darker tint of its own
+colour rather than in black, and set down with a soft shadow — and each link to
+a page carries the little white badge that marked a shortcut rather than the
+thing itself.
+
+The home page's photo is not in the home page. On a desktop a picture is a
+file, and opening one gets you a second window — so it sits on the wallpaper
+in a viewer of its own, with its own title bar, its own taskbar button, the
+filename in the status bar and the pixel dimensions filled in once the file
+decodes. Same `<img>`, same alt text, same document: nothing is lost to a
+crawler or a screen reader, it has just been put where the era would have put
+it. Drag it by the title bar, shut it, bring it back from the taskbar. With no
+photo set there is no window — the hero keeps the "add a photo" empty state,
+which is addressed to whoever is about to go and add one. Under 720px the
+viewer stops floating and stacks under the document, like every other window.
+
 **Nothing on the site is set in a typeface newer than the machine it is drawn
 as.** The whole thing runs on Tahoma (1994), Verdana (1996), Courier New (1955)
 and Helvetica / Arial, which is the design's own stack. Segoe UI came with

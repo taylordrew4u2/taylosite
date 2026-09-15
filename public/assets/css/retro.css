@@ -38,7 +38,6 @@ html[data-theme] {
     #3d84dd 100%
   );
   --xp-gloss: linear-gradient(180deg, #ffffff, #dde8f6 48%, #bed3ee);
-  --xp-wall: linear-gradient(180deg, #2e7bd6 0%, #5aa3e8 38%, #8fc36f 60%, #4e9a44 100%);
 
   --xp-mono: 'Courier New', monospace;
 }
@@ -93,11 +92,35 @@ body {
   overflow: hidden;
 }
 
+/*
+ * The wallpaper: sky, cloud and a green hill, drawn in gradients rather than
+ * photographed. Five layers, back to front — the sky, the hill as an ellipse
+ * rising past the bottom of the screen so its top edge curves, and three soft
+ * clouds. No image file, so it stays sharp at any size and costs one paint.
+ */
 .wall {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: var(--xp-wall);
+  background-color: #3585d8;
+  background-image:
+    radial-gradient(ellipse 30% 11% at 19% 21%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(ellipse 19% 8% at 28% 28%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 13% 6% at 11% 27%, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 22% 9% at 70% 12%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(ellipse 15% 6% at 79% 18%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 17% 7% at 92% 33%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 12% 5% at 48% 9%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(
+      ellipse 132% 62% at 50% 122%,
+      #2e6b26 0%,
+      #43882f 44%,
+      #5aa53c 66%,
+      #7ec550 79%,
+      #8fd35d 81%,
+      rgba(0, 0, 0, 0) 82%
+    ),
+    linear-gradient(180deg, #1552b4 0%, #2a76cd 22%, #57a3e2 48%, #93c9ef 66%, #c2e0f7 74%, #d7ecfb 100%);
 }
 
 .icons {
@@ -127,63 +150,40 @@ body {
   cursor: pointer;
 }
 
-.icon:focus-visible,
-.icon:active {
-  border-color: rgba(255, 255, 255, 0.55);
-  background: rgba(11, 58, 146, 0.35);
+.icon:focus-visible {
+  border-color: #fff;
+  border-style: dotted;
 }
 
-.icon-tile {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid #2c5f9e;
-  border-radius: 9px;
-  box-shadow: inset 0 1px 0 #fff, 0 2px 5px rgba(0, 0, 0, 0.35);
-  font-size: 15px;
-  line-height: 1;
-}
-
-.icon-blue {
-  background: linear-gradient(160deg, #fdfeff, #bcd8f5 45%, #7fb0e6);
-  color: var(--xp-blue);
-}
-
-.icon-red {
-  background: linear-gradient(160deg, #fff6f6, #f3bcbc 45%, #d97878);
-  color: #7d1f1f;
-}
-
-.icon-violet {
-  background: linear-gradient(160deg, #fbf6ff, #dcc4f3 45%, #b088dd);
-  color: #4c2278;
-}
-
-.icon-slate {
-  background: linear-gradient(160deg, #f4f7fb, #c9d3e0 45%, #8d9bb0);
-  color: #2c3950;
-}
-
-.icon-teal {
-  background: linear-gradient(160deg, #f1fbfa, #b6e2dd 45%, #6fb5ae);
-  color: #10534d;
-}
-
-.icon-gold {
-  background: linear-gradient(160deg, #fffdf0, #f0e2a8 45%, #cdb45c);
-  color: #6b5a14;
+/*
+ * 32 pixels square, with the soft shadow this machine set its icons down with.
+ * No `crispEdges` here: these are shaded drawings, and the edges are meant to
+ * smooth. What they never had is a tile behind them.
+ */
+.icon-art {
+  display: block;
+  width: 32px;
+  height: 32px;
+  filter: drop-shadow(1px 2px 1px rgba(0, 24, 56, 0.45));
 }
 
 .icon-label {
+  padding: 1px 3px;
   font-size: 11px;
   line-height: 1.25;
   color: #fff;
   text-align: center;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 20, 48, 0.85);
   overflow-wrap: anywhere;
 }
+
+/* Selecting a shortcut washed its picture blue and boxed its name in navy. */
+.icon:focus-visible .icon-label,
+.icon:active .icon-label,
+.icon[aria-current='page'] .icon-label {
+  background: #0a246a;
+}
+
 
 /* ----------------------------------------------------------- the window */
 
@@ -286,6 +286,67 @@ body {
   display: flex;
 }
 
+/* --------------------------------------------------- the picture viewer */
+
+/*
+ * A second window, holding the home page's photo. It sits over the bottom
+ * right of the main one the way a file you just opened lands on top of what
+ * you were already doing — and it can be dragged out from there, or shut.
+ */
+.photo-win {
+  left: auto;
+  top: auto;
+  right: 26px;
+  bottom: 70px;
+  width: min(340px, calc(100% - 180px));
+  max-height: calc(100% - 140px);
+}
+
+.photo-win-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  /* The chequerboard a viewer of the era put behind a picture. */
+  background: repeating-conic-gradient(#ffffff 0% 25%, #eef2f8 0% 50%) 0 0 / 16px 16px;
+  border: 1px solid #9fb3cd;
+  border-width: 0 0 1px;
+}
+
+.photo-win-body img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.photo-win-status {
+  justify-content: space-between;
+}
+
+.photo-win-size {
+  flex: 0 0 auto;
+}
+
+/* Two windows on a narrow screen is one window too many: the viewer becomes
+   the block of the page it came out of, under the document it belongs to. */
+@media (max-width: 719px) {
+  .photo-win {
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    max-height: none;
+    margin-top: 10px;
+  }
+
+  .photo-win-body {
+    max-height: 60vh;
+  }
+}
+
 /* ---------------------------------------------------------- the sidebar */
 
 .sidebar {
@@ -380,6 +441,13 @@ body {
    viewport, and a hero taller than it would push the fold inside the frame. */
 .hero-main {
   min-height: 0;
+}
+
+/* With the photo opened in its own window, the hero's second column holds only
+   the upcoming block — so it stops where that stops instead of ruling a line
+   down a panel of nothing. */
+.hero-side:not(:has(.hero-photo-wrap)) {
+  align-self: start;
 }
 
 .hero-photo,
