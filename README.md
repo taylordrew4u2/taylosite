@@ -169,7 +169,8 @@ crawler or a screen reader, it has just been put where the era would have put
 it. Drag it by the title bar, shut it, bring it back from the taskbar. With no
 photo set there is no window — the hero keeps the "add a photo" empty state,
 which is addressed to whoever is about to go and add one. Under 720px the
-viewer stops floating and stacks under the document, like every other window.
+viewer still floats, smaller and lower, and moves out of the way by its title
+bar like every other window.
 
 **Nothing on the site is set in a typeface newer than the machine it is drawn
 as.** The whole thing runs on Tahoma (1994), Verdana (1996), Courier New (1955)
@@ -189,8 +190,13 @@ says so instead of showing a button that goes nowhere.
 
 `public/assets/js/desktop.js` runs the parts a static page cannot: the clock,
 the start menu, minimise / maximise / close, dragging the window by its title
-bar, the two joke dialogs, and the boot splash (once per visit, skippable, and
-never shown to anyone who asked for reduced motion).
+bar (mouse or finger — pointer events, with `touch-action: none` on the bar so
+a phone reads the drag as a drag rather than a scroll, and the window is kept
+within reach of the desk's edges), the two joke dialogs, and the boot splash
+(once per visit, skippable, and never shown to anyone who asked for reduced
+motion). Under 720px the desktop stays a desktop: the shortcuts run along the
+top, the window opens below them and scrolls inside itself, and everything is
+draggable by hand just as it is with a mouse.
 
 None of it is content. Every word on the pages still comes from the admin
 panel, and every menu item is a real link to a real server-rendered URL — so
