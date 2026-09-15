@@ -1,0 +1,451 @@
+/* Taylor Drew — retro desktop skin
+ *
+ * A skin, not a rebuild: the pages, the markup and the admin panel are
+ * untouched. This sheet loads after site.css and after the theme block, and
+ * turns the page into one desktop window — title bar, menu bar, sunken client
+ * area, status bar — by (a) re-pointing the theme's neutral variables at the
+ * classic system palette and (b) replacing flat borders with 3D bevels.
+ *
+ * `--accent` and `--accent-text` are deliberately left alone: whichever scheme
+ * the admin panel serves still colours the title bar, the menu highlight and
+ * every call to action, so the theme picker keeps meaning something.
+ *
+ * Deleting this file and its <link> puts the brutalist site back, exactly.
+ */
+
+/* The `html[data-theme]` selector outranks the per-theme blocks the server
+   injects, so the neutrals below win no matter which scheme is served. */
+html[data-theme] {
+  --bg: #c0c0c0;
+  --surface: #c0c0c0;
+  --text: #0a0a0a;
+  --muted: #4a4a4a;
+  --line: #808080;
+
+  /* The bevel palette. Two light steps and two dark ones is what makes an
+     edge read as raised rather than merely outlined. */
+  --r-face: #c0c0c0;
+  --r-light: #ffffff;
+  --r-hilite: #dfdfdf;
+  --r-shadow: #808080;
+  --r-dark: #0a0a0a;
+  --r-client: #ffffff;
+  --r-desktop: #147a7a;
+  --r-title-end: #062a4a;
+}
+
+/* ------------------------------------------------------------ the desktop */
+
+html {
+  /* Two flat teals at 2px are the dither pattern of the era, and they stay
+     crisp at any zoom because there is no image to resample. */
+  background-color: var(--r-desktop);
+  background-image: repeating-conic-gradient(
+    color-mix(in srgb, var(--r-desktop) 88%, #000) 0% 25%,
+    var(--r-desktop) 0% 50%
+  );
+  background-size: 4px 4px;
+}
+
+/* ------------------------------------------------------------- the window */
+
+body {
+  margin: 14px;
+  min-height: calc(100vh - 28px);
+  min-height: calc(100svh - 28px);
+  padding: 3px;
+  background: var(--r-face);
+  border: 2px solid;
+  border-color: var(--r-hilite) var(--r-dark) var(--r-dark) var(--r-hilite);
+  box-shadow: inset 1px 1px 0 var(--r-light), inset -1px -1px 0 var(--r-shadow);
+  font-family: 'MS Sans Serif', Tahoma, Geneva, Verdana, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  /* Antialiasing is what modern type wants and what this window does not. */
+  -webkit-font-smoothing: none;
+}
+
+/* Small screens have no room to spend on a desktop margin. */
+@media (max-width: 640px) {
+  body {
+    margin: 4px;
+    min-height: calc(100vh - 8px);
+    min-height: calc(100svh - 8px);
+  }
+}
+
+/* Nothing in a window of this vintage is rounded, and nothing fades. */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn,
+  .nav-link,
+  .link-card {
+    transition: none;
+  }
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+:focus-visible {
+  outline: 1px dotted var(--r-dark);
+  outline-offset: -4px;
+}
+
+/* --------------------------------------------------------- the title bar */
+
+.topbar {
+  /* A title bar belongs to its window, so it scrolls with it rather than
+     detaching and floating over the desktop. */
+  position: relative;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border-bottom: 0;
+}
+
+/* The logo is the window's name, so it takes the whole bar. */
+.logo {
+  order: 1;
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 4px 4px 8px;
+  background: linear-gradient(90deg, var(--accent), var(--r-title-end));
+  color: var(--accent-text);
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+/* Minimise, maximise, close. Decoration — a window with one page has nothing
+   to minimise to — so they are a pseudo-element and not focusable buttons. */
+.logo::after {
+  content: '_ ☐ ✕';
+  margin-left: auto;
+  padding: 2px 7px;
+  background: var(--r-face);
+  color: var(--r-dark);
+  border: 1px solid;
+  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
+  font-family: 'Lucida Console', Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  line-height: 1.1;
+}
+
+/* ---------------------------------------------------------- the menu bar */
+
+.topbar-right {
+  order: 2;
+  flex: 1 1 100%;
+  gap: 0;
+  padding: 2px 2px 3px;
+  background: var(--r-face);
+  border-bottom: 1px solid var(--r-shadow);
+  box-shadow: 0 1px 0 var(--r-light);
+}
+
+.nav {
+  gap: 0;
+}
+
+.nav-link {
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+/* The sliding accent rule is a modern gesture; a menu item inverts instead. */
+.nav-link::after {
+  display: none;
+}
+
+.nav-link.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+@media (hover: hover) {
+  .nav-link:hover {
+    background: var(--accent);
+    color: var(--accent-text);
+  }
+}
+
+/* The hamburger becomes a plain raised toolbar button. */
+.menu-toggle {
+  order: 3;
+  position: absolute;
+  top: 36px;
+  right: 6px;
+  width: 34px;
+  height: 26px;
+  gap: 5px;
+  background: var(--r-face);
+  border: 2px solid;
+  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
+  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite);
+}
+
+.menu-toggle span {
+  height: 2px;
+  margin: 0 6px;
+  background: var(--r-dark);
+}
+
+.topbar.is-open .menu-toggle {
+  border-color: var(--r-dark) var(--r-light) var(--r-light) var(--r-dark);
+  box-shadow: inset 1px 1px 0 var(--r-shadow), inset -1px -1px 0 var(--r-hilite);
+}
+
+/* Below 900px the menu bar collapses behind the toggle, so there is no bar for
+   the toggle to sit on top of — it becomes the bar, a one-button toolbar under
+   the title, and the groove that closed the menu bar moves down with it. */
+@media (max-width: 900px) {
+  .menu-toggle {
+    position: static;
+    order: 2;
+    margin: 3px 0 3px 3px;
+  }
+
+  .topbar {
+    border-bottom: 1px solid var(--r-shadow);
+    box-shadow: 0 1px 0 var(--r-light);
+  }
+
+  .topbar-right {
+    order: 3;
+    padding-top: 0;
+    border-bottom: 0;
+    box-shadow: none;
+  }
+
+  .nav-link {
+    border-top-color: var(--r-shadow);
+  }
+}
+
+/* --------------------------------------------------------- the client area */
+
+.main {
+  background: var(--r-client);
+  border: 2px solid;
+  border-color: var(--r-shadow) var(--r-light) var(--r-light) var(--r-shadow);
+  box-shadow: inset 1px 1px 0 var(--r-dark), inset -1px -1px 0 var(--r-hilite);
+}
+
+/* site.css draws the page's internal divisions as hairlines; in here they are
+   grooves, which is the same job done with two pixels instead of one. */
+.rule,
+.hero-side,
+.split-side,
+.show,
+.fact,
+.faq-item,
+.credit,
+.link-card,
+.quote {
+  border-color: var(--r-shadow);
+}
+
+.rule {
+  height: 2px;
+  background: var(--r-shadow);
+  box-shadow: 0 1px 0 var(--r-light);
+}
+
+.rule-accent {
+  box-shadow: 0 1px 0 var(--r-light);
+}
+
+/* ------------------------------------------------------------ push buttons */
+
+.btn {
+  min-height: 30px;
+  padding: 6px 18px;
+  background: var(--r-face);
+  color: var(--r-dark);
+  border: 2px solid;
+  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
+  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+}
+
+/* The accent survives as a stripe down the default button rather than as a
+   fill, so the button still reads as a button. */
+.btn-accent {
+  border-left-color: var(--accent);
+  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite),
+    inset 4px 0 0 -1px var(--accent);
+}
+
+.btn:active,
+.btn-ghost:active {
+  transform: none;
+  background: var(--r-face);
+  color: var(--r-dark);
+  border-color: var(--r-dark) var(--r-light) var(--r-light) var(--r-dark);
+  box-shadow: inset 1px 1px 0 var(--r-shadow), inset -1px -1px 0 var(--r-hilite);
+  /* Pressing a button pushed its label along with it. */
+  padding: 7px 17px 5px 19px;
+}
+
+@media (hover: hover) {
+  .btn-accent:hover,
+  .btn-ghost:hover {
+    filter: none;
+    background: color-mix(in srgb, var(--r-face) 88%, #fff);
+    color: var(--r-dark);
+  }
+}
+
+/* ----------------------------------------------------------------- panels */
+
+/* Everything the site lists — a link, a reel, a show, a fact, a quote — is a
+   tile on the face of the window rather than a cell in a grid. */
+.link-card,
+.reel,
+.show-cta,
+.quote,
+.hero-upcoming,
+.play-stat,
+.seat {
+  background: var(--r-face);
+  border: 2px solid;
+  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
+  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite);
+}
+
+/* Tiles butt up against one another as flat cells; as raised ones they need the
+   sliver of face between them that stops two bevels reading as one groove. */
+.link-grid,
+.reel-grid {
+  gap: 4px;
+  padding: 4px;
+}
+
+.link-card:active,
+.show-cta:active,
+.seat:active {
+  border-color: var(--r-dark) var(--r-light) var(--r-light) var(--r-dark);
+  box-shadow: inset 1px 1px 0 var(--r-shadow), inset -1px -1px 0 var(--r-hilite);
+}
+
+/* A featured link keeps its accent, now as the strip of a selected row. */
+.link-card.is-featured::before {
+  background: var(--accent);
+}
+
+.link-arrow {
+  font-family: 'Lucida Console', Consolas, monospace;
+}
+
+/* Photographs sit in sunken wells, the way an image control framed them. */
+.hero-photo-wrap,
+.side-photo,
+.show-flyer,
+.reel-media,
+.reel-embed,
+.photo-placeholder {
+  background: var(--r-client);
+  border: 2px solid;
+  border-color: var(--r-shadow) var(--r-light) var(--r-light) var(--r-shadow);
+  box-shadow: inset 1px 1px 0 var(--r-dark), inset -1px -1px 0 var(--r-hilite);
+}
+
+/* ------------------------------------------------------------- the type */
+
+.display,
+.display-sm,
+.hero-title {
+  letter-spacing: -0.01em;
+}
+
+/* A hard, offset shadow — no blur — is the drop shadow this era had. */
+.display {
+  text-shadow: 2px 2px 0 var(--r-shadow);
+}
+
+.eyebrow {
+  letter-spacing: 0.16em;
+}
+
+/* A section heading is a caption bar over the section it names. */
+.dates .eyebrow,
+.faq .eyebrow,
+.credits .eyebrow,
+.hero-upcoming .eyebrow {
+  display: inline-block;
+  padding: 3px 9px;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ---------------------------------------------------------- the status bar */
+
+.footer {
+  padding: 5px 4px;
+  gap: 4px;
+  background: var(--r-face);
+  border-top: 2px solid;
+  border-color: var(--r-light) transparent transparent;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+/* Each piece of footer text is its own sunken pane, like a byte count and a
+   modified flag sitting at the bottom of a document window. */
+.footer > * {
+  padding: 3px 10px;
+  border: 1px solid;
+  border-color: var(--r-shadow) var(--r-light) var(--r-light) var(--r-shadow);
+}
+
+.footer-left {
+  flex: 1;
+}
+
+@media (hover: hover) {
+  a.footer-right:hover {
+    color: var(--accent);
+  }
+}
+
+/* ------------------------------------------------------------- scrollbars */
+
+* {
+  scrollbar-color: var(--r-face) color-mix(in srgb, var(--r-face) 55%, #fff);
+}
+
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+::-webkit-scrollbar-track {
+  background: repeating-conic-gradient(
+    color-mix(in srgb, var(--r-face) 40%, #fff) 0% 25%,
+    var(--r-face) 0% 50%
+  );
+  background-size: 2px 2px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--r-face);
+  border: 2px solid;
+  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
+  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite);
+}
