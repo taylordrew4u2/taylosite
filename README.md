@@ -202,6 +202,8 @@ these two and a **Connect Instagram** button appears in **Admin → Reels**.
 | `INSTAGRAM_USER_ID` | optional, defaults to `me` |
 | `INSTAGRAM_LIMIT` | optional, defaults to 24 |
 | `INSTAGRAM_TOKEN` | optional seed: an existing long-lived token, adopted on first sight |
+| `INSTAGRAM_MESSAGING` | optional, off by default — opt in to sending direct messages |
+| `INSTAGRAM_GRAPH_VERSION` | optional, defaults to `v25.0` — the version in the Send API's path |
 
 Both come from **Meta App Dashboard → Instagram → API setup with Instagram
 login → Set up Instagram business login**. Add `https://<your-domain>/admin` to
@@ -228,6 +230,41 @@ form post. The admin panel is told the connection's *state*, never the token.
 Reels added by hand in the admin panel are **pinned above** the feed, and a
 pinned reel is matched against the feed by permalink so the same one never
 appears twice.
+
+### Sending a direct message
+
+The same connection can send a DM as the account. It is **off by default**:
+tick *Also let this site send direct messages as the account* under
+**Admin → Reels → App details** (or set `INSTAGRAM_MESSAGING=1`), save, then
+connect — or reconnect, if the account was already connected. The tickbox only
+decides what the authorization window asks for; the permission arrives with the
+new token, so a token issued before it was ticked cannot send, and the panel
+says so rather than failing at the send. Asking for that permission is opt-in
+precisely because an app that was never set up for messaging would have the
+whole authorization refused, taking the reel wall with it.
+
+Once connected, **Send a direct message** appears under the connection's
+status, and `POST /api/admin/instagram/message` takes
+`{ "recipientId": "…", "text": "…" }` behind the same session and CSRF gate as
+every other admin call.
+
+Three rules of Meta's are worth knowing before the first send, because all
+three are ways an otherwise-correct request comes back refused:
+
+- **The bearer is the access token, not the app ID.** They are both long
+  numbers from the same dashboard page, which is exactly why they get swapped;
+  an app ID is public and identifies nobody, and a request bearing one is
+  answered with an opaque OAuth error. The site sends the stored long-lived
+  token, the same one it keeps alive for the reel wall, so there is nothing to
+  paste and nothing to renew.
+- **The recipient is an Instagram-scoped ID** — the all-digit `sender.id` that
+  arrives on a messaging webhook. It is not an @handle, not the number on the
+  profile, and there is no lookup from one to the other: you know someone's
+  IGSID because they messaged you. A value that is not all digits is refused
+  here before the request is made.
+- **A reply is only allowed within 24 hours** of that person's last message.
+  Outside the window Meta refuses, and their refusal is passed through word for
+  word, because their wording is what says which rule was hit.
 
 The MP4 URLs their API returns are signed and expire within hours, so nothing
 is written into the site document: the wall is rendered from a 20-minute cache

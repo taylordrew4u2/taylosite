@@ -1029,6 +1029,7 @@
         '</p>' +
         '<p class="hint">If Instagram is ever unreachable, /reels keeps showing the last good wall for a day, ' +
         'then falls back to the pinned reels below.</p>' +
+        igMessageForm(ig) +
         '<button class="btn btn-sm btn-danger" type="button" data-action="ig-disconnect">Disconnect</button>'
       );
     }
@@ -1080,6 +1081,12 @@
       '<input class="input" id="ig-app-secret" type="password" autocomplete="off" ' +
       'placeholder="' + (ig && ig.appSecretSet ? 'Saved — leave blank to keep it' : '32 hex characters') + '"></label>' +
       '</div>' +
+      '<label class="switch"><input type="checkbox" id="ig-messaging"' +
+      (ig && ig.messaging ? ' checked' : '') + '> ' +
+      '<span>Also let this site send direct messages as the account</span></label>' +
+      '<p class="hint">Off by default. Turning it on asks Instagram for one more permission when you connect, ' +
+      'so an app that was never set up for messaging keeps working. ' +
+      'Tick it, save, then connect (or reconnect) — the permission comes with the new token, not the tickbox.</p>' +
       '<p><button class="btn btn-sm btn-accent" type="button" data-action="ig-save-app">Save app details</button>' +
       (ig && ig.appSource === 'panel'
         ? ' <button class="btn btn-sm btn-ghost" type="button" data-action="ig-forget-app">Forget them</button>'
@@ -1088,6 +1095,40 @@
       '<p class="hint">The secret is kept with your password and is never shown again. ' +
       'Once both are saved, a <em>Connect Instagram</em> button appears here — one login and the wall fills itself, ' +
       'renewing its own access from then on.</p>'
+    );
+  }
+
+  /**
+   * Sending a DM, for the account that has said it wants to.
+   *
+   * Two rules of Instagram's are worth stating on the form rather than letting
+   * someone discover them as an error: the recipient is the all-digit ID that
+   * arrives with an incoming message — there is no way to look one up from an
+   * @handle — and a reply is only allowed within 24 hours of their last message.
+   */
+  function igMessageForm(ig) {
+    if (!ig || !ig.messaging) return '';
+    if (!ig.messagingScope) {
+      return (
+        '<p class="hint"><strong>Direct messages are on, but this token predates them.</strong> ' +
+        'Disconnect and connect again to pick up the messaging permission.</p>'
+      );
+    }
+    return (
+      '<details class="ig-details"><summary>Send a direct message</summary>' +
+      '<div class="grid-2">' +
+      '<label class="field"><span class="label">Recipient ID</span>' +
+      '<input class="input" id="ig-dm-to" type="text" inputmode="numeric" autocomplete="off" ' +
+      'placeholder="17841400000000000"></label>' +
+      '<label class="field"><span class="label">Message</span>' +
+      '<input class="input" id="ig-dm-text" type="text" autocomplete="off" maxlength="1000" ' +
+      'placeholder="Hello World"></label>' +
+      '</div>' +
+      '<p><button class="btn btn-sm btn-accent" type="button" data-action="ig-send-dm">Send</button></p>' +
+      '<p class="hint">The recipient is an Instagram-scoped ID — the all-digit sender id that comes in with ' +
+      'their message, not an @handle; there is no way to look one up. Instagram only allows a reply within ' +
+      '<strong>24 hours</strong> of their last message and refuses outside it.</p>' +
+      '</details>'
     );
   }
 
@@ -1969,9 +2010,14 @@
     if (action === 'ig-save-app') {
       var idBox = document.getElementById('ig-app-id');
       var secretBox = document.getElementById('ig-app-secret');
+      var dmBox = document.getElementById('ig-messaging');
       return api('/admin/instagram/app', {
         method: 'POST',
-        body: { appId: idBox ? idBox.value.trim() : '', appSecret: secretBox ? secretBox.value.trim() : '' }
+        body: {
+          appId: idBox ? idBox.value.trim() : '',
+          appSecret: secretBox ? secretBox.value.trim() : '',
+          messaging: dmBox ? dmBox.checked : undefined
+        }
       })
         .then(function () {
           toast('App details saved.');
@@ -1979,6 +2025,19 @@
         })
         .then(function () { render({ preserveFocus: false }); })
         .catch(function (err) { toast(err.message || 'Could not save the app details.', 'error'); });
+    }
+    if (action === 'ig-send-dm') {
+      var toBox = document.getElementById('ig-dm-to');
+      var textBox = document.getElementById('ig-dm-text');
+      return api('/admin/instagram/message', {
+        method: 'POST',
+        body: { recipientId: toBox ? toBox.value.trim() : '', text: textBox ? textBox.value : '' }
+      })
+        .then(function () {
+          toast('Message sent.');
+          if (textBox) textBox.value = '';
+        })
+        .catch(function (err) { toast(err.message || 'Could not send the message.', 'error'); });
     }
     if (action === 'ig-forget-app') {
       if (!confirm('Forget the Instagram app ID and secret?')) return;

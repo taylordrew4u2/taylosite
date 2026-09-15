@@ -446,3 +446,114 @@ test('a handle is read from a profile URL, and only from a profile URL', () => {
   assert.strictEqual(instagram.instagramHandle('https://feeds.behold.so/abc'), '');
   assert.strictEqual(instagram.instagramHandle('nonsense'), '');
 });
+
+// ------------------------------------------------------- direct messages
+
+test('a direct message goes out bearing the token, not the app ID', async () => {
+  await withApi({}, async (api, env) => {
+    const store = fakeStore({ auth: { instagram: { token: 'long-token', source: 'connected' } } });
+    const out = await instagram.sendMessage({
+      store,
+      site: store.site,
+      env,
+      recipientId: '17841400000000000',
+      text: 'Hello World'
+    });
+
+    assert.deepStrictEqual(out, { recipientId: '17841400000000000', messageId: 'mid.fake-1' });
+
+    const call = api.calls.find((c) => c.path.endsWith('/messages'));
+    assert.strictEqual(call.method, 'POST');
+    assert.strictEqual(call.path, '/v25.0/me/messages');
+    assert.strictEqual(call.auth, 'Bearer long-token', 'the bearer is the access token');
+    assert.deepStrictEqual(JSON.parse(call.body), {
+      recipient: { id: '17841400000000000' },
+      message: { text: 'Hello World' }
+    });
+  });
+});
+
+test('an app ID in the recipient slot is refused before Instagram is troubled', async () => {
+  await withApi({}, async (api, env) => {
+    const store = fakeStore({ auth: { instagram: { token: 'long-token' } } });
+    await assert.rejects(
+      instagram.sendMessage({ store, site: store.site, env, recipientId: '@taylordrew4u', text: 'hi' }),
+      /Instagram-scoped ID/
+    );
+    await assert.rejects(
+      instagram.sendMessage({ store, site: store.site, env, recipientId: '', text: 'hi' }),
+      /needs a recipient/
+    );
+    await assert.rejects(
+      instagram.sendMessage({ store, site: store.site, env, recipientId: '17841400000000000', text: '   ' }),
+      /needs some text/
+    );
+    await assert.rejects(
+      instagram.sendMessage({
+        store,
+        site: store.site,
+        env,
+        recipientId: '17841400000000000',
+        text: 'x'.repeat(instagram.MESSAGE_MAX + 1)
+      }),
+      /longer than 1000 characters/
+    );
+    assert.strictEqual(api.calls.length, 0, 'none of that reached the network');
+  });
+});
+
+test('without a connected account a message says so rather than sending nothing', async () => {
+  const store = fakeStore({ auth: {} });
+  await assert.rejects(
+    instagram.sendMessage({ store, site: store.site, env: {}, recipientId: '1784140000', text: 'hi' }),
+    /Connect the Instagram account first/
+  );
+});
+
+test("Instagram's own refusal is passed through, 24-hour window and all", async () => {
+  await withApi({ state: { outsideWindow: true } }, async (api, env) => {
+    const store = fakeStore({ auth: { instagram: { token: 'long-token' } } });
+    await assert.rejects(
+      instagram.sendMessage({ store, site: store.site, env, recipientId: '1784140000', text: 'hi' }),
+      /outside of allowed window/
+    );
+  });
+});
+
+test('messaging is opt-in, and opting in widens the scope that is asked for', async () => {
+  const store = fakeStore();
+  await instagram.saveApp({ store, appId: '990602627938098', appSecret: 'a1b2c3d4e5f60718' });
+
+  let url = new URL(instagram.authorizeUrl('https://www.taylordrew4u.com', {}, store.site));
+  assert.strictEqual(url.searchParams.get('scope'), 'instagram_business_basic');
+  assert.strictEqual(instagram.status(store.site, {}).messaging, false);
+
+  await instagram.saveApp({ store, appId: '990602627938098', messaging: true });
+  url = new URL(instagram.authorizeUrl('https://www.taylordrew4u.com', {}, store.site));
+  assert.strictEqual(
+    url.searchParams.get('scope'),
+    'instagram_business_basic,instagram_business_manage_messages'
+  );
+
+  const state = instagram.status(store.site, {});
+  assert.strictEqual(state.messaging, true);
+  assert.strictEqual(state.appSecretSet, true, 'the secret survives a save that omits it');
+
+  // The checkbox alone does not grant anything — the token has to be re-issued.
+  assert.strictEqual(state.messagingScope, false);
+});
+
+test('a token issued after opting in carries the messaging permission', async () => {
+  await withApi({}, async (api, env) => {
+    const store = fakeStore();
+    await instagram.saveApp({ store, appId: '990602627938098', appSecret: 'a1b2c3d4e5f60718', messaging: true });
+    await instagram.connect({
+      store,
+      code: 'abc#_',
+      origin: 'https://www.taylordrew4u.com',
+      env,
+      site: store.site
+    });
+    assert.strictEqual(instagram.status(store.site, env).messagingScope, true);
+  });
+});

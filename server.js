@@ -355,7 +355,12 @@ async function handleApi(req, res, url) {
   if (adminRoute === '/instagram/app' && req.method === 'POST') {
     const body = await readJson(req);
     try {
-      await instagram.saveApp({ store, appId: body.appId, appSecret: body.appSecret });
+      await instagram.saveApp({
+        store,
+        appId: body.appId,
+        appSecret: body.appSecret,
+        messaging: body.messaging
+      });
     } catch (err) {
       return sendJson(res, 400, { error: err.message });
     }
@@ -388,6 +393,25 @@ async function handleApi(req, res, url) {
   if (adminRoute === '/instagram' && req.method === 'DELETE') {
     await instagram.disconnect(store);
     return sendJson(res, 200, { ok: true });
+  }
+
+  // A direct message, sent as the connected account. The recipient is the
+  // Instagram-scoped ID of someone who messaged first — Instagram allows a
+  // reply for 24 hours after that and refuses outside it, and their refusal is
+  // more use here than anything invented.
+  if (adminRoute === '/instagram/message' && req.method === 'POST') {
+    const body = await readJson(req);
+    try {
+      const out = await instagram.sendMessage({
+        store,
+        site: await store.readSite(),
+        recipientId: body.recipientId,
+        text: body.text
+      });
+      return sendJson(res, 200, { ok: true, ...out });
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message });
+    }
   }
 
   // --- flyers -------------------------------------------------------------
