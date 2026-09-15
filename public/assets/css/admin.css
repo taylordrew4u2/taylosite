@@ -1021,6 +1021,10 @@ a {
 
 .modal-card {
   width: min(860px, 100%);
+  /* A grid item defaults to min-width:auto, so a footer whose buttons do not
+     fit pushes the card wider than the width declared right here — and on a
+     phone that puts the last button off the side of the screen. */
+  min-width: 0;
   max-height: 86vh;
   display: flex;
   flex-direction: column;
@@ -1041,6 +1045,9 @@ a {
   border-bottom: 0;
   border-top: 2px solid var(--line);
   justify-content: flex-end;
+  /* Three buttons do not fit across a phone; wrapping is the alternative to
+     overflowing, and on a wide screen nothing wraps so nothing changes. */
+  flex-wrap: wrap;
 }
 
 .modal-head h2 {
@@ -1617,4 +1624,89 @@ a {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* ------------------------------------------------------------------- crop */
+/* The site's photo panels have a shape of their own, so an image that is not
+   that shape loses its edges to object-fit. That crop used to happen silently
+   at display time; this is where it happens instead, with a hand on it. */
+
+.crop-card {
+  max-width: 720px;
+}
+
+.crop-ratios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.crop-ratios .btn[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.crop-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  background: #111;
+  overflow: hidden;
+  /* Chrome will happily start a native image drag from inside the frame. */
+  user-select: none;
+  touch-action: none;
+}
+
+.crop-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 58vh;
+  pointer-events: none;
+}
+
+/* Everything outside the frame, dimmed by four sides rather than a cut-out,
+   so there is no clip-path support question. */
+.crop-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.55);
+  clip-path: polygon(
+    0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+    var(--crop-x) var(--crop-y),
+    var(--crop-x) calc(var(--crop-y) + var(--crop-h)),
+    calc(var(--crop-x) + var(--crop-w)) calc(var(--crop-y) + var(--crop-h)),
+    calc(var(--crop-x) + var(--crop-w)) var(--crop-y),
+    var(--crop-x) var(--crop-y)
+  );
+}
+
+.crop-box {
+  position: absolute;
+  border: 1px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  cursor: move;
+  touch-action: none;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: var(--accent);
+  border: 2px solid #fff;
+  touch-action: none;
+}
+
+.crop-handle[data-crop-handle='nw'] { top: -11px; left: -11px; cursor: nwse-resize; }
+.crop-handle[data-crop-handle='ne'] { top: -11px; right: -11px; cursor: nesw-resize; }
+.crop-handle[data-crop-handle='sw'] { bottom: -11px; left: -11px; cursor: nesw-resize; }
+.crop-handle[data-crop-handle='se'] { bottom: -11px; right: -11px; cursor: nwse-resize; }
+
+@media (max-width: 700px) {
+  .crop-stage img {
+    max-height: 46svh;
+  }
 }

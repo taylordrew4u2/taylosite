@@ -62,6 +62,15 @@ Editing notes:
 - **Preview** opens a live pane of the real pages beside the form.
 - Media items show where they are in use, and deleting one that is in use says
   so before it goes.
+- **Uploading an image asks how to crop it.** The photo panels have a shape of
+  their own — square on a wide screen, 4:5 on a phone — so anything that is not
+  that shape loses its edges. That used to happen silently at display time,
+  with `object-fit` taking whichever edges it liked; now the frame is yours to
+  place before the file is sent, with the usual shapes as presets and the whole
+  image selected to begin with, so confirming without touching anything crops
+  nothing. **Use the whole image** skips the cut entirely and **Skip this one**
+  drops the file. A GIF is never offered a crop, because re-encoding one would
+  drop its animation, and neither is an SVG, which has no pixels to cut.
 - A headline of one or two words stacks one word per line like `TAYLOR / DREW`;
   longer headings wrap at a smaller size instead.
 - Links pointing at `http(s)` go through `/go/<id>` so clicks are counted; the
