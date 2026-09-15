@@ -1858,3 +1858,82 @@ test('changing the password keeps the Instagram connection and the other keys', 
     await api.stop();
   }
 });
+
+test('a connected account beats a profile URL pasted into the feed field', async () => {
+  // The exact shape of a live failure: the account is connected and working,
+  // but reels.feedUrl still holds the Instagram profile — which no server can
+  // read. The feed URL used to win outright, so the wall stayed empty and the
+  // working connection was never consulted.
+  const api = await startFakeInstagram({
+    media: [
+      {
+        id: '777',
+        caption: 'Crowd work',
+        media_type: 'VIDEO',
+        media_product_type: 'REELS',
+        media_url: 'https://cdn.example/777.mp4',
+        permalink: 'https://www.instagram.com/reel/GOOD/',
+        thumbnail_url: 'https://cdn.example/777.jpg'
+      }
+    ]
+  });
+  try {
+    await withServer({ INSTAGRAM_TOKEN: 'tok', INSTAGRAM_API_BASE: api.base }, async (server) => {
+      await server.login();
+      const current = (await server.call('/api/admin/site')).json.site;
+      current.reels = { ...(current.reels || {}), feedUrl: 'https://www.instagram.com/taylordrew4u/reels/' };
+      assert.strictEqual(
+        (await server.call('/api/admin/site', { method: 'PUT', body: { site: current } })).status,
+        200
+      );
+
+      const html = (await server.call('/reels')).text;
+      assert.match(html, /cdn\.example\/777\.mp4/, 'the account fills the wall');
+      assert.ok(!/reels live on Instagram/i.test(html), 'not the go-look-elsewhere fallback');
+    });
+  } finally {
+    await api.stop();
+  }
+});
+
+test('a real feed URL still wins, and a profile URL alone still points the way', async () => {
+  const http = require('node:http');
+  const feed = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify([
+      {
+        id: 'f1',
+        mediaType: 'VIDEO',
+        mediaUrl: 'https://cdn.example/from-feed.mp4',
+        permalink: 'https://www.instagram.com/reel/FEED/',
+        caption: 'From the feed'
+      }
+    ]));
+  });
+  await new Promise((r) => feed.listen(0, '127.0.0.1', r));
+  const feedUrl = `http://127.0.0.1:${feed.address().port}/feed.json`;
+
+  const api = await startFakeInstagram({ media: [] });
+  try {
+    // A usable feed URL is still the owner's choice, connected account or not.
+    await withServer({ INSTAGRAM_TOKEN: 'tok', INSTAGRAM_API_BASE: api.base }, async (server) => {
+      await server.login();
+      const site = (await server.call('/api/admin/site')).json.site;
+      site.reels = { ...(site.reels || {}), feedUrl };
+      await server.call('/api/admin/site', { method: 'PUT', body: { site } });
+      assert.match((await server.call('/reels')).text, /from-feed\.mp4/);
+    });
+
+    // And with nothing connected, a profile URL still says where the reels are.
+    await withServer({ INSTAGRAM_TOKEN: null }, async (server) => {
+      await server.login();
+      const site = (await server.call('/api/admin/site')).json.site;
+      site.reels = { ...(site.reels || {}), feedUrl: 'https://www.instagram.com/taylordrew4u/' };
+      await server.call('/api/admin/site', { method: 'PUT', body: { site } });
+      assert.match((await server.call('/reels')).text, /instagram\.com\/taylordrew4u/);
+    });
+  } finally {
+    await api.stop();
+    await new Promise((r) => feed.close(r));
+  }
+});
