@@ -955,77 +955,632 @@ body {
   cursor: pointer;
 }
 
-/* ----------------------------------------------------------- the splash */
+/* ------------------------------------------------------------- the boot */
 
+/*
+ * Switching the machine on. Three screens in turn, told apart by the
+ * `data-stage` desktop.js steps through: the self-test in light grey on
+ * black, the black screen with the flag and the blue blocks marching under
+ * the name, and the blue welcome screen (`user` while it loads your settings,
+ * `welcome` once it has). The whole thing is watched on a tube, so it
+ * flickers on from a line and carries the faintest scanlines and a dark edge
+ * the desktop under it does not.
+ */
 .boot {
   position: absolute;
   inset: 0;
   z-index: 9000;
+  overflow: hidden;
+  background: #000;
+  color: #a8a8a8;
+  animation: crt-on 0.55s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes crt-on {
+  0% {
+    transform: scale(1, 0.004);
+    filter: brightness(6);
+  }
+  35% {
+    transform: scale(1, 0.004);
+    filter: brightness(6);
+  }
+  60% {
+    transform: scale(1.02, 0.6);
+    filter: brightness(2.5);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+
+.boot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0) 0 2px, rgba(0, 0, 0, 0.07) 2px 3px),
+    radial-gradient(ellipse 90% 85% at 50% 50%, rgba(0, 0, 0, 0) 70%, rgba(0, 0, 0, 0.3) 100%);
+}
+
+.boot-post,
+.boot-os,
+.boot-welcome {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+
+.boot[data-stage='post'] .boot-post,
+.boot[data-stage='os'] .boot-os,
+.boot[data-stage='user'] .boot-welcome,
+.boot[data-stage='welcome'] .boot-welcome {
   display: flex;
+}
+
+/* --- 1. the self-test ------------------------------------------------- */
+
+/* The text mode the card came up in: 80 columns of light grey on black, in
+   the fixed-pitch face the machine had (Fixedsys, then Lucida Console,
+   before falling back to Courier). */
+.boot-post {
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  font: 15px/1.2 Fixedsys, 'Lucida Console', 'Courier New', monospace;
+  color: #a8a8a8;
+}
+
+.boot-post-text {
+  margin: 0;
+  font: inherit;
+  white-space: pre;
+  overflow: hidden;
+}
+
+/* Each line arrives a beat after the last, the way the screen filled in. */
+.boot-line {
+  display: block;
+  opacity: 0;
+  animation: boot-line 1ms linear forwards;
+  animation-delay: calc(var(--i) * 70ms + 120ms);
+}
+
+@keyframes boot-line {
+  to {
+    opacity: 1;
+  }
+}
+
+/* The Energy Star badge in the top right corner of every one of them. */
+.boot-estar {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  display: grid;
+  grid-template-columns: 30px auto;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  align-items: center;
+  padding: 4px 8px 4px 5px;
+  border: 1px solid #a8a8a8;
+  border-radius: 6px;
+  color: #a8a8a8;
+  font: 10px/1.1 Fixedsys, 'Lucida Console', 'Courier New', monospace;
+}
+
+.boot-estar i {
+  grid-row: 1 / 3;
+  display: block;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, #a8a8a8 0 5px, rgba(0, 0, 0, 0) 5.5px),
+    repeating-conic-gradient(from 0deg, #a8a8a8 0 12deg, rgba(0, 0, 0, 0) 12deg 36deg);
+  -webkit-mask: radial-gradient(circle, #000 0 8px, rgba(0, 0, 0, 0) 8.5px 10px, #000 10.5px 15px, rgba(0, 0, 0, 0) 15.5px);
+  mask: radial-gradient(circle, #000 0 8px, rgba(0, 0, 0, 0) 8.5px 10px, #000 10.5px 15px, rgba(0, 0, 0, 0) 15.5px);
+}
+
+.boot-estar b {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.boot-estar small {
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.boot-post-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  margin: 0;
+  font: inherit;
+}
+
+/* --- 2. the logo screen ------------------------------------------------ */
+
+.boot-os {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 22px;
-  background: radial-gradient(120% 90% at 50% 40%, #1b4f9c, #061a3c 70%);
+  gap: 60px;
+  padding-bottom: 5vh;
+  background: #000;
 }
 
-.boot-name {
-  margin: 0;
-  font: 700 38px Tahoma, Verdana, sans-serif;
-  letter-spacing: -0.02em;
+/* The flag, waving, and the words beside it. */
+.boot-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.boot-flag {
+  display: block;
+  width: 66px;
+  height: 54px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+}
+
+.boot-flag-tail {
+  opacity: 0.35;
+  filter: blur(1.5px);
+}
+
+.boot-wordmark {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   color: #fff;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-  text-align: center;
 }
 
-.boot-sub {
-  margin: -15px 0 0;
-  font: 11px var(--xp-mono);
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: #9fc2ef;
+/* Franklin Gothic shipped with the machine; Trebuchet and Tahoma stand in. */
+.boot-wm-small {
+  font: 15px/1 'Franklin Gothic Medium', 'Franklin Gothic', 'Trebuchet MS', Tahoma, Verdana, sans-serif;
+  letter-spacing: 0.01em;
 }
 
+.boot-wm-small sup {
+  font-size: 8px;
+  vertical-align: top;
+  line-height: 1;
+}
+
+.boot-wm-big {
+  margin-top: -2px;
+  font: 500 40px/1 'Franklin Gothic Medium', 'Franklin Gothic', 'Trebuchet MS', Tahoma, Verdana, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* The orange superscript, set in a lighter weight and tucked up close. */
+.boot-wm-big sup {
+  margin-left: 2px;
+  font-size: 22px;
+  font-weight: 400;
+  vertical-align: top;
+  line-height: 1;
+  color: #f47a1f;
+}
+
+.boot-wm-edition {
+  align-self: flex-end;
+  margin-top: 2px;
+  font: 12px/1 'Franklin Gothic Medium', 'Franklin Gothic', 'Trebuchet MS', Tahoma, Verdana, sans-serif;
+  color: #8ec83a;
+}
+
+/* The track with the three blue blocks that went across it, over and over. */
 .boot-bar {
-  width: 230px;
+  position: relative;
+  width: 154px;
   height: 14px;
-  padding: 2px;
-  border: 1px solid #6a97d8;
-  border-radius: 3px;
-  background: #0a2450;
+  border: 1px solid #9a9a9a;
+  border-radius: 4px;
+  background: #000;
+  overflow: hidden;
 }
 
 .boot-bar span {
+  position: absolute;
+  top: 2px;
+  left: -36px;
+  width: 33px;
+  height: 8px;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0) 0 0, rgba(0, 0, 0, 0) 0),
+    linear-gradient(180deg, #8fb8f5, #3a78e2 45%, #1f57c8);
+  -webkit-mask: linear-gradient(90deg, #000 0 9px, rgba(0, 0, 0, 0) 9px 12px, #000 12px 21px, rgba(0, 0, 0, 0) 21px 24px, #000 24px 33px);
+  mask: linear-gradient(90deg, #000 0 9px, rgba(0, 0, 0, 0) 9px 12px, #000 12px 21px, rgba(0, 0, 0, 0) 21px 24px, #000 24px 33px);
+  border-radius: 2px;
+  animation: boot-bar 1.3s linear infinite;
+}
+
+@keyframes boot-bar {
+  to {
+    left: 156px;
+  }
+}
+
+.boot-os-copy,
+.boot-os-brand {
+  position: absolute;
+  bottom: 16px;
+  margin: 0;
+  font: 11px/1 Tahoma, Verdana, sans-serif;
+  color: #b8b8b8;
+}
+
+.boot-os-copy {
+  left: 18px;
+}
+
+.boot-os-brand {
+  right: 18px;
+  font: 700 15px/1 'Franklin Gothic Medium', 'Franklin Gothic', 'Trebuchet MS', Tahoma, Verdana, sans-serif;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+/* --- 3. welcome ---------------------------------------------------------- */
+
+/* The blue field, lit from the centre, between the two navy bands with the
+   orange rule under the top one and over the bottom one. */
+.boot-welcome {
+  flex-direction: column;
+  background:
+    radial-gradient(ellipse 55% 70% at 45% 50%, rgba(140, 170, 240, 0.35), rgba(0, 0, 0, 0)),
+    linear-gradient(180deg, #5b7fdd, #4a6dd2 50%, #3e62c6);
+  color: #fff;
+}
+
+.boot-welcome::before,
+.boot-welcome::after {
+  content: '';
+  flex: 0 0 13.5%;
+  background: linear-gradient(180deg, #0a3aa8, #002f95);
+}
+
+.boot-welcome::before {
+  order: 0;
+  border-bottom: 2px solid #eaa52a;
+  box-shadow: 0 1px 0 #b9741a;
+}
+
+.boot-welcome::after {
+  order: 3;
+  border-top: 2px solid #eaa52a;
+  box-shadow: 0 -1px 0 #b9741a;
+}
+
+.boot-welcome-mid {
+  order: 1;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* The line down the middle, fading out at both ends. */
+.boot-welcome-mid::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  bottom: 12%;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.75) 20%, rgba(255, 255, 255, 0.75) 80%, rgba(255, 255, 255, 0));
+}
+
+.boot-welcome-left,
+.boot-welcome-right {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+
+.boot-welcome-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-right: 7%;
+}
+
+.boot-welcome-left .boot-flag {
+  width: 96px;
+  height: 78px;
+}
+
+.boot-welcome-left .boot-wm-small {
+  font-size: 18px;
+}
+
+.boot-welcome-left .boot-wm-big {
+  font-size: 52px;
+}
+
+.boot-welcome-left .boot-wm-big sup {
+  font-size: 28px;
+}
+
+.boot-welcome-left .boot-wm-edition {
+  display: none;
+}
+
+.boot-welcome-hint {
+  margin: 34px 0 0;
+  font: 14px Tahoma, Verdana, sans-serif;
+  text-shadow: 1px 1px 1px rgba(0, 20, 80, 0.4);
+}
+
+.boot-welcome-right {
+  padding-left: 6%;
+}
+
+/* The whole family's accounts, yours lit, while it loads your settings —
+   then just the word. */
+.boot[data-stage='welcome'] .boot-users,
+.boot[data-stage='welcome'] .boot-welcome-hint,
+.boot[data-stage='user'] .boot-welcome-word {
+  display: none;
+}
+
+.boot-users {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.boot-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: 100%;
+  padding: 5px 30px 5px 7px;
+  border-radius: 6px;
+  opacity: 0.72;
+}
+
+.boot-user.is-lit {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0));
+}
+
+/* The pictures on the accounts, in their white frames. */
+.boot-avatar {
   display: block;
-  width: 4%;
+  width: 46px;
+  height: 46px;
+  padding: 1px;
+  border: 1px solid #fff;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 20, 80, 0.5);
+}
+
+.boot-avatar i {
+  display: block;
+  width: 100%;
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, #6ef3a5, #2fb4e0);
-  animation: bootbar 2.1s linear forwards;
 }
 
-@keyframes bootbar {
-  from {
-    width: 4%;
-  }
-  to {
-    width: 100%;
-  }
+/* You: a person against a blue sky, red shirt. */
+.boot-avatar i[data-pic='you'] {
+  background:
+    radial-gradient(circle at 50% 38%, #f6d7b8 0 9px, rgba(0, 0, 0, 0) 10px),
+    radial-gradient(ellipse 60% 40% at 50% 100%, #c8322a 0 60%, rgba(0, 0, 0, 0) 62%),
+    linear-gradient(180deg, #8fc3f5, #3f8fdc);
 }
+
+/* Mom: the flower. */
+.boot-avatar i[data-pic='mom'] {
+  background:
+    radial-gradient(circle at 50% 50%, #f7c531 0 6px, rgba(0, 0, 0, 0) 7px),
+    radial-gradient(circle at 50% 26%, #f27bb1 0 8px, rgba(0, 0, 0, 0) 9px),
+    radial-gradient(circle at 74% 50%, #f27bb1 0 8px, rgba(0, 0, 0, 0) 9px),
+    radial-gradient(circle at 50% 74%, #f27bb1 0 8px, rgba(0, 0, 0, 0) 9px),
+    radial-gradient(circle at 26% 50%, #f27bb1 0 8px, rgba(0, 0, 0, 0) 9px),
+    linear-gradient(180deg, #d9f0c2, #8cc86a);
+}
+
+/* Dad: the beach. */
+.boot-avatar i[data-pic='dad'] {
+  background:
+    radial-gradient(circle at 72% 26%, #ffe66b 0 6px, rgba(0, 0, 0, 0) 7px),
+    linear-gradient(180deg, #7fc4ff 0 55%, #2a80c8 55% 78%, #f0d79a 78%);
+}
+
+/* Grandma: the duck. */
+.boot-avatar i[data-pic='grandma'] {
+  background:
+    radial-gradient(circle at 66% 38%, #1c1c1c 0 1.5px, rgba(0, 0, 0, 0) 2.5px),
+    radial-gradient(ellipse 30% 14% at 82% 46%, #f28c1e 0 100%, rgba(0, 0, 0, 0) 101%),
+    radial-gradient(circle at 60% 40%, #ffd83a 0 11px, rgba(0, 0, 0, 0) 12px),
+    radial-gradient(ellipse 44% 30% at 44% 70%, #ffd83a 0 100%, rgba(0, 0, 0, 0) 101%),
+    linear-gradient(180deg, #bfe6ff, #6fb6ec);
+}
+
+.boot-user-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 12px Tahoma, Verdana, sans-serif;
+}
+
+.boot-user-text b {
+  font: 700 17px/1 'Franklin Gothic Medium', 'Franklin Gothic', 'Trebuchet MS', Tahoma, Verdana, sans-serif;
+  text-shadow: 1px 1px 1px rgba(0, 20, 80, 0.4);
+}
+
+.boot-user-text small {
+  font-size: 12px;
+}
+
+.boot-welcome-word {
+  margin: 0;
+  font: italic 500 46px/1 'Franklin Gothic Medium', 'Franklin Gothic', 'Trebuchet MS', Tahoma, Verdana, sans-serif;
+  letter-spacing: 0.01em;
+  text-shadow: 1px 2px 2px rgba(0, 20, 80, 0.5);
+}
+
+/* The bottom band: the power button on the left, the note on the right. */
+.boot-welcome-foot {
+  order: 2;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 13.5%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 30px;
+  font: 12px/1.35 Tahoma, Verdana, sans-serif;
+}
+
+.boot-poweroff {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.boot-poweroff i {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ff8d7a, #d63a24 55%, #9c1e0f);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.boot-poweroff i::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #fff;
+  border-top-color: rgba(0, 0, 0, 0);
+  border-radius: 50%;
+}
+
+.boot-poweroff i::after {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 5px;
+  width: 2px;
+  height: 7px;
+  background: #fff;
+}
+
+.boot-welcome-note {
+  text-align: right;
+}
+
+/* --- skip ----------------------------------------------------------------- */
 
 .boot-skip {
-  padding: 6px 16px;
-  border: 1px solid #6a97d8;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.12);
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 30;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
   font: 11px Tahoma, Verdana, sans-serif;
-  color: #cfe2fb;
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
+}
+
+.boot[data-stage='os'] .boot-skip,
+.boot[data-stage='user'] .boot-skip,
+.boot[data-stage='welcome'] .boot-skip {
+  bottom: auto;
+  top: 10px;
 }
 
 /* Someone who asked for less motion gets the desktop, not the show. */
 @media (prefers-reduced-motion: reduce) {
   .boot {
+    display: none;
+  }
+}
+
+/* On a phone the self-test wraps and the welcome screen stacks. */
+@media (max-width: 719px) {
+  .boot {
+    position: fixed;
+  }
+
+  .boot-post {
+    font-size: 11px;
+    padding-right: 60px;
+  }
+
+  .boot-estar {
+    display: none;
+  }
+
+  .boot-welcome-mid {
+    flex-direction: column;
+    justify-content: center;
+    gap: 26px;
+  }
+
+  .boot-welcome-mid::after {
+    display: none;
+  }
+
+  .boot-welcome-left,
+  .boot-welcome-right {
+    flex: 0 0 auto;
+    align-items: center;
+    padding: 0;
+  }
+
+  .boot-welcome-right {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .boot-welcome-hint {
+    margin-top: 18px;
+    text-align: center;
+  }
+
+  .boot-welcome-right {
+    align-items: center;
+  }
+
+  .boot-users {
+    align-items: flex-start;
+  }
+
+  .boot-skip {
+    bottom: auto;
+    top: 10px;
+  }
+
+  .boot-poweroff {
+    white-space: normal;
+  }
+
+  .boot-welcome-note {
     display: none;
   }
 }

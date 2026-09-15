@@ -315,13 +315,62 @@
     }
   }
 
+  // Three screens in turn: the self-test, the logo, the welcome (first with
+  // your name while it loads your settings, then just the word). The memory
+  // count on the first is the one part CSS cannot do, so it is counted here.
+  var stages = [
+    ['post', 2400],
+    ['os', 2300],
+    ['user', 1400],
+    ['welcome', 900]
+  ];
+  var timers = [];
+  var elapsed = 0;
+  stages.forEach(function (stage, i) {
+    if (i === 0) {
+      boot.setAttribute('data-stage', stage[0]);
+    } else {
+      timers.push(
+        setTimeout(function () {
+          boot.setAttribute('data-stage', stage[0]);
+        }, elapsed)
+      );
+    }
+    elapsed += stage[1];
+  });
+  timers.push(setTimeout(done, elapsed));
+
+  var memory = boot.querySelector('.boot-mem');
+  if (memory) {
+    var total = 65536;
+    var started = Date.now() + 400;
+    var counting = setInterval(function () {
+      var at = Math.min(total, Math.max(0, Math.round((Date.now() - started) / 650 * total / 512) * 512));
+      memory.textContent = String(at);
+      if (at >= total) clearInterval(counting);
+    }, 40);
+    timers.push(counting);
+  }
+
+  function skipNow() {
+    timers.forEach(function (t) {
+      clearTimeout(t);
+      clearInterval(t);
+    });
+    document.removeEventListener('keydown', onKey);
+    done();
+  }
+
+  // "Press any key": a bare modifier is not a key.
+  function onKey(event) {
+    if (['Shift', 'Control', 'Alt', 'Meta', 'Tab'].indexOf(event.key) !== -1) return;
+    skipNow();
+  }
+
   boot.hidden = false;
-  var timer = setTimeout(done, 2200);
+  document.addEventListener('keydown', onKey);
   if (skip) {
     skip.focus();
-    skip.addEventListener('click', function () {
-      clearTimeout(timer);
-      done();
-    });
+    skip.addEventListener('click', skipNow);
   }
 })();
