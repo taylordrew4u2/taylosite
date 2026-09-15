@@ -291,15 +291,26 @@
       : '';
   }
 
+  // Every piece of text that ends up on the site gets a pair of generators.
+  // What does not: identifiers and brand names (rewriting "Taylor Drew" is
+  // never an improvement), links, addresses, dates, times, codes and keys.
   function seoEligible(opts) {
     if (opts.seo === false || (opts.type && opts.type !== 'text')) return false;
-    return !/(?:^|\.)(?:id|name|logoText|location|source|url|href|email|to|date|time|year|venue|street|city|country|postalCode|photo|video|poster|feedUrl|favicon|googleVerification|bingVerification|wikidata|rightHref|color|hash|salt|apiKey|maxItems)$/i.test(opts.path || '');
+    return !/(?:^|\.)(?:id|name|logoText|source|url|href|email|to|date|time|year|street|country|postalCode|photo|video|poster|flyer|feedUrl|favicon|googleVerification|bingVerification|wikidata|rightHref|color|hash|salt|apiKey|maxItems)$/i.test(opts.path || '');
   }
 
-  function seoButton(opts) {
+  // `compact` is the pair that fits inside a table cell or a mini-field: the
+  // same two actions, labelled SEO and GEO, with the full name on the tooltip.
+  function seoButton(opts, compact) {
     if (!seoEligible(opts)) return '';
     var shared = ' type="button" data-action="seo-generate" data-target="' + esc(opts.path) +
       '" data-label="' + esc(opts.label || 'Text') + '"';
+    if (compact) {
+      return '<span class="search-generators is-compact">' +
+        '<button class="seo-generate"' + shared + ' data-mode="seo" title="Generate SEO version" aria-label="Generate SEO version of ' + esc(opts.label || 'this text') + '">SEO</button>' +
+        '<button class="seo-generate"' + shared + ' data-mode="geo" title="Generate GEO version" aria-label="Generate GEO version of ' + esc(opts.label || 'this text') + '">GEO</button>' +
+        '</span>';
+    }
     return '<span class="search-generators">' +
       '<button class="seo-generate"' + shared + ' data-mode="seo">Generate SEO version</button>' +
       '<button class="seo-generate"' + shared + ' data-mode="geo">Generate GEO version</button>' +
@@ -828,11 +839,11 @@
                   '</span>' +
                   (open
                     ? '<div class="dtable-extra">' +
-                      '<label class="mini-field"><span>Button label</span><input class="input input-sm" type="text" data-path="shows.' + i + '.ctaLabel" value="' + esc(show.ctaLabel || '') + '" placeholder="Tickets"></label>' +
-                      '<label class="mini-field mini-field-wide"><span>Note</span><input class="input input-sm" type="text" data-path="shows.' + i + '.note" value="' + esc(show.note || '') + '" placeholder="Late show · 18+"></label>' +
-                      '<label class="mini-field mini-field-wide"><span>Venue street address</span><input class="input input-sm" type="text" data-path="shows.' + i + '.street" value="' + esc(show.street || '') + '" placeholder="117 MacDougal St"></label>' +
-                      '<label class="mini-field"><span>Postal code</span><input class="input input-sm" type="text" data-path="shows.' + i + '.postalCode" value="' + esc(show.postalCode || '') + '" placeholder="10012"></label>' +
-                      '<label class="mini-field"><span>Country</span><input class="input input-sm" type="text" data-path="shows.' + i + '.country" value="' + esc(show.country || '') + '" placeholder="US"></label>' +
+                      miniField('Button label', 'shows.' + i + '.ctaLabel', show.ctaLabel, 'Tickets') +
+                      miniField('Note', 'shows.' + i + '.note', show.note, 'Late show · 18+', true) +
+                      miniField('Venue street address', 'shows.' + i + '.street', show.street, '117 MacDougal St', true) +
+                      miniField('Postal code', 'shows.' + i + '.postalCode', show.postalCode, '10012') +
+                      miniField('Country', 'shows.' + i + '.country', show.country, 'US') +
                       '<div class="mini-field mini-field-wide">' +
                       imageField({ label: 'Flyer', path: 'shows.' + i + '.flyer', value: show.flyer, hint: 'Shown beside the date on the links page and published as the event’s picture.' }) +
                       '</div>' +
@@ -973,7 +984,20 @@
     return (
       '<label class="cell cell-' + kind + '"><span class="cell-name">' + esc(label) + '</span>' +
       '<input class="input input-sm" type="' + (type || 'text') + '" data-path="' + esc(path) + '"' +
-      ' aria-label="' + esc(label) + '" placeholder="' + esc(placeholder || '') + '" value="' + esc(value || '') + '"></label>'
+      ' aria-label="' + esc(label) + '" placeholder="' + esc(placeholder || '') + '" value="' + esc(value || '') + '">' +
+      seoButton({ path: path, label: label, type: type || 'text' }, true) +
+      '</label>'
+    );
+  }
+
+  // The small labelled inputs inside an opened show row. Text that reaches
+  // the site (the note, the button label) gets the compact generator pair.
+  function miniField(label, path, value, placeholder, wide) {
+    return (
+      '<label class="mini-field' + (wide ? ' mini-field-wide' : '') + '"><span>' + esc(label) + '</span>' +
+      '<input class="input input-sm" type="text" data-path="' + esc(path) + '" value="' + esc(value || '') + '" placeholder="' + esc(placeholder || '') + '">' +
+      seoButton({ path: path, label: label, type: 'text' }, true) +
+      '</label>'
     );
   }
 
@@ -2373,11 +2397,14 @@
     if (action === 'seo-generate') {
       var target = trigger.dataset.target;
       var mode = trigger.dataset.mode === 'geo' ? 'geo' : 'seo';
-      var input = document.getElementById(target);
+      var input = document.getElementById(target) || trigger.closest('.field, .cell, .mini-field');
+      if (input && !('value' in input)) input = input.querySelector('[data-path]');
       var original = input ? input.value : String(getPath(state.site, target) || '');
       if (!original.trim()) return toast('Write something first, then generate its SEO version.', 'error');
+      var idleLabel = trigger.textContent;
+      var compact = trigger.parentElement && trigger.parentElement.classList.contains('is-compact');
       trigger.disabled = true;
-      trigger.textContent = 'Generating ' + mode.toUpperCase() + '…';
+      trigger.textContent = compact ? '…' : 'Generating ' + mode.toUpperCase() + '…';
       return api('/admin/seo-copy', {
         method: 'POST',
         body: { text: original, path: target, label: trigger.dataset.label || 'Text', mode: mode }
@@ -2391,7 +2418,7 @@
         .catch(function (err) { toast(err.message || 'Could not generate SEO copy.', 'error'); })
         .finally(function () {
           trigger.disabled = false;
-          trigger.textContent = 'Generate ' + mode.toUpperCase() + ' version';
+          trigger.textContent = idleLabel;
         });
     }
 
