@@ -15,7 +15,7 @@ npm start          # http://localhost:3000
 PORT=8080 npm start
 ```
 
-- Public site: `/`, `/about`, `/reels`, `/links`
+- Public site: `/`, `/about`, `/reels`, `/links`, `/contact`
 - Admin panel: `/admin`
 - Default password: **`weed`** — change it in **Admin → Security**. (Set
   `ADMIN_PASSWORD` before the very first run to seed a different one.)
@@ -46,6 +46,7 @@ credentials.
 | **Reels** | The wall at `/reels` — pulled from the connected Instagram account, plus any reels pinned by hand |
 | **Links** | Add, edit, delete, reorder (drag or arrows), hide, feature; label, sub-label, URL; click counts per link |
 | **Shows** | Date, time, venue, city, street address, ticket link, button label, note, flyer, sold-out and hidden flags — or post the flyer and have all of that read off it |
+| **Contact page** | Kicker, title, intro, the address and subject the Send button opens, the message hint and the button's label |
 | **About page** | Kicker, title, photo, unlimited bio paragraphs, label/value facts, credits and awards, press quotes, questions and answers |
 | **Navigation** | The header menu — labels, targets, order, visibility |
 | **Themes** | Every colour of every scheme, and which one the site is served with |
@@ -105,25 +106,47 @@ lib/auth.js          scrypt password hashing, sessions, login rate limiting
 lib/render.js        server-side HTML for the three public pages
 public/admin.html    the admin panel shell
 public/assets/       site + admin CSS and JS
-                     (css/retro.css is the skin — delete it and the link
-                      in lib/render.js to get the plain site back)
+                     (css/retro.css + js/desktop.js are the desktop; see below)
 data/                site.json, sessions, snapshots, uploads (git-ignored)
 ```
 
-### The retro skin
+### The desktop
 
-`public/assets/css/retro.css` loads after `site.css` and after the theme block,
-and turns the page into one desktop window: the logo is the title bar, the menu
-is the menu bar, the content is a sunken client area and the footer is a status
-bar of sunken panes. Buttons, links, shows, reels and the game's seats become
-raised tiles that push in when pressed.
+The site is one window on a desktop of the early 2000s. `lib/render.js` wraps
+every page in it and `public/assets/css/retro.css` dresses it:
 
-It is a skin and nothing else. No page markup changed, the admin panel is
-untouched, and the only edit outside the file is the one `<link>` that loads it.
-The sheet re-points the theme's four neutral variables (`--bg`, `--surface`,
-`--text`, `--line`) at the classic system greys but leaves `--accent` alone, so
-whichever scheme is served still colours the title bar, the active menu item,
-the section captions and the default button.
+| Part of the desktop | What it actually is |
+| --- | --- |
+| Title bar | the site's logo, plus the document's name |
+| Sidebar | the navigation menu |
+| Document | the page — hero, links, reels, shows, all of it |
+| Status bar | the footer, behind an invented `C:\TAYLOR\…` path |
+| Taskbar | start button, the open window, a clock |
+| Shortcuts | the menu again, plus two folders that refuse to open |
+
+Contact is a message being composed rather than a form: there is no handler
+behind it and there is not meant to be. The fields show what the message will
+say and **Send** is a `mailto:` carrying the address, the subject and the body,
+so the draft opens in whatever the visitor writes mail in. With no contact
+address set it falls back to the brand's booking address, and with neither it
+says so instead of showing a button that goes nowhere.
+
+`public/assets/js/desktop.js` runs the parts a static page cannot: the clock,
+the start menu, minimise / maximise / close, dragging the window by its title
+bar, the two joke dialogs, and the boot splash (once per visit, skippable, and
+never shown to anyone who asked for reduced motion).
+
+None of it is content. Every word on the pages still comes from the admin
+panel, and every menu item is a real link to a real server-rendered URL — so
+with JavaScript off the window simply sits open on the wallpaper with nothing
+missing. The stylesheet re-points the theme's four neutral variables (`--bg`,
+`--surface`, `--text`, `--line`) at the period palette but leaves `--accent`
+alone, so whichever scheme is served still colours the featured link, the
+section captions and the default button.
+
+Under 720px the desktop collapses: the shortcuts go, the window becomes the
+page, and the taskbar pins to the bottom of the screen. Under 480px the
+sidebar becomes a row of tabs above the document.
 
 Pages are rendered on the server, so the site works with JavaScript disabled and
 reads correctly to search engines and link previews. The admin panel is a

@@ -681,7 +681,8 @@ const PAGES = {
   '/': render.renderHome,
   '/about': render.renderAbout,
   '/links': render.renderLinks,
-  '/reels': render.renderReels
+  '/reels': render.renderReels,
+  '/contact': render.renderContact
 };
 
 const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
