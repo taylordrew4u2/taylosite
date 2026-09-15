@@ -205,7 +205,53 @@ function ensureReady() {
 
 // ------------------------------------------------------------------- auth
 
-async function requireSession(req, res) {
+/**
+ * What an API key is allowed to reach.
+ *
+ * An allowlist rather than a denylist, so a route added later is refused until
+ * somebody decides otherwise — the failure mode of a denylist is a new route
+ * quietly becoming reachable. Content and media only: a key cannot change the
+ * password, sign anyone out, mint or revoke a key, touch the Instagram and
+ * Anthropic credentials, or export the site.
+ */
+function apiKeyAllows(method, adminRoute) {
+  if (adminRoute === '/site') return method === 'GET' || method === 'PUT';
+  if (adminRoute === '/uploads') return method === 'GET' || method === 'POST';
+  if (adminRoute.startsWith('/uploads/')) return method === 'DELETE';
+  return false;
+}
+
+async function requireSession(req, res, adminRoute) {
+  // A bearer key is the other way in, and it is checked first because a
+  // request carrying one is not a browser request: no cookie is involved, so
+  // there is no CSRF to defend against — a cross-site page cannot set this
+  // header in the first place.
+  const bearer = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || ''));
+  if (bearer) {
+    const ip = clientIp(req);
+    const blockedFor = auth.loginBlocked(ip);
+    if (blockedFor) {
+      sendJson(res, 429, {
+        error: `Too many bad keys. Try again in ${Math.ceil(blockedFor / 60000)} minutes.`
+      });
+      return null;
+    }
+    if (!(await auth.checkApiKey(bearer[1].trim()))) {
+      // The same counter the login form uses, so guessing a key is bounded too.
+      auth.recordFailure(ip);
+      sendJson(res, 401, { error: 'That API key is not valid' });
+      return null;
+    }
+    if (!apiKeyAllows(req.method, adminRoute)) {
+      sendJson(res, 403, {
+        error: 'An API key may only read and write content and media. Sign in for anything else.'
+      });
+      return null;
+    }
+    auth.clearFailures(ip);
+    return { token: null, session: { csrf: null }, viaApiKey: true };
+  }
+
   const cookies = auth.parseCookies(req.headers.cookie);
   const token = cookies[auth.COOKIE_NAME];
   const session = await auth.getSession(token);
@@ -274,9 +320,9 @@ async function handleApi(req, res, url) {
   // --- authenticated ------------------------------------------------------
   if (!route.startsWith('/admin')) return notFound(req, res);
 
-  const ctx = await requireSession(req, res);
-  if (!ctx) return undefined;
   const adminRoute = route.replace(/^\/admin/, '');
+  const ctx = await requireSession(req, res, adminRoute);
+  if (!ctx) return undefined;
 
   if (adminRoute === '/site' && req.method === 'GET') {
     const site = await store.readSite();
@@ -285,6 +331,7 @@ async function handleApi(req, res, url) {
       stats: await buildStats(site),
       sessions: await auth.listSessions(ctx.token),
       usingDefaultPassword: await auth.usingDefaultPassword(),
+      apiKey: auth.apiKeyStatus(site),
       storage: store.describe(),
       flyer: flyer.status(site, process.env)
     });
@@ -333,6 +380,24 @@ async function handleApi(req, res, url) {
     if (next.length < 4) return sendJson(res, 400, { error: 'New password must be at least 4 characters' });
     await auth.setPassword(next);
     return sendJson(res, 200, { ok: true, signedOut: true }, { 'Set-Cookie': auth.clearCookie({ secure: isSecure(req) }) });
+  }
+
+  // A key for editing content without a browser. Minting one replaces any
+  // previous key, and the plaintext is returned exactly once — only its hash
+  // is stored, so there is nothing to show again later.
+  if (adminRoute === '/apikey' && req.method === 'POST') {
+    const body = await readJson(req);
+    const key = await auth.createApiKey(body.label);
+    return sendJson(res, 200, {
+      ok: true,
+      key,
+      ...auth.apiKeyStatus(await store.readSite())
+    });
+  }
+
+  if (adminRoute === '/apikey' && req.method === 'DELETE') {
+    await auth.revokeApiKey();
+    return sendJson(res, 200, { ok: true, set: false });
   }
 
   if (adminRoute === '/sessions' && req.method === 'DELETE') {
@@ -823,7 +888,20 @@ async function handle(req, res) {
     // A pasted feed URL is the one-login path and takes precedence; a Meta app
     // token is the other way in for anyone who has one.
     const feedUrl = (site.reels && site.reels.feedUrl) || '';
-    const feed = feedUrl ? await instagram.fetchFeedUrl(feedUrl) : await instagram.fetchReels({ store, site });
+    // A feed URL used to win outright, which meant a bad one silently disabled
+    // a working connection. The commonest bad one is the Instagram profile
+    // itself: it looks like the right answer, it can never be read by a server,
+    // and pasted once it would sit there beating the API forever. So a feed URL
+    // only wins while it is actually usable; a connected account is the better
+    // answer than a URL we already know cannot be fetched.
+    const feedProblem = feedUrl ? instagram.feedUrlProblem(feedUrl) : '';
+    const feed =
+      feedUrl && !feedProblem
+        ? await instagram.fetchFeedUrl(feedUrl)
+        : instagram.isConfigured(process.env, site)
+          ? await instagram.fetchReels({ store, site })
+          // Nothing connected either: fall back to naming where the reels are.
+          : await instagram.fetchFeedUrl(feedUrl);
     return sendHtml(
       res,
       200,

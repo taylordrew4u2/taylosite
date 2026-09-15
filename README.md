@@ -52,7 +52,7 @@ credentials.
 | **Footer** | Left text, right text and its link, optional middle note |
 | **Media** | Upload / browse / delete images, copy URLs |
 | **Backups & data** | Restore any of the last 30 auto-snapshots, export or import the whole site as JSON, reset to defaults |
-| **Security** | Change password, see signed-in devices, sign out everywhere |
+| **Security** | Change password, mint or revoke the API key, see signed-in devices, sign out everywhere |
 
 Editing notes:
 
@@ -352,6 +352,44 @@ Escape.
   be hex, `javascript:` and other unsafe URL schemes are rejected, uploads must
   be images under 8 MB, and every value is HTML-escaped on output.
 - `/admin` is excluded in `robots.txt`.
+
+#### The API key
+
+**Admin → Security → API key** mints one key for editing the site without a
+browser — a script, a phone shortcut, an assistant. Send it as
+`Authorization: Bearer tdk_…` instead of signing in.
+
+```bash
+curl -s https://www.taylordrew4u.com/api/admin/site \
+  -H "Authorization: Bearer $TAYLOSITE_KEY"
+
+curl -X PUT https://www.taylordrew4u.com/api/admin/site \
+  -H "Authorization: Bearer $TAYLOSITE_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"site": { … }}'
+```
+
+What makes it safe to hand out is that it is **much weaker than the password**:
+
+- It reaches content and media only — `GET`/`PUT /api/admin/site`,
+  `GET`/`POST /api/admin/uploads`, and `DELETE /api/admin/uploads/<id>`.
+  Everything else answers `403`. That list is an allowlist, not a denylist, so
+  a route added later is refused until someone decides otherwise — a denylist
+  fails the other way, by quietly exposing whatever it has not heard of.
+- So it **cannot** change the password, sign anyone out, mint or revoke a key,
+  read or write the Instagram and Anthropic credentials, export the site, or
+  restore a backup. A leaked key is a content problem, never a takeover.
+- It is stored the way the password is: `scrypt` over 24 random bytes, salted,
+  hash only. The key is shown once when it is made and cannot be read back —
+  not from the panel, not from the API, not from a copy of the stored document.
+- Guessing one is bounded by the same eight-attempts-then-fifteen-minutes
+  lockout the login form uses.
+- Making a new key replaces the old one; **Revoke it** removes it entirely.
+  Either takes effect on the next request.
+
+No CSRF token is needed on a bearer request, and that is not a gap: CSRF exists
+because a browser attaches cookies to cross-site requests on its own. It never
+attaches an `Authorization` header, so a hostile page cannot forge one of these.
 
 ### Data
 

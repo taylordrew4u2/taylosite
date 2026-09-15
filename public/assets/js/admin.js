@@ -25,7 +25,12 @@
     showFilter: 'all',
     expandedShows: {},
     flyer: null,
-    flyerBusy: false
+    flyerBusy: false,
+    apiKey: null,
+    // The one and only copy of a freshly minted key. Held in memory until the
+    // section is left, then dropped: only its hash is stored, so once this is
+    // gone there is nowhere to read it from again.
+    freshApiKey: ''
   };
 
   function icon(paths) {
@@ -63,7 +68,7 @@
     { id: 'footer', label: 'Footer', hint: 'The line at the bottom of every page.', keys: ['footer'] },
     { id: 'media', label: 'Media', hint: 'Uploaded images.' },
     { id: 'data', label: 'Backups & data', hint: 'Snapshots, export, import and reset.' },
-    { id: 'security', label: 'Security', hint: 'Password and signed-in devices.' }
+    { id: 'security', label: 'Security', hint: 'Password, API key and signed-in devices.' }
   ];
 
   var el = {
@@ -1444,11 +1449,50 @@
           '<p class="hint" style="margin-top:10px">You will be signed out of every device afterwards.</p>' +
           '</form>'
       ) +
+      card('API key', apiKeyCard()) +
       card(
         'Signed-in devices',
         '<table class="table"><thead><tr><th>Session</th><th>Signed in</th><th>IP</th><th>Browser</th></tr></thead><tbody>' + rows + '</tbody></table>',
         { actions: '<button class="btn btn-sm btn-danger" type="button" data-action="revoke-sessions">Sign out everywhere</button>' }
       )
+    );
+  }
+
+  /**
+   * A key for editing the site without a browser — an agent, a script, a phone
+   * shortcut. Only its hash is stored, so the key itself is shown once and
+   * never again; `state.freshApiKey` holds it only until the next render.
+   */
+  function apiKeyCard() {
+    var info = state.apiKey || { set: false };
+    var fresh = state.freshApiKey
+      ? '<div class="notice"><div><strong>Copy it now — it is not shown again.</strong>' +
+        '<code class="ig-copy">' + esc(state.freshApiKey) + '</code> ' +
+        '<button class="btn btn-sm btn-ghost" type="button" data-action="ig-copy-redirect" ' +
+        'data-value="' + esc(state.freshApiKey) + '">Copy</button></div></div>'
+      : '';
+
+    return (
+      fresh +
+      '<p class="hint">Lets a script or an assistant read and edit your content and images without your ' +
+      'password. It is deliberately limited: it <strong>cannot</strong> change your password, sign anyone ' +
+      'out, reach your Instagram or Anthropic keys, export the site, or make another key. Anything it is ' +
+      'not allowed to touch is refused outright.</p>' +
+      (info.set
+        ? '<p class="hint"><strong>A key is active' + (info.label ? ' (' + esc(info.label) + ')' : '') + '.</strong> ' +
+          'Made ' + esc(formatDate(info.createdAt)) + '. ' +
+          (info.lastUsedAt ? 'Last used ' + esc(formatDate(info.lastUsedAt)) + '.' : 'Not used yet.') +
+          '</p>'
+        : '<p class="hint">No key right now.</p>') +
+      '<label class="field" style="max-width:320px"><span class="label">What is it for</span>' +
+      '<input class="input" id="apikey-label" type="text" maxlength="60" placeholder="Claude"></label>' +
+      '<p><button class="btn btn-sm btn-accent" type="button" data-action="apikey-create">' +
+      (info.set ? 'Replace the key' : 'Make a key') + '</button>' +
+      (info.set
+        ? ' <button class="btn btn-sm btn-danger" type="button" data-action="apikey-revoke">Revoke it</button>'
+        : '') +
+      '</p>' +
+      (info.set ? '<p class="hint">Making a new one replaces the old one immediately.</p>' : '')
     );
   }
 
@@ -1538,6 +1582,10 @@
   }
 
   function go(sectionId) {
+    // A freshly minted key is on screen exactly once. Leaving the section is
+    // the moment it stops being offered, so it does not reappear later to
+    // someone reading over a shoulder.
+    if (sectionId !== state.section) state.freshApiKey = '';
     state.section = sectionId;
     location.hash = sectionId;
     document.getElementById('app').classList.remove('nav-open');
@@ -1639,6 +1687,7 @@
       state.flyer = data.flyer || null;
       state.sessions = data.sessions;
       state.usingDefaultPassword = data.usingDefaultPassword;
+      state.apiKey = data.apiKey || null;
       state.storage = data.storage || '';
       state.baseline = data.site.meta && data.site.meta.updatedAt;
       markClean();
@@ -2205,6 +2254,33 @@
         })
         .then(function () { render({ preserveFocus: false }); })
         .catch(function (err) { toast(err.message || 'Could not save the app details.', 'error'); });
+    }
+    if (action === 'apikey-create') {
+      var labelBox = document.getElementById('apikey-label');
+      var label = labelBox ? labelBox.value.trim() : '';
+      if (state.apiKey && state.apiKey.set &&
+          !confirm('Replace the current key? Anything using the old one stops working straight away.')) {
+        return;
+      }
+      return api('/admin/apikey', { method: 'POST', body: { label: label } })
+        .then(function (data) {
+          state.freshApiKey = data.key;
+          toast('Key made. Copy it now — it is not shown again.');
+          return loadSite();
+        })
+        .then(function () { render({ preserveFocus: false }); })
+        .catch(function (err) { toast(err.message || 'Could not make a key.', 'error'); });
+    }
+    if (action === 'apikey-revoke') {
+      if (!confirm('Revoke the API key? Anything using it stops working straight away.')) return;
+      return api('/admin/apikey', { method: 'DELETE' })
+        .then(function () {
+          state.freshApiKey = '';
+          toast('Key revoked.');
+          return loadSite();
+        })
+        .then(function () { render({ preserveFocus: false }); })
+        .catch(function (err) { toast(err.message || 'Could not revoke it.', 'error'); });
     }
     if (action === 'ig-save-token') {
       var tokenBox = document.getElementById('ig-token');

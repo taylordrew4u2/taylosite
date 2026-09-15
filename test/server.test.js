@@ -1694,3 +1694,246 @@ test('the game page renders, is in the menu, and stays out of the index', async 
     assert.strictEqual((await server.call('/play/')).status, 301, 'one canonical spelling, like every page');
   });
 });
+
+// ------------------------------------------------------------- api keys
+
+/** A client with no cookie and no CSRF token — only the key. */
+function bearer(server, key) {
+  return async (pathname, options = {}) => {
+    const res = await fetch(server.base + pathname, {
+      method: options.method || 'GET',
+      headers: {
+        authorization: `Bearer ${key}`,
+        ...(options.body === undefined ? {} : { 'content-type': 'application/json' })
+      },
+      body: options.body === undefined ? undefined : JSON.stringify(options.body)
+    });
+    const text = await res.text();
+    let json = null;
+    try {
+      json = JSON.parse(text);
+    } catch (_) {
+      /* not every response is JSON */
+    }
+    return { status: res.status, text, json };
+  };
+}
+
+async function mintKey(server) {
+  await server.login();
+  const res = await server.call('/api/admin/apikey', { method: 'POST', body: { label: 'agent' } });
+  assert.strictEqual(res.status, 200);
+  assert.ok(res.json.key.startsWith('tdk_'), 'the key is handed back once, plainly');
+  return res.json.key;
+}
+
+test('an API key edits content with no cookie and no CSRF token', async () => {
+  await withServer({}, async (server) => {
+    const key = await mintKey(server);
+    const api = bearer(server, key);
+
+    const read = await api('/api/admin/site');
+    assert.strictEqual(read.status, 200, 'it can read the site');
+
+    const site = read.json.site;
+    site.brand = { ...site.brand, name: 'Edited By Key' };
+    const write = await api('/api/admin/site', { method: 'PUT', body: { site } });
+    assert.strictEqual(write.status, 200, 'and write it, with no CSRF token in sight');
+
+    // The real proof is the rendered page, not the API's own answer.
+    assert.match((await server.call('/')).text, /Edited By Key/);
+  });
+});
+
+test('an API key reaches content and media, and nothing else', async () => {
+  await withServer({ INSTAGRAM_APP_ID: '99', INSTAGRAM_APP_SECRET: 'sh' }, async (server) => {
+    const key = await mintKey(server);
+    const api = bearer(server, key);
+
+    // Allowed.
+    assert.strictEqual((await api('/api/admin/uploads')).status, 200);
+
+    // Refused — each of these is a way a leaked key could become a takeover.
+    const forbidden = [
+      ['/api/admin/password', 'POST', { current: 'weed', next: 'hunter2' }],
+      ['/api/admin/sessions', 'DELETE', undefined],
+      ['/api/admin/apikey', 'POST', {}],
+      ['/api/admin/apikey', 'DELETE', undefined],
+      ['/api/admin/instagram', 'GET', undefined],
+      ['/api/admin/instagram/message', 'POST', { recipientId: '1', text: 'x' }],
+      ['/api/admin/export', 'GET', undefined],
+      ['/api/admin/backups', 'GET', undefined],
+      ['/api/admin/site/reset', 'POST', undefined],
+      ['/api/admin/import', 'POST', { site: {} }]
+    ];
+    for (const [path, method, body] of forbidden) {
+      const res = await api(path, { method, body });
+      assert.strictEqual(res.status, 403, `${method} ${path} must be refused, got ${res.status}`);
+      assert.match(res.json.error, /only read and write content and media/);
+    }
+
+    // And the password really did not change.
+    assert.strictEqual((await server.login('weed')).status, 200);
+  });
+});
+
+test('a wrong key is refused, and guessing is rate limited', async () => {
+  await withServer({}, async (server) => {
+    await mintKey(server);
+    const wrong = bearer(server, 'tdk_' + '0'.repeat(48));
+
+    assert.strictEqual((await wrong('/api/admin/site')).status, 401);
+
+    let sawLockout = false;
+    for (let i = 0; i < 10; i++) {
+      if ((await wrong('/api/admin/site')).status === 429) {
+        sawLockout = true;
+        break;
+      }
+    }
+    assert.ok(sawLockout, 'the login limiter bounds key guessing too');
+  });
+});
+
+test('a revoked key stops working, and the key is never readable again', async () => {
+  await withServer({}, async (server) => {
+    const key = await mintKey(server);
+    const api = bearer(server, key);
+    assert.strictEqual((await api('/api/admin/site')).status, 200);
+
+    // The panel is told there is a key, never what it is.
+    const panel = await server.call('/api/admin/site');
+    assert.strictEqual(panel.json.apiKey.set, true);
+    assert.strictEqual(panel.json.apiKey.label, 'agent');
+    assert.ok(!panel.text.includes(key), 'the key itself is not in the admin payload');
+
+    // Nor is it anywhere a visitor can reach.
+    assert.ok(!(await server.call('/api/content')).text.includes(key));
+    for (const path of ['/', '/about', '/links', '/llms.txt']) {
+      assert.ok(!(await server.call(path)).text.includes(key), `not on ${path}`);
+    }
+
+    assert.strictEqual((await server.call('/api/admin/apikey', { method: 'DELETE' })).status, 200);
+    assert.strictEqual((await api('/api/admin/site')).status, 401, 'revoked means revoked');
+  });
+});
+
+test('changing the password keeps the Instagram connection and the other keys', async () => {
+  // Regression: setPassword assigned a fresh object over site.auth, which threw
+  // away everything else kept there — the Instagram token and app credentials,
+  // the Anthropic key and the IndexNow key.
+  const api = await startFakeInstagram({ media: [] });
+  try {
+    await withServer(
+      {
+        INSTAGRAM_APP_ID: '99',
+        INSTAGRAM_APP_SECRET: 'sh',
+        INSTAGRAM_API_BASE: api.base,
+        INSTAGRAM_OAUTH_BASE: api.base
+      },
+      async (server) => {
+        await server.login();
+        assert.strictEqual(
+          (await server.call('/api/admin/instagram', { method: 'POST', body: { code: 'abc' } })).status,
+          200
+        );
+        assert.strictEqual((await server.call('/api/admin/instagram')).json.connected, true);
+
+        const changed = await server.call('/api/admin/password', {
+          method: 'POST',
+          body: { current: 'weed', next: 'a-better-password' }
+        });
+        assert.strictEqual(changed.status, 200);
+
+        // Changing the password signs everyone out, so sign back in.
+        assert.strictEqual((await server.login('a-better-password')).status, 200);
+        assert.strictEqual(
+          (await server.call('/api/admin/instagram')).json.connected,
+          true,
+          'the account is still connected'
+        );
+      }
+    );
+  } finally {
+    await api.stop();
+  }
+});
+
+test('a connected account beats a profile URL pasted into the feed field', async () => {
+  // The exact shape of a live failure: the account is connected and working,
+  // but reels.feedUrl still holds the Instagram profile — which no server can
+  // read. The feed URL used to win outright, so the wall stayed empty and the
+  // working connection was never consulted.
+  const api = await startFakeInstagram({
+    media: [
+      {
+        id: '777',
+        caption: 'Crowd work',
+        media_type: 'VIDEO',
+        media_product_type: 'REELS',
+        media_url: 'https://cdn.example/777.mp4',
+        permalink: 'https://www.instagram.com/reel/GOOD/',
+        thumbnail_url: 'https://cdn.example/777.jpg'
+      }
+    ]
+  });
+  try {
+    await withServer({ INSTAGRAM_TOKEN: 'tok', INSTAGRAM_API_BASE: api.base }, async (server) => {
+      await server.login();
+      const current = (await server.call('/api/admin/site')).json.site;
+      current.reels = { ...(current.reels || {}), feedUrl: 'https://www.instagram.com/taylordrew4u/reels/' };
+      assert.strictEqual(
+        (await server.call('/api/admin/site', { method: 'PUT', body: { site: current } })).status,
+        200
+      );
+
+      const html = (await server.call('/reels')).text;
+      assert.match(html, /cdn\.example\/777\.mp4/, 'the account fills the wall');
+      assert.ok(!/reels live on Instagram/i.test(html), 'not the go-look-elsewhere fallback');
+    });
+  } finally {
+    await api.stop();
+  }
+});
+
+test('a real feed URL still wins, and a profile URL alone still points the way', async () => {
+  const http = require('node:http');
+  const feed = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify([
+      {
+        id: 'f1',
+        mediaType: 'VIDEO',
+        mediaUrl: 'https://cdn.example/from-feed.mp4',
+        permalink: 'https://www.instagram.com/reel/FEED/',
+        caption: 'From the feed'
+      }
+    ]));
+  });
+  await new Promise((r) => feed.listen(0, '127.0.0.1', r));
+  const feedUrl = `http://127.0.0.1:${feed.address().port}/feed.json`;
+
+  const api = await startFakeInstagram({ media: [] });
+  try {
+    // A usable feed URL is still the owner's choice, connected account or not.
+    await withServer({ INSTAGRAM_TOKEN: 'tok', INSTAGRAM_API_BASE: api.base }, async (server) => {
+      await server.login();
+      const site = (await server.call('/api/admin/site')).json.site;
+      site.reels = { ...(site.reels || {}), feedUrl };
+      await server.call('/api/admin/site', { method: 'PUT', body: { site } });
+      assert.match((await server.call('/reels')).text, /from-feed\.mp4/);
+    });
+
+    // And with nothing connected, a profile URL still says where the reels are.
+    await withServer({ INSTAGRAM_TOKEN: null }, async (server) => {
+      await server.login();
+      const site = (await server.call('/api/admin/site')).json.site;
+      site.reels = { ...(site.reels || {}), feedUrl: 'https://www.instagram.com/taylordrew4u/' };
+      await server.call('/api/admin/site', { method: 'PUT', body: { site } });
+      assert.match((await server.call('/reels')).text, /instagram\.com\/taylordrew4u/);
+    });
+  } finally {
+    await api.stop();
+    await new Promise((r) => feed.close(r));
+  }
+});
