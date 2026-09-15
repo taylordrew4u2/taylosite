@@ -49,7 +49,11 @@ async function startFakeInstagram({ media = [], state = {} } = {}) {
 
     // The token dance: code -> short-lived -> long-lived -> refreshed.
     if (url.pathname === '/oauth/access_token') {
-      return json(200, { data: [{ access_token: 'short-token', user_id: '1020', permissions: 'instagram_business_basic' }] });
+      // `state.permissions` stands in for what the account owner approved,
+      // which is whatever the authorize URL asked for — and an authorize URL
+      // built in Meta's dashboard asks for every permission the app has.
+      const permissions = state.permissions === undefined ? 'instagram_business_basic' : state.permissions;
+      return json(200, { data: [{ access_token: 'short-token', user_id: '1020', permissions }] });
     }
     if (url.pathname === '/access_token') {
       if (url.searchParams.get('grant_type') !== 'ig_exchange_token') {

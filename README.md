@@ -243,6 +243,21 @@ says so rather than failing at the send. Asking for that permission is opt-in
 precisely because an app that was never set up for messaging would have the
 whole authorization refused, taking the reel wall with it.
 
+Two things decide whether a connected account can actually send, and only the
+second one counts:
+
+- The tickbox sets what the **authorize URL asks for**. The connect link also
+  carries `force_reauth=true`, which is what forces the consent screen —
+  without it an account with a live Instagram session can be handed a fresh
+  token carrying the *old* grant, so reconnecting to widen the scope would
+  appear to work and still not be able to send.
+- What Meta says it **granted** is stored with the token and is the authority.
+  An authorize URL built in Meta's own dashboard asks for every permission the
+  app has, so a token minted that way can send whether or not the box here was
+  ever ticked — and the panel reads the granted list rather than telling you to
+  reconnect for a permission you already hold. A refresh renews the same grant
+  and says nothing about it, so the known list is carried across.
+
 Once connected, **Send a direct message** appears under the connection's
 status, and `POST /api/admin/instagram/message` takes
 `{ "recipientId": "…", "text": "…" }` behind the same session and CSRF gate as

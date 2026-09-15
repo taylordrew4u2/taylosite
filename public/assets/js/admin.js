@@ -1110,8 +1110,9 @@
     if (!ig || !ig.messaging) return '';
     if (!ig.messagingScope) {
       return (
-        '<p class="hint"><strong>Direct messages are on, but this token predates them.</strong> ' +
-        'Disconnect and connect again to pick up the messaging permission.</p>'
+        '<p class="hint"><strong>Direct messages are on, but this token was not granted them.</strong> ' +
+        'Disconnect and connect again — the button now forces the consent screen, which is where the ' +
+        'messaging permission is actually approved.</p>'
       );
     }
     return (

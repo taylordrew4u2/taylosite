@@ -256,6 +256,9 @@ test('the authorize URL asks for the documented scope and comes back to /admin',
   assert.strictEqual(url.searchParams.get('response_type'), 'code');
   assert.strictEqual(url.searchParams.get('scope'), 'instagram_business_basic');
   assert.strictEqual(url.searchParams.get('redirect_uri'), 'https://www.taylordrew4u.com/admin');
+  // Without this, an account with a live session can be handed a fresh token
+  // carrying the old grant without ever seeing the consent screen.
+  assert.strictEqual(url.searchParams.get('force_reauth'), 'true');
   assert.strictEqual(instagram.authorizeUrl('https://x.com', {}), '', 'and nothing without an app ID');
 });
 
@@ -544,7 +547,9 @@ test('messaging is opt-in, and opting in widens the scope that is asked for', as
 });
 
 test('a token issued after opting in carries the messaging permission', async () => {
-  await withApi({}, async (api, env) => {
+  // The owner approves what the wider authorize URL asked for.
+  const state = { permissions: 'instagram_business_basic,instagram_business_manage_messages' };
+  await withApi({ state }, async (api, env) => {
     const store = fakeStore();
     await instagram.saveApp({ store, appId: '990602627938098', appSecret: 'a1b2c3d4e5f60718', messaging: true });
     await instagram.connect({
@@ -555,5 +560,100 @@ test('a token issued after opting in carries the messaging permission', async ()
       site: store.site
     });
     assert.strictEqual(instagram.status(store.site, env).messagingScope, true);
+  });
+});
+
+test('the permissions Meta granted outrank what the panel asked for', async () => {
+  // An authorize URL built in Meta's own dashboard asks for every permission
+  // the app has, so a token minted that way can send whether or not the box
+  // here was ever ticked. The panel must not tell her to reconnect for a
+  // permission she already holds.
+  await withApi({ state: { permissions: [
+    'instagram_business_basic',
+    'instagram_business_manage_messages',
+    'instagram_business_manage_comments',
+    'instagram_business_content_publish',
+    'instagram_business_manage_insights'
+  ] } }, async (api, env) => {
+    const store = fakeStore();
+    await instagram.saveApp({ store, appId: '1054718834013118', appSecret: 'a1b2c3d4e5f60718' });
+
+    const asked = new URL(instagram.authorizeUrl('https://www.taylordrew4u.com', {}, store.site));
+    assert.strictEqual(asked.searchParams.get('scope'), 'instagram_business_basic', 'messaging was never ticked');
+
+    await instagram.connect({
+      store,
+      code: 'abc',
+      origin: 'https://www.taylordrew4u.com',
+      env,
+      site: store.site
+    });
+
+    const state = instagram.status(store.site, env);
+    assert.strictEqual(state.messaging, false, 'the box is still unticked');
+    assert.strictEqual(state.messagingScope, true, 'but the token really can send');
+    assert.deepStrictEqual(store.site.auth.instagram.scopes.slice(0, 2), [
+      'instagram_business_basic',
+      'instagram_business_manage_messages'
+    ]);
+  });
+});
+
+test('a narrow grant is believed even when the box is ticked', async () => {
+  await withApi({ state: { permissions: 'instagram_business_basic' } }, async (api, env) => {
+    const store = fakeStore();
+    await instagram.saveApp({
+      store,
+      appId: '1054718834013118',
+      appSecret: 'a1b2c3d4e5f60718',
+      messaging: true
+    });
+    await instagram.connect({
+      store,
+      code: 'abc',
+      origin: 'https://www.taylordrew4u.com',
+      env,
+      site: store.site
+    });
+    const state = instagram.status(store.site, env);
+    assert.strictEqual(state.messaging, true, 'asked for');
+    assert.strictEqual(state.messagingScope, false, 'and refused — Meta is the authority');
+  });
+});
+
+test('a token that predates the permissions list falls back to what it asked for', () => {
+  assert.strictEqual(instagram.tokenCanMessage({ token: 't', messaging: true }), true);
+  assert.strictEqual(instagram.tokenCanMessage({ token: 't', messaging: false }), false);
+  assert.strictEqual(instagram.tokenCanMessage(null), false);
+  // An empty list means "not stated", so the flag still decides.
+  assert.strictEqual(instagram.tokenCanMessage({ token: 't', messaging: true, scopes: [] }), true);
+});
+
+test('Meta states permissions two ways and neither is lost', () => {
+  assert.deepStrictEqual(instagram.grantedScopes('a, b ,c'), ['a', 'b', 'c']);
+  assert.deepStrictEqual(instagram.grantedScopes(['a', ' b']), ['a', 'b']);
+  assert.deepStrictEqual(instagram.grantedScopes(undefined), []);
+  assert.deepStrictEqual(instagram.grantedScopes(''), []);
+});
+
+test('renewing a token keeps the permissions it was issued with', async () => {
+  await withApi({ state: { permissions: 'instagram_business_basic,instagram_business_manage_messages' } }, async (api, env) => {
+    const store = fakeStore();
+    await instagram.saveApp({ store, appId: '1054718834013118', appSecret: 'a1b2c3d4e5f60718', messaging: true });
+    const now = Date.now();
+    await instagram.connect({ store, code: 'abc', origin: 'https://x.com', env, site: store.site, now });
+
+    // Walk up to the refresh window: old enough to renew, close enough to expiry.
+    const held = store.site.auth.instagram;
+    held.obtainedAt = new Date(now - 40 * 24 * 3600 * 1000).toISOString();
+    held.expiresAt = new Date(now + 3 * 24 * 3600 * 1000).toISOString();
+
+    const token = await instagram.currentToken({ store, site: store.site, env, now });
+    assert.strictEqual(token, 'refreshed-token', 'it did renew');
+    assert.strictEqual(
+      instagram.status(store.site, env).messagingScope,
+      true,
+      'and the renewed token still knows it can send'
+    );
   });
 });
