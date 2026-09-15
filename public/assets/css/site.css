@@ -649,6 +649,20 @@ img {
   padding: 56px 28px;
 }
 
+/* The way to the next page. With JavaScript it is a sentinel that loads the
+   next page as it comes into view; without, a link that does the same. */
+.reel-more {
+  display: flex;
+  justify-content: center;
+  padding: 28px;
+  background: var(--bg);
+}
+
+.reel-more.is-loading .reel-more-link {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* Instagram will not let a site read an account, so when that is all we have
    the page says so plainly and sends people to the real thing. */
 /* Instagram's own widget, rendered in the visitor's browser. It sets its own

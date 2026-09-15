@@ -89,6 +89,35 @@ test('a second read inside the window is served from cache', async () => {
   });
 });
 
+test('the wall pages through the whole account, one cursor at a time', async () => {
+  const media = ['1', '2', '3', '4', '5'].map((n) => ({
+    ...REEL,
+    id: n,
+    media_url: `https://cdn.example/${n}.mp4`,
+    permalink: `https://www.instagram.com/reel/R${n}/`
+  }));
+  await withApi({ media: [media[0], PHOTO, ...media.slice(1)] }, async (api, env) => {
+    const paged = { ...env, INSTAGRAM_LIMIT: '2' };
+
+    const first = await instagram.fetchReels({ env: paged });
+    assert.deepStrictEqual(first.reels.map((r) => r.id), ['ig-1'], 'two posts, one of them a photo');
+    assert.ok(first.next, 'and there is more');
+
+    const second = await instagram.fetchReels({ env: paged, after: first.next });
+    assert.deepStrictEqual(second.reels.map((r) => r.id), ['ig-2', 'ig-3']);
+    assert.strictEqual(api.calls[1].path, api.calls[0].path, 'the same endpoint');
+    assert.ok(api.calls[1].token, 'still with the token');
+
+    const third = await instagram.fetchReels({ env: paged, after: second.next });
+    assert.deepStrictEqual(third.reels.map((r) => r.id), ['ig-4', 'ig-5']);
+    assert.strictEqual(third.next, null, 'and that was the last page');
+
+    const again = await instagram.fetchReels({ env: paged, after: first.next });
+    assert.strictEqual(again.cached, true, 'a page already seen is not fetched twice');
+    assert.strictEqual(api.calls.length, 3);
+  });
+});
+
 test('an expired token is reported rather than swallowed', async () => {
   await withApi({ media: [REEL], state: { expired: true } }, async (api, env) => {
     const out = await instagram.fetchReels({ env });

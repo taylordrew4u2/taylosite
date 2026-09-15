@@ -266,6 +266,15 @@ inline at all, and an `IntersectionObserver` plays only the tiles on screen and
 pauses the rest: twenty videos decoding at once will stall a phone. Anyone who
 asked for reduced motion gets controls instead of movement.
 
+The wall is as long as the account. The page carries one page of reels
+(`INSTAGRAM_LIMIT`, 24 by default) and a real **More reels** link to the next;
+the script on the page turns that link into a sentinel and fetches the next
+page from `/api/reels?after=…` as it scrolls into view, again and again, until
+Instagram says there is no more. Without JavaScript the link still walks the
+wall one page per click, so a crawler reaches every reel too. A connected
+account pages on Instagram's own cursors; a pasted feed, or the pinned reels
+alone, is held whole and cut into pages of 24.
+
 ### Connecting the Instagram account
 
 `/reels` fills itself from the account: captions, cover frames, and the MP4

@@ -104,8 +104,14 @@ async function startFakeInstagram({ media = [], state = {} } = {}) {
     const match = /^\/([^/]+)\/media$/.exec(url.pathname);
     if (!match) return json(404, { error: { message: 'Unsupported get request' } });
 
+    // Pages the way the real thing does: `after` is an opaque cursor, and
+    // `paging.next` is only there while there is another page to fetch.
     const limit = Number(url.searchParams.get('limit')) || 25;
-    return json(200, { data: media.slice(0, limit), paging: { cursors: { before: 'a', after: 'b' } } });
+    const start = Number(url.searchParams.get('after')) || 0;
+    const end = Math.min(start + limit, media.length);
+    const paging = { cursors: { before: String(start), after: String(end) } };
+    if (end < media.length) paging.next = `${url.origin}${url.pathname}?after=${end}&limit=${limit}`;
+    return json(200, { data: media.slice(start, end), paging });
   });
 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

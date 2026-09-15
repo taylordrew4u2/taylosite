@@ -278,6 +278,20 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, publicSite(await store.readSite()));
   }
 
+  // The next page of the reel wall, as tiles the browser drops straight into
+  // the grid. `next` is the cursor to ask for after this one, empty at the end.
+  if (route === '/reels' && req.method === 'GET') {
+    const site = await store.readSite();
+    const after = reelCursor(url.searchParams.get('after'));
+    const page = await reelPage(site, after);
+    return sendJson(
+      res,
+      200,
+      { html: render.renderReelTiles(site, page.reels), next: page.next || '', count: page.reels.length },
+      { 'Cache-Control': 'public, max-age=300' }
+    );
+  }
+
   if (route === '/session' && req.method === 'GET') {
     const cookies = auth.parseCookies(req.headers.cookie);
     const session = await auth.getSession(cookies[auth.COOKIE_NAME]);
@@ -677,6 +691,65 @@ async function handleClickThrough(req, res, url) {
   res.end();
 }
 
+/** How many reels one page of the wall holds when the whole list is in hand. */
+const REEL_PAGE = 24;
+
+/** A cursor from the query string: a short opaque string, or nothing. */
+function reelCursor(value) {
+  const cursor = String(value || '').replace(/[^\x21-\x7e]/g, '');
+  return cursor.length <= 512 ? cursor : '';
+}
+
+/**
+ * One page of the wall, and where the next one starts.
+ *
+ * The wall scrolls until the account runs out, so the page is cut here rather
+ * than in the renderer, the same way for the page itself and for the fragment
+ * the browser asks for as it scrolls. Two kinds of cursor: `ig:` carries
+ * Instagram's own paging cursor when the account is connected; `n:` is an
+ * offset into a list already held whole — a pasted feed, or the pinned reels.
+ */
+async function reelPage(site, after = '') {
+  // A pasted feed URL is the one-login path and takes precedence; a Meta app
+  // token is the other way in for anyone who has one.
+  const feedUrl = (site.reels && site.reels.feedUrl) || '';
+  // A feed URL used to win outright, which meant a bad one silently disabled
+  // a working connection. The commonest bad one is the Instagram profile
+  // itself: it looks like the right answer, it can never be read by a server,
+  // and pasted once it would sit there beating the API forever. So a feed URL
+  // only wins while it is actually usable; a connected account is the better
+  // answer than a URL we already know cannot be fetched.
+  const feedProblem = feedUrl ? instagram.feedUrlProblem(feedUrl) : '';
+  const usable = feedUrl && !feedProblem;
+
+  if (!usable && instagram.isConfigured(process.env, site)) {
+    let cursor = after.startsWith('ig:') ? after.slice(3) : '';
+    let feed = await instagram.fetchReels({ store, site, after: cursor });
+    let reels = render.wallReels(site, feed.reels, { pinned: !cursor });
+    // A page of photos filters down to nothing while the account still has
+    // more; keep going a few pages rather than answering with an empty one.
+    for (let hops = 0; !reels.length && feed.next && hops < 4; hops += 1) {
+      cursor = feed.next;
+      feed = await instagram.fetchReels({ store, site, after: cursor });
+      reels = render.wallReels(site, feed.reels, { pinned: false });
+    }
+    return { reels, next: feed.next ? `ig:${feed.next}` : '', error: feed.error };
+  }
+
+  // Nothing connected, or a feed read whole: the list is in hand, so cut it.
+  const feed = await instagram.fetchFeedUrl(feedUrl);
+  const all = render.wallReels(site, feed.reels);
+  const offset = after.startsWith('n:') ? Math.max(0, Math.floor(Number(after.slice(2))) || 0) : 0;
+  const end = offset + REEL_PAGE;
+  return {
+    reels: all.slice(offset, end),
+    next: end < all.length ? `n:${end}` : '',
+    error: feed.error,
+    profile: feed.profile,
+    profileUrl: feed.profileUrl
+  };
+}
+
 const PAGES = {
   '/': render.renderHome,
   '/about': render.renderAbout,
@@ -887,28 +960,9 @@ async function handle(req, res) {
 
   if (pathname === '/reels') {
     const site = await store.readSite();
-    // A pasted feed URL is the one-login path and takes precedence; a Meta app
-    // token is the other way in for anyone who has one.
-    const feedUrl = (site.reels && site.reels.feedUrl) || '';
-    // A feed URL used to win outright, which meant a bad one silently disabled
-    // a working connection. The commonest bad one is the Instagram profile
-    // itself: it looks like the right answer, it can never be read by a server,
-    // and pasted once it would sit there beating the API forever. So a feed URL
-    // only wins while it is actually usable; a connected account is the better
-    // answer than a URL we already know cannot be fetched.
-    const feedProblem = feedUrl ? instagram.feedUrlProblem(feedUrl) : '';
-    const feed =
-      feedUrl && !feedProblem
-        ? await instagram.fetchFeedUrl(feedUrl)
-        : instagram.isConfigured(process.env, site)
-          ? await instagram.fetchReels({ store, site })
-          // Nothing connected either: fall back to naming where the reels are.
-          : await instagram.fetchFeedUrl(feedUrl);
-    return sendHtml(
-      res,
-      200,
-      render.renderReels(site, { origin, remote: feed.reels, error: feed.error, profile: feed.profile, profileUrl: feed.profileUrl })
-    );
+    const after = reelCursor(url.searchParams.get('after'));
+    const page = await reelPage(site, after);
+    return sendHtml(res, 200, render.renderReels(site, { origin, after, ...page }));
   }
 
   // Not in PAGES on purpose: the game is noindex and stays out of the sitemap.
