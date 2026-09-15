@@ -675,6 +675,95 @@ test('the wall fills itself from the connected account', async () => {
   }
 });
 
+test('the wall scrolls on until the account runs out', async () => {
+  const media = [];
+  for (let n = 1; n <= 7; n += 1) {
+    media.push({
+      id: String(n),
+      caption: `Reel ${n}`,
+      media_type: 'VIDEO',
+      media_product_type: 'REELS',
+      media_url: `https://cdn.example/${n}.mp4`,
+      permalink: `https://www.instagram.com/reel/R${n}/`,
+      thumbnail_url: `https://cdn.example/${n}.jpg`
+    });
+  }
+  // A photo in the middle: it is not a reel and must not leave a hole.
+  media.splice(3, 0, { id: 'photo', media_type: 'IMAGE', media_product_type: 'FEED', permalink: 'https://www.instagram.com/p/X/' });
+  const api = await startFakeInstagram({ media });
+
+  try {
+    await withServer({ INSTAGRAM_TOKEN: 'tok', INSTAGRAM_API_BASE: api.base, INSTAGRAM_LIMIT: '3' }, async (server) => {
+      await server.login();
+      // Reel 6 is also pinned by hand: it leads the wall, and must not come
+      // round again when the page it sits on is fetched.
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: {
+          site: {
+            reels: {
+              items: [{ id: 'pinned', url: 'https://www.instagram.com/reel/R6', video: '/uploads/six.mp4', caption: 'Pinned six', visible: true }]
+            }
+          }
+        }
+      });
+
+      const page = await server.call('/reels');
+      const tiles = (html) => (html.match(/data-reel="([^"]+)"/g) || []).map((m) => m.slice(11, -1));
+      assert.deepStrictEqual(tiles(page.text), ['pinned', 'ig-1', 'ig-2', 'ig-3'], 'pinned first, then the first page');
+      const more = /<section class="reel-more" data-next="([^"]+)">\s*<a class="btn reel-more-link" href="\/reels\?after=([^"]+)"/.exec(page.text);
+      assert.ok(more, 'and a way to the next page');
+      const next = more[1];
+      assert.strictEqual(decodeURIComponent(more[2]), next, 'the link and the sentinel agree');
+
+      // The fragment the browser fetches as it scrolls.
+      const second = await server.call(`/api/reels?after=${encodeURIComponent(next)}`);
+      assert.strictEqual(second.status, 200);
+      assert.deepStrictEqual(tiles(second.json.html), ['ig-4', 'ig-5'], 'page two, minus the photo');
+      assert.ok(second.json.next, 'still more');
+      assert.match(second.json.html, /^<a class="reel"/, 'tiles only — no page around them');
+
+      const third = await server.call(`/api/reels?after=${encodeURIComponent(second.json.next)}`);
+      assert.deepStrictEqual(tiles(third.json.html), ['ig-7'], 'the pinned reel does not come round again');
+      assert.strictEqual(third.json.next, '', 'and that is the end');
+
+      // The same page without JavaScript: a real page, with the rest of the site.
+      const walked = await server.call(`/reels?after=${encodeURIComponent(next)}`);
+      assert.deepStrictEqual(tiles(walked.text), ['ig-4', 'ig-5']);
+      assert.match(walked.text, /<header class="topbar">/);
+      assert.ok(!walked.text.includes('/uploads/six.mp4'), 'the pinned reels are on the first page only');
+
+      // A cursor nobody handed out gets an answer, not a crash.
+      assert.strictEqual((await server.call('/api/reels?after=ig:nonsense')).status, 200);
+    });
+  } finally {
+    await api.stop();
+  }
+});
+
+test('a wall held whole is cut into pages the same way', async () => {
+  await withServer({ INSTAGRAM_TOKEN: null, IG_TOKEN: null, INSTAGRAM_APP_ID: null, INSTAGRAM_APP_SECRET: null }, async (server) => {
+    await server.login();
+    const items = [];
+    for (let n = 1; n <= 30; n += 1) {
+      items.push({ id: `p${n}`, url: `https://www.instagram.com/reel/P${n}/`, video: `/uploads/${n}.mp4`, caption: `Clip ${n}`, visible: true });
+    }
+    await server.call('/api/admin/site', { method: 'PUT', body: { site: { reels: { feedUrl: '', items } } } });
+
+    const html = (await server.call('/reels')).text;
+    assert.strictEqual((html.match(/class="reel"/g) || []).length, 24, 'one page of the wall');
+    assert.match(html, /data-next="n:24"/);
+
+    const rest = (await server.call('/api/reels?after=n:24')).json;
+    assert.strictEqual((rest.html.match(/class="reel"/g) || []).length, 6, 'and the rest on the next');
+    assert.strictEqual(rest.next, '');
+    assert.strictEqual((await server.call('/api/reels?after=n:999')).json.count, 0, 'past the end is simply empty');
+
+    const beyond = (await server.call('/reels?after=n:999')).text;
+    assert.match(beyond, /That is every reel/);
+  });
+});
+
 test('a reel only on Instagram is played from Instagram', async () => {
   const api = await startFakeInstagram({
     media: [
