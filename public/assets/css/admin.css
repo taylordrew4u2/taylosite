@@ -34,7 +34,8 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Helvetica Neue', Helvetica, Arial, 'Segoe UI', sans-serif;
+  /* The panel follows the public site's rule: nothing newer than the era. */
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -584,7 +585,9 @@ a {
 }
 
 .color-field .input {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* ui-monospace is a 2020 keyword, SF Mono 2016, Menlo 2009 — all of them
+     newer than the site they configure. Courier New has been here since 1955. */
+  font-family: 'Courier New', Courier, monospace;
   font-size: 0.82rem;
 }
 

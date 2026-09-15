@@ -124,6 +124,15 @@ every page in it and `public/assets/css/retro.css` dresses it:
 | Taskbar | start button, the open window, a clock |
 | Shortcuts | the menu again, plus two folders that refuse to open |
 
+**Nothing on the site is set in a typeface newer than the machine it is drawn
+as.** The whole thing runs on Tahoma (1994), Verdana (1996), Courier New (1955)
+and Helvetica / Arial, which is the design's own stack. Segoe UI came with
+Vista and is not in any stack here; neither are `ui-monospace` (a 2020
+keyword), SF Mono (2016) or Menlo (2009), which the admin panel used to reach
+for. Tahoma for what the site says, Courier for what the machine says — the
+eyebrow over a heading, a label, a date, the status bar, and the body of
+`ABOUT.TXT`.
+
 Contact is a message being composed rather than a form: there is no handler
 behind it and there is not meant to be. The fields show what the message will
 say and **Send** is a `mailto:` carrying the address, the subject and the body,

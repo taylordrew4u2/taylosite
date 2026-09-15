@@ -40,7 +40,7 @@ html[data-theme] {
   --xp-gloss: linear-gradient(180deg, #ffffff, #dde8f6 48%, #bed3ee);
   --xp-wall: linear-gradient(180deg, #2e7bd6 0%, #5aa3e8 38%, #8fc36f 60%, #4e9a44 100%);
 
-  --xp-mono: 'Courier New', Courier, monospace;
+  --xp-mono: 'Courier New', monospace;
 }
 
 html {
@@ -53,7 +53,11 @@ body {
   min-height: 0;
   background: transparent;
   color: var(--xp-ink);
-  font-family: Tahoma, Verdana, Geneva, 'Segoe UI', sans-serif;
+  /* The design's own stack, exactly: Tahoma (1994), Verdana (1996). Nothing
+     here postdates the machine it is pretending to be — Segoe UI, which used
+     to close this stack, arrived with Vista and is the wrong decade's face.
+     Same rule for --xp-mono: Courier New, 1955. */
+  font-family: Tahoma, Verdana, sans-serif;
   font-size: 15px;
 }
 
@@ -386,7 +390,7 @@ body {
 /* ------------------------------------------------------------- the type */
 
 .display {
-  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-family: Tahoma, Verdana, sans-serif;
   font-weight: 700;
   font-size: clamp(2rem, 4.4vw, 2.6rem);
   line-height: 0.95;
@@ -398,12 +402,23 @@ body {
   font-size: clamp(1.3rem, 2.2vw, 1.55rem);
 }
 
+/*
+ * Where the design puts Courier: the labels and the machine's own voice — the
+ * eyebrow over a heading, a fact's label, a date, the text of a document. The
+ * running prose it writes in Tahoma, so the intro under a title and a link's
+ * sub-label are not in this list.
+ */
 .eyebrow,
-.subhead,
 .fact dt,
-.link-sub,
 .credit-meta,
 .show-meta {
+  font-family: var(--xp-mono);
+}
+
+/* About is a text file open in a text editor, so its body is typed. */
+.page-about .prose p,
+.page-about .credit-title,
+.page-about .quote p {
   font-family: var(--xp-mono);
 }
 
@@ -673,6 +688,12 @@ body {
 .footer-left {
   flex: 1;
   min-width: 0;
+}
+
+/* The design bookends its status bar with the path and the word `ready`; the
+   footer the admin panel writes sits between them. */
+.footer-ready {
+  flex: 0 0 auto;
 }
 
 @media (hover: hover) {
