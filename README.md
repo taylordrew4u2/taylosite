@@ -57,6 +57,10 @@ credentials.
 
 Editing notes:
 
+- The Overview starts with a live setup checklist. Missing required and
+  recommended discovery fields are counted, linked to the correct section and
+  explained step by step. The same instructions appear beside an incomplete
+  field, and sidebar badges show which sections still need attention.
 - Public-facing text inputs include separate **Generate SEO version** and
   **Generate GEO version** buttons. SEO targets traditional search wording;
   GEO produces a self-contained, factual block that AI answer engines can

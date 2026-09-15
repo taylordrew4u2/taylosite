@@ -198,6 +198,99 @@
 
   // ------------------------------------------------------------ field HTML
 
+  function present(value) {
+    return String(value == null ? '' : value).trim().length > 0;
+  }
+
+  function setupItems() {
+    var site = state.site || {};
+    var brand = site.brand || {};
+    var seo = site.seo || {};
+    var home = site.home || {};
+    var about = site.about || {};
+    var links = (site.links && site.links.items) || [];
+    var visibleLinks = links.filter(function (link) { return link && link.visible !== false && present(link.url); });
+    var hasLink = function (pattern) { return visibleLinks.some(function (link) { return pattern.test(String(link.url || '')); }); };
+    var realBio = (about.body || []).some(function (line) {
+      return present(line) && !/write the real bio|new paragraph/i.test(line);
+    });
+    var usefulFaqs = (about.faqs || []).filter(function (item) {
+      return item && item.visible !== false && present(item.question) && present(item.answer);
+    });
+    var credits = (about.credits || []).filter(function (item) { return item && item.visible !== false && present(item.title); });
+    var quotes = (about.quotes || []).filter(function (item) { return item && present(item.text) && present(item.source); });
+    var announcedShows = (site.shows || []).filter(function (item) { return item && item.visible !== false && present(item.date) && present(item.venue); });
+    var reelsReady = Boolean((state.instagram && state.instagram.connected) || ((site.reels && site.reels.items) || []).some(function (item) {
+      return item && item.visible !== false && (present(item.url) || present(item.video));
+    }));
+
+    return [
+      { id: 'password', level: 'required', section: 'security', title: 'Replace the default admin password', done: !state.usingDefaultPassword,
+        how: 'Open Security, enter the current password and a new private password, then choose Change password.' },
+      { id: 'anthropic', level: 'required', section: 'shows', title: 'Connect the writing and photo generators', done: Boolean(state.flyer && state.flyer.configured),
+        how: 'Open Shows → Post a flyer. Paste an Anthropic API key beginning with sk-ant-, then choose Save key. The same key powers SEO, GEO and photo descriptions.' },
+      { id: 'identity', level: 'required', section: 'brand', paths: ['brand.name', 'brand.accentLabel', 'brand.location'], title: 'Complete the public identity',
+        done: present(brand.name) && present(brand.accentLabel) && present(brand.location),
+        how: 'Open Brand & SEO. Enter the exact public name, the job title “Stand-up comedian,” and “New York City.” Keep this wording consistent everywhere.' },
+      { id: 'booking', level: 'required', section: 'brand', paths: ['brand.email'], title: 'Add a working booking email', done: present(brand.email),
+        how: 'Open Brand & SEO → Booking email. Enter the address that should receive professional enquiries, then send it a test message after saving.' },
+      { id: 'search-copy', level: 'required', section: 'brand', paths: ['seo.title', 'seo.description'], title: 'Complete the search title and description',
+        done: present(seo.title) && present(seo.description),
+        how: 'Open Brand & SEO → Search & sharing. Put “Taylor Drew” and “New York City stand-up comedian” naturally in the title and description. Use Generate SEO version if needed.' },
+      { id: 'bio', level: 'required', section: 'about', paths: ['about.body.0'], title: 'Publish a real biography', done: realBio,
+        how: 'Open About page → Bio. Add at least one factual paragraph covering who Taylor Drew is, where she performs, major credits and how to book her. Generate GEO version, review it, then save.' },
+      { id: 'hero-photo', level: 'required', section: 'home', paths: ['home.photo'], title: 'Choose the homepage photograph', done: present(home.photo),
+        how: 'Open Home page → Hero photo → Choose or upload. Pick a sharp, recent photograph where Taylor Drew is clearly visible.' },
+      { id: 'hero-alt', level: 'required', section: 'home', paths: ['home.photoAlt'], title: 'Describe the homepage photograph', done: !present(home.photo) || present(home.photoAlt),
+        how: 'Open Home page → Hero photo and choose Generate photo SEO + GEO. Review the visible description, then save.' },
+      { id: 'about-photo', level: 'recommended', section: 'about', paths: ['about.photo'], title: 'Add a separate About headshot', done: present(about.photo),
+        how: 'Open About page → Photo → Choose or upload. Use a high-resolution headshot that is different from the homepage image.' },
+      { id: 'about-alt', level: 'required', section: 'about', paths: ['about.photoAlt'], title: 'Describe the About headshot', done: !present(about.photo) || present(about.photoAlt),
+        how: 'Open About page → Photo and choose Generate photo SEO + GEO. Review the description and save.' },
+      { id: 'share-image', level: 'recommended', section: 'brand', paths: ['seo.ogImage'], title: 'Choose a social sharing image', done: present(seo.ogImage),
+        how: 'Open Brand & SEO → Social share image. Upload a strong 1200 × 630 image, select it, then generate its photo SEO + GEO description.' },
+      { id: 'share-alt', level: 'required', section: 'brand', paths: ['seo.ogImageAlt'], title: 'Describe the social sharing image', done: !present(seo.ogImage) || present(seo.ogImageAlt),
+        how: 'Open Brand & SEO → Social share image and choose Generate photo SEO + GEO. Review the description and save.' },
+      { id: 'favicon', level: 'recommended', section: 'brand', paths: ['seo.favicon'], title: 'Add the square app icon', done: present(seo.favicon),
+        how: 'Open Brand & SEO → App icon. Upload and select a square PNG or WebP version of the Taylor Drew mark.' },
+      { id: 'google', level: 'required', section: 'brand', paths: ['seo.googleVerification'], title: 'Verify Google Search Console', done: present(seo.googleVerification),
+        how: 'Go to search.google.com/search-console, add taylordrew4u.com, choose the HTML tag method, copy the content value from google-site-verification, paste it here, save, then return to Google and press Verify.' },
+      { id: 'bing', level: 'required', section: 'brand', paths: ['seo.bingVerification'], title: 'Verify Bing Webmaster Tools', done: present(seo.bingVerification),
+        how: 'Go to bing.com/webmasters, add taylordrew4u.com, choose HTML meta tag verification, copy the msvalidate.01 content value, paste it here, save, then press Verify in Bing.' },
+      { id: 'wikidata', level: 'recommended', section: 'brand', paths: ['seo.wikidata'], title: 'Connect the Wikidata identity', done: present(seo.wikidata),
+        how: 'Open Brand & SEO → Wikidata item. Paste the verified Taylor Drew item’s Q number, such as Q123456, without creating a duplicate person.' },
+      { id: 'instagram', level: 'required', section: 'links', title: 'Link the official Instagram profile', done: hasLink(/instagram\.com\/taylordrew4u/i),
+        how: 'Open Links, add a visible link named Instagram, and use the full official profile URL: https://instagram.com/taylordrew4u.' },
+      { id: 'imdb', level: 'recommended', section: 'links', title: 'Link the official IMDb profile', done: hasLink(/imdb\.com\/name\//i),
+        how: 'Open Links, add a visible link named IMDb, and paste Taylor Drew’s exact imdb.com/name/ profile URL.' },
+      { id: 'credits', level: 'recommended', section: 'about', title: 'Add selected credits and awards', done: credits.length > 0,
+        how: 'Open About page → Selected credits. Add each verifiable credit separately, include the year and source link when available, and mark awards as awards.' },
+      { id: 'faqs', level: 'recommended', section: 'about', title: 'Answer common questions', done: usefulFaqs.length >= 3,
+        how: 'Open About page → Questions. Add at least three factual answers: who Taylor Drew is, where to see her live, and how to book her.' },
+      { id: 'press', level: 'recommended', section: 'about', title: 'Add an attributed press quote', done: quotes.length > 0,
+        how: 'Open About page → Press quotes. Paste an exact short quote and name the publication. Only use a quote that appears in a real source.' },
+      { id: 'shows', level: 'recommended', section: 'shows', title: 'List every announced performance', done: announcedShows.length > 0,
+        how: 'Open Shows and choose Add show, or post a flyer. Confirm the date, venue, city and ticket link before saving.' },
+      { id: 'reels', level: 'recommended', section: 'reels', title: 'Connect or add performance clips', done: reelsReady,
+        how: 'Open Reels. Connect the official Instagram account or add a visible reel with its permalink, cover image and factual description.' }
+    ];
+  }
+
+  function missingSetupItems() {
+    return setupItems().filter(function (item) { return !item.done; });
+  }
+
+  function setupForPath(path) {
+    return missingSetupItems().filter(function (item) { return (item.paths || []).indexOf(path) !== -1; })[0] || null;
+  }
+
+  function fieldSetupNote(path) {
+    var item = setupForPath(path);
+    return item
+      ? '<span class="field-setup-note"><strong>' + (item.level === 'required' ? 'Required' : 'Recommended') + ':</strong> ' + esc(item.how) + '</span>'
+      : '';
+  }
+
   function seoEligible(opts) {
     if (opts.seo === false || (opts.type && opts.type !== 'text')) return false;
     return !/(?:^|\.)(?:id|name|logoText|location|source|url|href|email|to|date|time|year|venue|street|city|country|postalCode|photo|video|poster|feedUrl|favicon|googleVerification|bingVerification|wikidata|rightHref|color|hash|salt|apiKey|maxItems)$/i.test(opts.path || '');
@@ -215,8 +308,9 @@
 
   function field(opts) {
     var value = opts.value == null ? '' : opts.value;
+    var setup = setupForPath(opts.path);
     return (
-      '<div class="field">' +
+      '<div class="field' + (setup ? ' is-needs-setup' : '') + '">' +
       '<label class="label" for="' + esc(opts.path) + '">' + esc(opts.label) + '</label>' +
       '<input class="input" id="' + esc(opts.path) + '" type="' + (opts.type || 'text') + '"' +
       ' data-path="' + esc(opts.path) + '"' +
@@ -224,19 +318,22 @@
       (opts.attrs || '') +
       ' placeholder="' + esc(opts.placeholder || '') + '" value="' + esc(value) + '">' +
       seoButton(opts) +
+      fieldSetupNote(opts.path) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</div>'
     );
   }
 
   function textareaField(opts) {
+    var setup = setupForPath(opts.path);
     return (
-      '<div class="field">' +
+      '<div class="field' + (setup ? ' is-needs-setup' : '') + '">' +
       '<label class="label" for="' + esc(opts.path) + '">' + esc(opts.label) + '</label>' +
       '<textarea class="textarea" id="' + esc(opts.path) + '" data-path="' + esc(opts.path) + '"' +
       (opts.rows ? ' rows="' + opts.rows + '"' : '') +
       ' placeholder="' + esc(opts.placeholder || '') + '">' + esc(opts.value || '') + '</textarea>' +
       seoButton(opts) +
+      fieldSetupNote(opts.path) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</div>'
     );
@@ -252,8 +349,9 @@
 
   function imageField(opts) {
     var value = opts.value || '';
+    var setup = setupForPath(opts.path);
     return (
-      '<div class="field">' +
+      '<div class="field' + (setup ? ' is-needs-setup' : '') + '">' +
       '<span class="label">' + esc(opts.label) + '</span>' +
       '<div class="image-field">' +
       '<span class="image-thumb"' + (value ? ' style="background-image:url(' + esc(value) + ')"' : '') + '>' +
@@ -266,6 +364,7 @@
       (value && opts.seoTarget ? '<button class="btn btn-sm" type="button" data-action="seo-photo" data-target="' + esc(opts.seoTarget) + '" data-image-path="' + esc(opts.path) + '">Generate photo SEO + GEO</button>' : '') +
       (value ? '<button class="btn btn-sm btn-danger" type="button" data-action="clear-image" data-target="' + esc(opts.path) + '">Remove</button>' : '') +
       '</span>' +
+      fieldSetupNote(opts.path) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</span></div></div>'
     );
@@ -322,6 +421,18 @@
   function sectionOverview() {
     var s = state.stats || {};
     var site = state.site;
+    var allSetup = setupItems();
+    var missingSetup = allSetup.filter(function (item) { return !item.done; });
+    var requiredMissing = missingSetup.filter(function (item) { return item.level === 'required'; }).length;
+    var setupRows = missingSetup.length
+      ? missingSetup.map(function (item) {
+          return '<article class="setup-item is-' + esc(item.level) + '">' +
+            '<div class="setup-copy"><span class="setup-level">' + (item.level === 'required' ? 'Required' : 'Recommended') + '</span>' +
+            '<strong>' + esc(item.title) + '</strong><p>' + esc(item.how) + '</p></div>' +
+            '<button class="btn btn-sm" type="button" data-action="goto" data-section="' + esc(item.section) + '">Open ' +
+            esc((SECTIONS.filter(function (section) { return section.id === item.section; })[0] || {}).label || item.section) + '</button></article>';
+        }).join('')
+      : '<div class="setup-complete"><strong>Everything is filled out.</strong><p>No required or recommended setup items are missing.</p></div>';
     var maxClicks = Math.max.apply(
       null,
       [1].concat((s.topLinks || []).map(function (l) {
@@ -372,6 +483,13 @@
 
     return (
       warning +
+      card(
+        'Finish setting up the site',
+        '<div class="setup-summary"><strong>' + esc(allSetup.length - missingSetup.length) + ' of ' + esc(allSetup.length) + ' complete</strong>' +
+          '<span>' + (requiredMissing ? esc(requiredMissing) + ' required item' + (requiredMissing === 1 ? '' : 's') + ' left' : 'No required items left') + '</span></div>' +
+          '<div class="setup-list">' + setupRows + '</div>',
+        { subtitle: 'Anything missing is listed here with exact instructions and marked again inside its section.' }
+      ) +
       '<div class="stat-grid">' + stats + '</div>' +
       card('Quick actions', '<div class="image-buttons">' + quick + '</div>') +
       card('Most clicked links', clickRows, {
@@ -1586,6 +1704,8 @@
       media: state.media.length
     };
     var changed = changedSections();
+    var setupCounts = {};
+    missingSetupItems().forEach(function (item) { setupCounts[item.section] = (setupCounts[item.section] || 0) + 1; });
     el.nav.innerHTML = SECTIONS.map(function (s) {
       return (
         '<button class="side-item' + (s.id === state.section ? ' is-active' : '') +
@@ -1593,6 +1713,7 @@
         (changed[s.id] ? ' title="Unsaved changes in this section"' : '') + '>' +
         icon(ICONS[s.id]) + '<span>' + esc(s.label) + '</span>' +
         (changed[s.id] ? '<span class="side-dot" aria-label="unsaved changes"></span>' : '') +
+        (setupCounts[s.id] ? '<span class="side-needs" title="' + setupCounts[s.id] + ' setup items missing">' + setupCounts[s.id] + '</span>' : '') +
         (counts[s.id] != null ? '<span class="side-count">' + counts[s.id] + '</span>' : '') +
         '</button>'
       );

@@ -119,6 +119,27 @@ test('public pages render', async () => {
   });
 });
 
+test('the admin explains every missing setup item and marks its field', async () => {
+  await withServer({}, async (server) => {
+    const js = await server.call('/assets/js/admin.js');
+    assert.strictEqual(js.status, 200);
+    assert.match(js.text, /Finish setting up the site/);
+    assert.match(js.text, /Anything missing is listed here with exact instructions/);
+    assert.match(js.text, /Verify Google Search Console/);
+    assert.match(js.text, /search\.google\.com\/search-console/);
+    assert.match(js.text, /Verify Bing Webmaster Tools/);
+    assert.match(js.text, /Connect the Wikidata identity/);
+    assert.match(js.text, /Generate photo SEO \+ GEO/);
+    assert.match(js.text, /class="field' \+ \(setup \? ' is-needs-setup'/);
+    assert.match(js.text, /setupCounts\[item\.section\]/);
+
+    const css = await server.call('/assets/css/admin.css');
+    assert.match(css.text, /\.field\.is-needs-setup/);
+    assert.match(css.text, /\.setup-item\.is-required/);
+    assert.match(css.text, /\.side-needs/);
+  });
+});
+
 test('the homepage includes the progressive-enhancement desktop assistant', async () => {
   await withServer({}, async (server) => {
     const home = await server.call('/');
