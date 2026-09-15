@@ -1008,7 +1008,7 @@ test('a menu saved before a page existed still links to it', async () => {
       const sidebar = html.slice(html.indexOf('<div class="sidebar">'), html.indexOf('<div class="win-doc">'));
       return [...sidebar.matchAll(/<a class="nav-link[^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
     };
-    assert.deepStrictEqual(labels((await server.call('/')).text), ['Home', 'About', 'Links', 'Reels', 'Play', 'Contact']);
+    assert.deepStrictEqual(labels((await server.call('/')).text), ['Home', 'About', 'Links', 'Shows', 'Reels', 'Play', 'Contact']);
 
     // On the page itself the link is marked current, like any other.
     assert.match((await server.call('/reels')).text, /<a class="nav-link is-active" href="\/reels" aria-current="page">Reels<\/a>/);
@@ -1028,7 +1028,7 @@ test('a menu saved before a page existed still links to it', async () => {
     });
     assert.deepStrictEqual(
       labels((await server.call('/')).text),
-      ['Home', 'Contact'],
+      ['Home', 'Shows', 'Contact'],
       'a hidden entry suppresses it, and a page with no entry at all still adds itself'
     );
   });
