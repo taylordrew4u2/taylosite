@@ -1,91 +1,66 @@
-/* Taylor Drew — retro desktop skin
+/* Taylor Drew — the desktop
  *
- * A skin, not a rebuild: the pages, the markup and the admin panel are
- * untouched. This sheet loads after site.css and after the theme block, and
- * turns the page into one desktop window — title bar, menu bar, sunken client
- * area, status bar — by (a) re-pointing the theme's neutral variables at the
- * classic system palette and (b) replacing flat borders with 3D bevels.
+ * The site is one window on a desktop of the early 2000s: a wallpapered
+ * background with shortcuts down the left, a window with a glossy title bar,
+ * the menu as that window's sidebar, the page as its document, the footer as
+ * its status bar, and a taskbar along the bottom.
  *
- * `--accent` and `--accent-text` are deliberately left alone: whichever scheme
- * the admin panel serves still colours the title bar, the menu highlight and
- * every call to action, so the theme picker keeps meaning something.
- *
- * Deleting this file and its <link> puts the brutalist site back, exactly.
+ * The pages themselves are untouched — every word still comes from the admin
+ * panel, and site.css still lays out the hero, the link wall, the reel grid
+ * and the rest. This sheet loads after site.css and after the theme block, so
+ * it re-points the theme's neutral variables at the period palette while
+ * leaving `--accent` alone: whichever scheme is served still colours the
+ * featured link, the section captions and the default button.
  */
 
-/* The `html[data-theme]` selector outranks the per-theme blocks the server
-   injects, so the neutrals below win no matter which scheme is served. */
+/* `html[data-theme]` outranks the per-theme blocks the server injects. */
 html[data-theme] {
-  --bg: #c0c0c0;
-  --surface: #c0c0c0;
-  --text: #0a0a0a;
-  --muted: #4a4a4a;
-  --line: #808080;
+  --bg: #fdfeff;
+  --surface: #eaf0f9;
+  --text: #1d2a3c;
+  --muted: #5b6d86;
+  --line: #b9c7da;
 
-  /* The bevel palette. Two light steps and two dark ones is what makes an
-     edge read as raised rather than merely outlined. */
-  --r-face: #c0c0c0;
-  --r-light: #ffffff;
-  --r-hilite: #dfdfdf;
-  --r-shadow: #808080;
-  --r-dark: #0a0a0a;
-  --r-client: #ffffff;
-  --r-desktop: #147a7a;
-  --r-title-end: #062a4a;
+  --xp-ink: #1d2a3c;
+  --xp-deep: #0b2b5e;
+  --xp-blue: #0b3a92;
+  --xp-line: #b9c7da;
+  --xp-face: #eef3fb;
+  --xp-edge: #08316f;
+  --xp-mute: #5b6d86;
+
+  --xp-title: linear-gradient(
+    180deg,
+    #63a5ec 0%,
+    #2b6fd0 10%,
+    #134ba8 48%,
+    #0d3f96 56%,
+    #3d84dd 100%
+  );
+  --xp-gloss: linear-gradient(180deg, #ffffff, #dde8f6 48%, #bed3ee);
+  --xp-wall: linear-gradient(180deg, #2e7bd6 0%, #5aa3e8 38%, #8fc36f 60%, #4e9a44 100%);
+
+  --xp-mono: 'Courier New', Courier, monospace;
 }
-
-/* ------------------------------------------------------------ the desktop */
 
 html {
-  /* Two flat teals at 2px are the dither pattern of the era, and they stay
-     crisp at any zoom because there is no image to resample. */
-  background-color: var(--r-desktop);
-  background-image: repeating-conic-gradient(
-    color-mix(in srgb, var(--r-desktop) 88%, #000) 0% 25%,
-    var(--r-desktop) 0% 50%
-  );
-  background-size: 4px 4px;
+  background: #0a2a5e;
 }
-
-/* ------------------------------------------------------------- the window */
 
 body {
-  margin: 14px;
-  min-height: calc(100vh - 28px);
-  min-height: calc(100svh - 28px);
-  padding: 3px;
-  background: var(--r-face);
-  border: 2px solid;
-  border-color: var(--r-hilite) var(--r-dark) var(--r-dark) var(--r-hilite);
-  box-shadow: inset 1px 1px 0 var(--r-light), inset -1px -1px 0 var(--r-shadow);
-  font-family: 'MS Sans Serif', Tahoma, Geneva, Verdana, 'Segoe UI', sans-serif;
+  display: block;
+  margin: 0;
+  min-height: 0;
+  background: transparent;
+  color: var(--xp-ink);
+  font-family: Tahoma, Verdana, Geneva, 'Segoe UI', sans-serif;
   font-size: 15px;
-  /* Antialiasing is what modern type wants and what this window does not. */
-  -webkit-font-smoothing: none;
 }
 
-/* Small screens have no room to spend on a desktop margin. */
-@media (max-width: 640px) {
-  body {
-    margin: 4px;
-    min-height: calc(100vh - 8px);
-    min-height: calc(100svh - 8px);
-  }
-}
-
-/* Nothing in a window of this vintage is rounded, and nothing fades. */
-*,
-*::before,
-*::after {
-  border-radius: 0 !important;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .btn,
-  .nav-link,
-  .link-card {
-    transition: none;
-  }
+/* Several things here are display:flex and hidden by the `hidden` attribute,
+   and a class beats the user-agent's `[hidden]` rule every time. */
+[hidden] {
+  display: none !important;
 }
 
 ::selection {
@@ -94,358 +69,950 @@ body {
 }
 
 :focus-visible {
-  outline: 1px dotted var(--r-dark);
-  outline-offset: -4px;
+  outline: 1px dotted #fff;
+  outline-offset: 2px;
 }
 
-/* --------------------------------------------------------- the title bar */
+.win :focus-visible,
+.startmenu :focus-visible {
+  outline: 1px dotted var(--xp-deep);
+}
 
-.topbar {
-  /* A title bar belongs to its window, so it scrolls with it rather than
-     detaching and floating over the desktop. */
+/* ---------------------------------------------------------- the desktop */
+
+.desk {
   position: relative;
-  flex-wrap: wrap;
-  gap: 0;
-  padding: 0;
-  background: transparent;
-  border-bottom: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  min-height: 560px;
+  overflow: hidden;
 }
 
-/* The logo is the window's name, so it takes the whole bar. */
-.logo {
-  order: 1;
-  flex: 1 1 100%;
+.wall {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--xp-wall);
+}
+
+.icons {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 82px;
+  gap: 4px;
+}
+
+.icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 82px;
+  padding: 5px 2px;
+  border: 1px solid transparent;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.icon:focus-visible,
+.icon:active {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(11, 58, 146, 0.35);
+}
+
+.icon-tile {
   display: flex;
   align-items: center;
-  min-height: 30px;
-  padding: 4px 4px 4px 8px;
-  background: linear-gradient(90deg, var(--accent), var(--r-title-end));
-  color: var(--accent-text);
-  font-size: 0.86rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #2c5f9e;
+  border-radius: 9px;
+  box-shadow: inset 0 1px 0 #fff, 0 2px 5px rgba(0, 0, 0, 0.35);
+  font-size: 15px;
+  line-height: 1;
 }
 
-/* Minimise, maximise, close. Decoration — a window with one page has nothing
-   to minimise to — so they are a pseudo-element and not focusable buttons. */
-.logo::after {
-  content: '_ ☐ ✕';
-  margin-left: auto;
-  padding: 2px 7px;
-  background: var(--r-face);
-  color: var(--r-dark);
-  border: 1px solid;
-  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
-  font-family: 'Lucida Console', Consolas, monospace;
-  font-size: 0.68rem;
+.icon-blue {
+  background: linear-gradient(160deg, #fdfeff, #bcd8f5 45%, #7fb0e6);
+  color: var(--xp-blue);
+}
+
+.icon-red {
+  background: linear-gradient(160deg, #fff6f6, #f3bcbc 45%, #d97878);
+  color: #7d1f1f;
+}
+
+.icon-violet {
+  background: linear-gradient(160deg, #fbf6ff, #dcc4f3 45%, #b088dd);
+  color: #4c2278;
+}
+
+.icon-slate {
+  background: linear-gradient(160deg, #f4f7fb, #c9d3e0 45%, #8d9bb0);
+  color: #2c3950;
+}
+
+.icon-teal {
+  background: linear-gradient(160deg, #f1fbfa, #b6e2dd 45%, #6fb5ae);
+  color: #10534d;
+}
+
+.icon-gold {
+  background: linear-gradient(160deg, #fffdf0, #f0e2a8 45%, #cdb45c);
+  color: #6b5a14;
+}
+
+.icon-label {
+  font-size: 11px;
+  line-height: 1.25;
+  color: #fff;
+  text-align: center;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------------------- the window */
+
+.win {
+  position: absolute;
+  left: 116px;
+  top: 34px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: min(1020px, calc(100% - 146px));
+  max-height: calc(100% - 92px);
+  overflow: hidden;
+  background: var(--xp-face);
+  border: 1px solid var(--xp-edge);
+  border-radius: 9px 9px 4px 4px;
+  box-shadow: 0 8px 22px rgba(4, 18, 44, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.win.is-max {
+  left: 0;
+  top: 0;
+  width: 100%;
+  max-height: calc(100% - 46px);
+  height: calc(100% - 46px);
+  border-radius: 0;
+}
+
+.topbar {
+  position: static;
+  z-index: auto;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 5px 5px 9px;
+  background: var(--xp-title);
+  border-bottom: 1px solid var(--xp-edge);
+  user-select: none;
+}
+
+/* A title bar you can pick the window up by — pointer only, and never when
+   the window fills the screen or the desktop has collapsed to one column. */
+@media (min-width: 720px) and (pointer: fine) {
+  .win:not(.is-max) .topbar {
+    cursor: move;
+  }
+}
+
+.logo {
+  min-width: 0;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.32em;
-  line-height: 1.1;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.55);
 }
 
-/* ---------------------------------------------------------- the menu bar */
-
-.topbar-right {
-  order: 2;
-  flex: 1 1 100%;
-  gap: 0;
-  padding: 2px 2px 3px;
-  background: var(--r-face);
-  border-bottom: 1px solid var(--r-shadow);
-  box-shadow: 0 1px 0 var(--r-light);
+.win-buttons {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
 }
 
-.nav {
-  gap: 0;
+.win-button {
+  width: 21px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #0a3d8f;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #f8fcff, #a9cbf2 52%, #6ea6e2);
+  color: #083b86;
+  font: 700 11px Tahoma, Verdana, sans-serif;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.win-button.is-close {
+  border-color: #8f1c12;
+  background: linear-gradient(180deg, #ffdad5, #e8705f 52%, #c0301c);
+  color: #fff;
+}
+
+.win-button:active {
+  background: linear-gradient(180deg, #6ea6e2, #a9cbf2 52%, #f8fcff);
+}
+
+.win-button.is-close:active {
+  background: linear-gradient(180deg, #c0301c, #e8705f 52%, #ffdad5);
+}
+
+.win-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* ---------------------------------------------------------- the sidebar */
+
+.sidebar {
+  flex: 0 0 auto;
+  width: 138px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 7px;
+  border-right: 1px solid var(--xp-line);
+  background: linear-gradient(180deg, #fbfcfe, #dde6f2);
+}
+
+.sidebar-label {
+  margin: 0;
+  padding: 2px 6px 6px;
+  font: 10px var(--xp-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--xp-mute);
+}
+
+.sidebar .nav {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.sidebar-foot {
+  margin: auto 0 0;
+  padding: 8px 6px 2px;
+  font: 10px var(--xp-mono);
+  line-height: 1.5;
+  color: #7c8ca3;
 }
 
 .nav-link {
-  padding: 4px 10px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #22334c;
+  white-space: nowrap;
 }
 
-/* The sliding accent rule is a modern gesture; a menu item inverts instead. */
+/* The sliding accent rule is a modern gesture; a shortcut lights up instead. */
 .nav-link::after {
   display: none;
 }
 
 .nav-link.is-active {
-  background: var(--accent);
-  color: var(--accent-text);
+  border-color: #7ba2d4;
+  background: linear-gradient(180deg, #ffffff, #d3e3f8 55%, #b7d1ef);
+  box-shadow: inset 0 1px 0 #fff;
+  font-weight: 700;
+  color: var(--xp-deep);
 }
 
 @media (hover: hover) {
   .nav-link:hover {
-    background: var(--accent);
-    color: var(--accent-text);
+    background: #dbe8fa;
+  }
+
+  .nav-link.is-active:hover {
+    background: linear-gradient(180deg, #ffffff, #d3e3f8 55%, #b7d1ef);
   }
 }
 
-/* The hamburger becomes a plain raised toolbar button. */
-.menu-toggle {
-  order: 3;
-  position: absolute;
-  top: 36px;
-  right: 6px;
-  width: 34px;
-  height: 26px;
-  gap: 5px;
-  background: var(--r-face);
-  border: 2px solid;
-  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
-  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite);
+/* --------------------------------------------------------- the document */
+
+.win-doc {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
-
-.menu-toggle span {
-  height: 2px;
-  margin: 0 6px;
-  background: var(--r-dark);
-}
-
-.topbar.is-open .menu-toggle {
-  border-color: var(--r-dark) var(--r-light) var(--r-light) var(--r-dark);
-  box-shadow: inset 1px 1px 0 var(--r-shadow), inset -1px -1px 0 var(--r-hilite);
-}
-
-/* Below 900px the menu bar collapses behind the toggle, so there is no bar for
-   the toggle to sit on top of — it becomes the bar, a one-button toolbar under
-   the title, and the groove that closed the menu bar moves down with it. */
-@media (max-width: 900px) {
-  .menu-toggle {
-    position: static;
-    order: 2;
-    margin: 3px 0 3px 3px;
-  }
-
-  .topbar {
-    border-bottom: 1px solid var(--r-shadow);
-    box-shadow: 0 1px 0 var(--r-light);
-  }
-
-  .topbar-right {
-    order: 3;
-    padding-top: 0;
-    border-bottom: 0;
-    box-shadow: none;
-  }
-
-  .nav-link {
-    border-top-color: var(--r-shadow);
-  }
-}
-
-/* --------------------------------------------------------- the client area */
 
 .main {
-  background: var(--r-client);
-  border: 2px solid;
-  border-color: var(--r-shadow) var(--r-light) var(--r-light) var(--r-shadow);
-  box-shadow: inset 1px 1px 0 var(--r-dark), inset -1px -1px 0 var(--r-hilite);
+  flex: 1;
+  min-height: 0;
+  /* The page scrolls inside its window, which is what a window is for. */
+  overflow: auto;
+  background: linear-gradient(180deg, #fdfeff, #eaf0f9);
 }
 
-/* site.css draws the page's internal divisions as hairlines; in here they are
-   grooves, which is the same job done with two pixels instead of one. */
+/* site.css sizes the hero against the viewport; in here the window is the
+   viewport, and a hero taller than it would push the fold inside the frame. */
+.hero-main {
+  min-height: 0;
+}
+
+.hero-photo,
+.side-photo img {
+  max-height: 46vh;
+}
+
+/* ------------------------------------------------------------- the type */
+
+.display {
+  font-family: Tahoma, Verdana, Geneva, sans-serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 4.4vw, 2.6rem);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--xp-deep);
+}
+
+.display-sm {
+  font-size: clamp(1.3rem, 2.2vw, 1.55rem);
+}
+
+.eyebrow,
+.subhead,
+.fact dt,
+.link-sub,
+.credit-meta,
+.show-meta {
+  font-family: var(--xp-mono);
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--xp-mute);
+}
+
+.subhead {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #33465f;
+}
+
+/* ------------------------------------------------------------- controls */
+
+.btn {
+  min-height: 0;
+  padding: 8px 18px;
+  border: 1px solid #6f8fb8;
+  border-radius: 5px;
+  background: var(--xp-gloss);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--xp-blue);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The served scheme's accent survives as the default button's left edge. */
+.btn-accent {
+  border-left: 3px solid var(--accent);
+  color: var(--xp-blue);
+}
+
+.btn-ghost {
+  background: linear-gradient(180deg, #fdfdfd, #e8ecf2 48%, #d3d9e3);
+  border-color: #9fb3cd;
+  color: #3c4a60;
+}
+
+.btn:active {
+  transform: none;
+  background: linear-gradient(180deg, #bed3ee, #dde8f6 48%, #ffffff);
+}
+
+.btn-ghost:active {
+  background: linear-gradient(180deg, #d3d9e3, #e8ecf2 48%, #fdfdfd);
+  color: #3c4a60;
+}
+
+@media (hover: hover) {
+  .btn-accent:hover,
+  .btn:hover {
+    filter: none;
+    background: linear-gradient(180deg, #ffffff, #d5e5fb 50%, #b8d2f1);
+    color: var(--xp-blue);
+  }
+
+  .btn-ghost:hover {
+    background: linear-gradient(180deg, #ffffff, #eef1f6 48%, #dde2ea);
+    color: #3c4a60;
+  }
+}
+
+/* Everything the site lists becomes a glossy row of the same family. */
+.link-card,
+.reel,
+.show-cta,
+.quote,
+.hero-upcoming,
+.play-stat {
+  border: 1px solid #93b2d8;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #ffffff, #e4ecf8 50%, #cfdef2);
+  box-shadow: inset 0 1px 0 #fff;
+}
+
+.link-grid,
+.reel-grid {
+  gap: 9px;
+  padding: 9px;
+}
+
+.link-card {
+  border-right: 1px solid #93b2d8;
+}
+
+.link-label {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.link-arrow {
+  font-family: var(--xp-mono);
+  color: var(--xp-mute);
+}
+
+@media (hover: hover) {
+  .link-card:hover {
+    background: linear-gradient(180deg, #ffffff, #d5e5fb 50%, #b8d2f1);
+  }
+}
+
+.link-card:active {
+  background: linear-gradient(180deg, #cfdef2, #e4ecf8 50%, #ffffff);
+}
+
+/* A reel wall is a media player's window: dark, so the clips carry the light. */
+.page-reels .main {
+  background: linear-gradient(180deg, #22304a, #101a2c);
+}
+
+.page-reels .reel {
+  border-color: #47597a;
+  background: repeating-linear-gradient(45deg, #2b3a55 0 8px, #33425e 8px 16px);
+  box-shadow: none;
+}
+
+.page-reels .reel-title,
+.page-reels .reel-intro,
+.page-reels .reel-empty,
+.page-reels .display,
+.page-reels .eyebrow,
+.page-reels .subhead,
+.page-reels .muted {
+  color: #a8bad6;
+}
+
+.page-reels .display {
+  color: #e8f0fb;
+}
+
+/* The game is the one thing on the machine that is not a document. */
+.page-play .main {
+  background: #0b1220;
+}
+
+.page-play .display,
+.page-play .play-line,
+.page-play .play-stat strong {
+  color: #6ef3a5;
+}
+
+.page-play .eyebrow,
+.page-play .subhead,
+.page-play .play-stat-label {
+  color: #7d93b5;
+}
+
+.page-play .play-stat {
+  border-color: #2c4160;
+  background: linear-gradient(180deg, #25385a, #16243c);
+  box-shadow: none;
+}
+
+.page-play .seat {
+  border: 1px solid #2c4160;
+  background: repeating-linear-gradient(45deg, #111d31 0 8px, #16243c 8px 16px);
+}
+
+.page-play .btn {
+  border-color: #2c4160;
+  background: linear-gradient(180deg, #25385a, #16243c);
+  color: #9fd8ff;
+}
+
+/* Photographs sit in the hatched wells an image control gave an empty slot. */
+.hero-photo-wrap,
+.side-photo,
+.show-flyer,
+.photo-placeholder {
+  border: 1px solid #b6c6dd;
+  background: repeating-linear-gradient(45deg, #dfe7f2 0 8px, #eef3fa 8px 16px);
+}
+
 .rule,
+.rule-accent {
+  height: 1px;
+}
+
 .hero-side,
 .split-side,
 .show,
 .fact,
 .faq-item,
 .credit,
-.link-card,
 .quote {
-  border-color: var(--r-shadow);
+  border-color: var(--xp-line);
 }
 
-.rule {
-  height: 2px;
-  background: var(--r-shadow);
-  box-shadow: 0 1px 0 var(--r-light);
-}
-
-.rule-accent {
-  box-shadow: 0 1px 0 var(--r-light);
-}
-
-/* ------------------------------------------------------------ push buttons */
-
-.btn {
-  min-height: 30px;
-  padding: 6px 18px;
-  background: var(--r-face);
-  color: var(--r-dark);
-  border: 2px solid;
-  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
-  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-}
-
-/* The accent survives as a stripe down the default button rather than as a
-   fill, so the button still reads as a button. */
-.btn-accent {
-  border-left-color: var(--accent);
-  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite),
-    inset 4px 0 0 -1px var(--accent);
-}
-
-.btn:active,
-.btn-ghost:active {
-  transform: none;
-  background: var(--r-face);
-  color: var(--r-dark);
-  border-color: var(--r-dark) var(--r-light) var(--r-light) var(--r-dark);
-  box-shadow: inset 1px 1px 0 var(--r-shadow), inset -1px -1px 0 var(--r-hilite);
-  /* Pressing a button pushed its label along with it. */
-  padding: 7px 17px 5px 19px;
-}
-
-@media (hover: hover) {
-  .btn-accent:hover,
-  .btn-ghost:hover {
-    filter: none;
-    background: color-mix(in srgb, var(--r-face) 88%, #fff);
-    color: var(--r-dark);
-  }
-}
-
-/* ----------------------------------------------------------------- panels */
-
-/* Everything the site lists — a link, a reel, a show, a fact, a quote — is a
-   tile on the face of the window rather than a cell in a grid. */
-.link-card,
-.reel,
-.show-cta,
-.quote,
-.hero-upcoming,
-.play-stat,
-.seat {
-  background: var(--r-face);
-  border: 2px solid;
-  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
-  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite);
-}
-
-/* Tiles butt up against one another as flat cells; as raised ones they need the
-   sliver of face between them that stops two bevels reading as one groove. */
-.link-grid,
-.reel-grid {
-  gap: 4px;
-  padding: 4px;
-}
-
-.link-card:active,
-.show-cta:active,
-.seat:active {
-  border-color: var(--r-dark) var(--r-light) var(--r-light) var(--r-dark);
-  box-shadow: inset 1px 1px 0 var(--r-shadow), inset -1px -1px 0 var(--r-hilite);
-}
-
-/* A featured link keeps its accent, now as the strip of a selected row. */
-.link-card.is-featured::before {
-  background: var(--accent);
-}
-
-.link-arrow {
-  font-family: 'Lucida Console', Consolas, monospace;
-}
-
-/* Photographs sit in sunken wells, the way an image control framed them. */
-.hero-photo-wrap,
-.side-photo,
-.show-flyer,
-.reel-media,
-.reel-embed,
-.photo-placeholder {
-  background: var(--r-client);
-  border: 2px solid;
-  border-color: var(--r-shadow) var(--r-light) var(--r-light) var(--r-shadow);
-  box-shadow: inset 1px 1px 0 var(--r-dark), inset -1px -1px 0 var(--r-hilite);
-}
-
-/* ------------------------------------------------------------- the type */
-
-.display,
-.display-sm,
-.hero-title {
-  letter-spacing: -0.01em;
-}
-
-/* A hard, offset shadow — no blur — is the drop shadow this era had. */
-.display {
-  text-shadow: 2px 2px 0 var(--r-shadow);
-}
-
-.eyebrow {
-  letter-spacing: 0.16em;
-}
-
-/* A section heading is a caption bar over the section it names. */
-.dates .eyebrow,
-.faq .eyebrow,
-.credits .eyebrow,
-.hero-upcoming .eyebrow {
-  display: inline-block;
-  padding: 3px 9px;
-  background: var(--accent);
-  color: var(--accent-text);
-}
-
-/* ---------------------------------------------------------- the status bar */
+/* ---------------------------------------------------------- status bar */
 
 .footer {
-  padding: 5px 4px;
-  gap: 4px;
-  background: var(--r-face);
-  border-top: 2px solid;
-  border-color: var(--r-light) transparent transparent;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  flex: 0 0 auto;
+  gap: 10px;
+  padding: 5px 10px;
+  border-top: 1px solid #c3d0e2;
+  background: linear-gradient(180deg, #f3f6fb, #e3eaf4);
+  font: 11px var(--xp-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--xp-mute);
 }
 
-/* Each piece of footer text is its own sunken pane, like a byte count and a
-   modified flag sitting at the bottom of a document window. */
-.footer > * {
-  padding: 3px 10px;
-  border: 1px solid;
-  border-color: var(--r-shadow) var(--r-light) var(--r-light) var(--r-shadow);
+.footer-path {
+  flex: 0 0 auto;
 }
 
 .footer-left {
   flex: 1;
+  min-width: 0;
 }
 
 @media (hover: hover) {
   a.footer-right:hover {
-    color: var(--accent);
+    color: var(--xp-blue);
   }
 }
 
-/* ------------------------------------------------------------- scrollbars */
+/* ------------------------------------------------------------- taskbar */
 
-* {
-  scrollbar-color: var(--r-face) color-mix(in srgb, var(--r-face) 55%, #fff);
-}
-
-::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
-}
-
-::-webkit-scrollbar-track {
-  background: repeating-conic-gradient(
-    color-mix(in srgb, var(--r-face) 40%, #fff) 0% 25%,
-    var(--r-face) 0% 50%
+.taskbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  padding-bottom: max(5px, env(safe-area-inset-bottom));
+  background: linear-gradient(
+    180deg,
+    #5fa3ea 0%,
+    #2367c8 10%,
+    #124da9 52%,
+    #0c3f96 60%,
+    #2f78d4 100%
   );
-  background-size: 2px 2px;
+  border-top: 1px solid #7fb6f5;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.35);
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--r-face);
-  border: 2px solid;
-  border-color: var(--r-light) var(--r-dark) var(--r-dark) var(--r-light);
-  box-shadow: inset -1px -1px 0 var(--r-shadow), inset 1px 1px 0 var(--r-hilite);
+.start {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 5px 16px 5px 10px;
+  border: 1px solid #1d6b2d;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #7fd48c, #2f9e4a 48%, #1f7a37);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  font: italic 700 14px Tahoma, Verdana, sans-serif;
+  color: #fff;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.start-mark {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #fff, #cdebd3);
+}
+
+.start[aria-expanded='true'] {
+  background: linear-gradient(180deg, #1f7a37, #2f9e4a 48%, #7fd48c);
+}
+
+.tasks {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.task {
+  max-width: 220px;
+  padding: 5px 12px;
+  border: 1px solid #0a3d8f;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(255, 255, 255, 0.14));
+  font: 700 12px Tahoma, Verdana, sans-serif;
+  color: #fff;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* A minimised window's button stops looking pressed. */
+.task.is-idle {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04));
+  font-weight: 400;
+}
+
+.tray {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  border: 1px solid #0a3d8f;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.05));
+  font: 12px Tahoma, Verdana, sans-serif;
+  color: #fff;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.45);
+}
+
+.clock {
+  letter-spacing: 0.06em;
+}
+
+/* ---------------------------------------------------------- start menu */
+
+.startmenu {
+  position: absolute;
+  left: 9px;
+  bottom: 50px;
+  z-index: 8100;
+  width: 196px;
+  overflow: hidden;
+  border: 1px solid var(--xp-edge);
+  border-radius: 7px 7px 4px 4px;
+  box-shadow: 0 10px 26px rgba(4, 18, 44, 0.5);
+}
+
+.startmenu-head {
+  margin: 0;
+  padding: 9px 12px;
+  background: linear-gradient(180deg, #2b6fd0, #0d3f96);
+  font: 700 13px Tahoma, Verdana, sans-serif;
+  color: #fff;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+.startmenu-list {
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  background: #fff;
+}
+
+.startmenu-list .nav-link {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+  font-weight: 400;
+  color: #12263f;
+}
+
+.startmenu-list .nav-link.is-active {
+  font-weight: 700;
+  color: var(--xp-deep);
+}
+
+/* ------------------------------------------------------------- dialogs */
+
+.dialog {
+  position: absolute;
+  z-index: 8500;
+  width: 390px;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  border: 1px solid var(--xp-edge);
+  border-radius: 8px 8px 4px 4px;
+  box-shadow: 0 12px 30px rgba(4, 18, 44, 0.5);
+}
+
+.dialog-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 5px 5px 9px;
+  background: var(--xp-title);
+  border-bottom: 1px solid var(--xp-edge);
+}
+
+.dialog-title {
+  font: 700 12px Tahoma, Verdana, sans-serif;
+  color: #fff;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.55);
+}
+
+.dialog-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 17px;
+  background: linear-gradient(180deg, #fdfeff, #eef2f8);
+}
+
+.dialog-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #8f1c12;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffdad5, #c0301c);
+  color: #fff;
+  font: 700 16px Tahoma, Verdana, sans-serif;
+}
+
+.dialog-glyph.is-info {
+  border-color: #1d6b2d;
+  background: linear-gradient(180deg, #d9f7e0, #4aa85f);
+}
+
+.dialog-main {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dialog-text {
+  margin: 0;
+  font: 12px/1.55 Tahoma, Verdana, sans-serif;
+  color: var(--xp-ink);
+  text-wrap: pretty;
+}
+
+.dialog-ok {
+  align-self: flex-end;
+  padding: 6px 20px;
+  border: 1px solid #6f8fb8;
+  border-radius: 5px;
+  background: var(--xp-gloss);
+  box-shadow: inset 0 1px 0 #fff;
+  font: 700 12px Tahoma, Verdana, sans-serif;
+  color: var(--xp-blue);
+  cursor: pointer;
+}
+
+/* ----------------------------------------------------------- the splash */
+
+.boot {
+  position: absolute;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  background: radial-gradient(120% 90% at 50% 40%, #1b4f9c, #061a3c 70%);
+}
+
+.boot-name {
+  margin: 0;
+  font: 700 38px Tahoma, Verdana, sans-serif;
+  letter-spacing: -0.02em;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.boot-sub {
+  margin: -15px 0 0;
+  font: 11px var(--xp-mono);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #9fc2ef;
+}
+
+.boot-bar {
+  width: 230px;
+  height: 14px;
+  padding: 2px;
+  border: 1px solid #6a97d8;
+  border-radius: 3px;
+  background: #0a2450;
+}
+
+.boot-bar span {
+  display: block;
+  width: 4%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #6ef3a5, #2fb4e0);
+  animation: bootbar 2.1s linear forwards;
+}
+
+@keyframes bootbar {
+  from {
+    width: 4%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.boot-skip {
+  padding: 6px 16px;
+  border: 1px solid #6a97d8;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  font: 11px Tahoma, Verdana, sans-serif;
+  color: #cfe2fb;
+  cursor: pointer;
+}
+
+/* Someone who asked for less motion gets the desktop, not the show. */
+@media (prefers-reduced-motion: reduce) {
+  .boot {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------ narrow */
+
+/*
+ * Under 720px there is no room for a desktop: the wallpaper stays, the
+ * shortcuts go, and the window becomes the page — full width, scrolling with
+ * the document rather than inside itself, with the taskbar pinned to the
+ * bottom of the screen the way it is on the real thing.
+ */
+@media (max-width: 719px) {
+  .desk {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100svh;
+    padding: 10px 10px 62px;
+    padding-bottom: calc(62px + env(safe-area-inset-bottom));
+    overflow: visible;
+  }
+
+  .wall {
+    position: fixed;
+  }
+
+  .icons {
+    display: none;
+  }
+
+  .win {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: 100%;
+    max-height: none;
+  }
+
+  .win.is-max {
+    height: auto;
+    max-height: none;
+    border-radius: 9px 9px 4px 4px;
+  }
+
+  .main {
+    overflow: visible;
+  }
+
+  .sidebar {
+    width: 112px;
+  }
+
+  .sidebar-label,
+  .sidebar-foot {
+    display: none;
+  }
+
+  .taskbar,
+  .startmenu {
+    position: fixed;
+  }
+
+  .dialog {
+    position: fixed;
+    left: 5%;
+    top: 16%;
+    width: 90%;
+  }
+}
+
+/* Very narrow: the sidebar becomes a row of tabs above the document. */
+@media (max-width: 479px) {
+  .win-body {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: auto;
+    flex-direction: row;
+    gap: 4px;
+    padding: 6px;
+    border-right: 0;
+    border-bottom: 1px solid var(--xp-line);
+    overflow-x: auto;
+  }
+
+  .sidebar .nav {
+    flex-direction: row;
+    gap: 4px;
+  }
 }

@@ -969,7 +969,12 @@ test('a menu saved before a page existed still links to it', async () => {
       }
     });
 
-    const labels = (html) => [...html.matchAll(/<a class="nav-link[^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
+    // The menu is rendered twice — in the window's sidebar and again in the
+    // start menu — so the check reads the sidebar's copy of it.
+    const labels = (html) => {
+      const sidebar = html.slice(html.indexOf('<div class="sidebar">'), html.indexOf('<div class="win-doc">'));
+      return [...sidebar.matchAll(/<a class="nav-link[^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
+    };
     assert.deepStrictEqual(labels((await server.call('/')).text), ['Home', 'About', 'Links', 'Reels', 'Play']);
 
     // On the page itself the link is marked current, like any other.
