@@ -1021,7 +1021,8 @@
       var until = ig.expiresAt ? new Date(ig.expiresAt) : null;
       var days = until ? Math.round((until - new Date()) / 86400000) : null;
       return (
-        '<p class="hint"><strong>Connected.</strong> The wall is rebuilt from your account every 20 minutes.' +
+        '<p class="hint"><strong>Connected' + (ig.username ? ' as @' + esc(ig.username) : '') +
+        '.</strong> The wall is rebuilt from your account every 20 minutes.' +
         (days !== null
           ? ' The access token renews itself automatically; as it stands it is good for another ' +
             days + ' day' + (days === 1 ? '' : 's') + '.'
@@ -1029,6 +1030,7 @@
         '</p>' +
         '<p class="hint">If Instagram is ever unreachable, /reels keeps showing the last good wall for a day, ' +
         'then falls back to the pinned reels below.</p>' +
+        igMessageForm(ig) +
         '<button class="btn btn-sm btn-danger" type="button" data-action="ig-disconnect">Disconnect</button>'
       );
     }
@@ -1039,12 +1041,32 @@
         '<p><a class="btn btn-sm btn-accent" href="' + esc(ig.authorizeUrl) + '">Connect Instagram</a></p>' +
         '<p class="hint">Opens Instagram, asks for read access to your reels, and brings you back here. ' +
         'The redirect URI registered with your Meta app must be exactly <code>' + esc(ig.redirectUri) + '</code>.</p>' +
+        igTokenForm() +
         '<details class="ig-details"><summary>App details</summary>' + igAppForm(ig) + '</details>'
       );
     }
 
     return (
-      '<p class="hint">Not connected — /reels shows only the pinned reels below.</p>' + igAppForm(ig)
+      '<p class="hint">Not connected — /reels shows only the pinned reels below.</p>' +
+      igTokenForm() +
+      igAppForm(ig)
+    );
+  }
+
+  /**
+   * A token minted somewhere else — Meta's dashboard hands one out directly —
+   * adopted here instead of through a hosting environment variable and a
+   * redeploy. From then on the site refreshes it like any other.
+   */
+  function igTokenForm() {
+    return (
+      '<details class="ig-details"><summary>Paste a long-lived access token</summary>' +
+      '<label class="field"><span class="label">Instagram access token</span>' +
+      '<input class="input" id="ig-token" type="password" autocomplete="off" placeholder="IGAA…"></label>' +
+      '<p><button class="btn btn-sm btn-accent" type="button" data-action="ig-save-token">Save token</button></p>' +
+      '<p class="hint">Checked against the account before it is saved, then kept alive here — a long-lived ' +
+      'token dies for good after 60 days without a refresh. It is stored with your password and never shown again.</p>' +
+      '</details>'
     );
   }
 
@@ -1080,6 +1102,12 @@
       '<input class="input" id="ig-app-secret" type="password" autocomplete="off" ' +
       'placeholder="' + (ig && ig.appSecretSet ? 'Saved — leave blank to keep it' : '32 hex characters') + '"></label>' +
       '</div>' +
+      '<label class="switch"><input type="checkbox" id="ig-messaging"' +
+      (ig && ig.messaging ? ' checked' : '') + '> ' +
+      '<span>Also let this site send direct messages as the account</span></label>' +
+      '<p class="hint">Off by default. Turning it on asks Instagram for one more permission when you connect, ' +
+      'so an app that was never set up for messaging keeps working. ' +
+      'Tick it, save, then connect (or reconnect) — the permission comes with the new token, not the tickbox.</p>' +
       '<p><button class="btn btn-sm btn-accent" type="button" data-action="ig-save-app">Save app details</button>' +
       (ig && ig.appSource === 'panel'
         ? ' <button class="btn btn-sm btn-ghost" type="button" data-action="ig-forget-app">Forget them</button>'
@@ -1088,6 +1116,41 @@
       '<p class="hint">The secret is kept with your password and is never shown again. ' +
       'Once both are saved, a <em>Connect Instagram</em> button appears here — one login and the wall fills itself, ' +
       'renewing its own access from then on.</p>'
+    );
+  }
+
+  /**
+   * Sending a DM, for the account that has said it wants to.
+   *
+   * Two rules of Instagram's are worth stating on the form rather than letting
+   * someone discover them as an error: the recipient is the all-digit ID that
+   * arrives with an incoming message — there is no way to look one up from an
+   * @handle — and a reply is only allowed within 24 hours of their last message.
+   */
+  function igMessageForm(ig) {
+    if (!ig || !ig.messaging) return '';
+    if (!ig.messagingScope) {
+      return (
+        '<p class="hint"><strong>Direct messages are on, but this token was not granted them.</strong> ' +
+        'Disconnect and connect again — the button now forces the consent screen, which is where the ' +
+        'messaging permission is actually approved.</p>'
+      );
+    }
+    return (
+      '<details class="ig-details"><summary>Send a direct message</summary>' +
+      '<div class="grid-2">' +
+      '<label class="field"><span class="label">Recipient ID</span>' +
+      '<input class="input" id="ig-dm-to" type="text" inputmode="numeric" autocomplete="off" ' +
+      'placeholder="17841400000000000"></label>' +
+      '<label class="field"><span class="label">Message</span>' +
+      '<input class="input" id="ig-dm-text" type="text" autocomplete="off" maxlength="1000" ' +
+      'placeholder="Hello World"></label>' +
+      '</div>' +
+      '<p><button class="btn btn-sm btn-accent" type="button" data-action="ig-send-dm">Send</button></p>' +
+      '<p class="hint">The recipient is an Instagram-scoped ID — the all-digit sender id that comes in with ' +
+      'their message, not an @handle; there is no way to look one up. Instagram only allows a reply within ' +
+      '<strong>24 hours</strong> of their last message and refuses outside it.</p>' +
+      '</details>'
     );
   }
 
@@ -1706,13 +1769,19 @@
     });
   }
 
-  /** Resolves to { dataUrl, shrunk, from, to }. Never rejects. */
-  function prepareImage(file) {
-    return readAsDataUrl(file).then(function (original) {
+  /**
+   * Resolves to { dataUrl, shrunk, from, to }. Never rejects.
+   *
+   * `alreadyRead` is a data URL that has been through the crop step, so the
+   * file on disk is no longer what should be uploaded.
+   */
+  function prepareImage(file, alreadyRead) {
+    var read = alreadyRead ? Promise.resolve(alreadyRead) : readAsDataUrl(file);
+    return read.then(function (original) {
       var originalBytes = dataUrlBytes(original);
       // Vectors have no pixels to resample, and re-encoding a GIF would drop
       // its animation — leave both exactly as they are.
-      if (/svg|gif/.test(file.type)) {
+      if (!alreadyRead && /svg|gif/.test(file.type)) {
         return { dataUrl: original, shrunk: false, from: originalBytes, to: originalBytes };
       }
 
@@ -1757,6 +1826,154 @@
     });
   }
 
+  /* ----------------------------------------------------------------- crop */
+
+  /**
+   * Choose the crop before the upload, rather than letting object-fit take
+   * the edges off at display time.
+   *
+   * Resolves to a data URL to upload, or null to skip this file entirely.
+   * The frame starts as the whole image, so confirming without touching it
+   * is a no-op rather than a surprise.
+   */
+  var cropState = null;
+
+  function cropElements() {
+    return {
+      modal: document.getElementById('crop-modal'),
+      stage: document.getElementById('crop-stage'),
+      image: document.getElementById('crop-image'),
+      shade: document.getElementById('crop-shade'),
+      box: document.getElementById('crop-box'),
+      title: document.getElementById('crop-title'),
+      size: document.getElementById('crop-size')
+    };
+  }
+
+  /** Keep the frame inside the picture, and at the chosen shape if there is one. */
+  function cropClamp() {
+    var c = cropState;
+    if (!c) return;
+    var minSide = 24;
+    c.w = Math.max(minSide, Math.min(c.w, c.dw));
+    c.h = Math.max(minSide, Math.min(c.h, c.dh));
+    if (c.ratio) {
+      // Honour the shape, shrinking whichever side would otherwise escape.
+      if (c.w / c.h > c.ratio) c.w = c.h * c.ratio;
+      else c.h = c.w / c.ratio;
+      if (c.w > c.dw) { c.w = c.dw; c.h = c.w / c.ratio; }
+      if (c.h > c.dh) { c.h = c.dh; c.w = c.h * c.ratio; }
+    }
+    c.x = Math.max(0, Math.min(c.x, c.dw - c.w));
+    c.y = Math.max(0, Math.min(c.y, c.dh - c.h));
+  }
+
+  function cropPaint() {
+    var c = cropState;
+    if (!c) return;
+    var els = cropElements();
+    var left = c.ox + c.x;
+    var top = c.oy + c.y;
+    els.box.style.left = left + 'px';
+    els.box.style.top = top + 'px';
+    els.box.style.width = c.w + 'px';
+    els.box.style.height = c.h + 'px';
+    els.shade.style.setProperty('--crop-x', left + 'px');
+    els.shade.style.setProperty('--crop-y', top + 'px');
+    els.shade.style.setProperty('--crop-w', c.w + 'px');
+    els.shade.style.setProperty('--crop-h', c.h + 'px');
+    var scale = c.natural.width / c.dw;
+    els.size.textContent =
+      Math.round(c.w * scale) + ' × ' + Math.round(c.h * scale) + ' pixels' +
+      (Math.round(c.w) >= Math.round(c.dw) && Math.round(c.h) >= Math.round(c.dh)
+        ? ' — the whole image'
+        : '');
+  }
+
+  function cropReset(ratio) {
+    var c = cropState;
+    if (!c) return;
+    c.ratio = ratio || 0;
+    c.x = 0;
+    c.y = 0;
+    c.w = c.dw;
+    c.h = c.dh;
+    cropClamp();
+    // A shape smaller than the picture is centred rather than hugging a corner.
+    c.x = (c.dw - c.w) / 2;
+    c.y = (c.dh - c.h) / 2;
+    cropPaint();
+  }
+
+  function cropStep(file) {
+    // A vector has no pixels to cut and re-encoding a GIF would drop its
+    // animation, so neither is offered a crop.
+    if (/svg|gif/.test(file.type)) return Promise.resolve({ dataUrl: null });
+
+    return readAsDataUrl(file)
+      .then(loadImage)
+      .then(function (img) {
+        var els = cropElements();
+        if (!els.modal) return { dataUrl: null };
+
+        return new Promise(function (resolve) {
+          els.title.textContent = 'Crop ' + file.name;
+          els.image.src = img.src;
+          els.modal.hidden = false;
+
+          // The rendered size is only known once it is on screen and laid out.
+          var rect = els.image.getBoundingClientRect();
+          var stage = els.stage.getBoundingClientRect();
+          cropState = {
+            img: img,
+            natural: { width: img.naturalWidth, height: img.naturalHeight },
+            dw: rect.width,
+            dh: rect.height,
+            ox: rect.left - stage.left,
+            oy: rect.top - stage.top,
+            ratio: 0,
+            resolve: resolve
+          };
+          els.modal.querySelectorAll('[data-crop-ratio]').forEach(function (btn) {
+            btn.setAttribute('aria-pressed', btn.getAttribute('data-crop-ratio') === '0' ? 'true' : 'false');
+          });
+          cropReset(0);
+        });
+      })
+      .catch(function () {
+        // An unreadable image is the upload's problem to report, not the crop's.
+        return { dataUrl: null };
+      });
+  }
+
+  function cropFinish(result) {
+    var c = cropState;
+    var els = cropElements();
+    if (els.modal) els.modal.hidden = true;
+    if (els.image) els.image.removeAttribute('src');
+    cropState = null;
+    if (c && c.resolve) c.resolve(result);
+  }
+
+  /** Cut the chosen rectangle at the image's own resolution. */
+  function cropApply() {
+    var c = cropState;
+    if (!c) return;
+    var scale = c.natural.width / c.dw;
+    var sx = Math.round(c.x * scale);
+    var sy = Math.round(c.y * scale);
+    var sw = Math.max(1, Math.round(c.w * scale));
+    var sh = Math.max(1, Math.round(c.h * scale));
+    var canvas = document.createElement('canvas');
+    canvas.width = sw;
+    canvas.height = sh;
+    var context = canvas.getContext('2d');
+    context.drawImage(c.img, sx, sy, sw, sh, 0, 0, sw, sh);
+    var probe = canvas.toDataURL('image/webp', 0.92);
+    var type = probe.indexOf('data:image/webp') === 0 ? 'image/webp' : 'image/jpeg';
+    cropFinish({ dataUrl: canvas.toDataURL(type, 0.92), cropped: true });
+  }
+
   function uploadFiles(files, onDone) {
     var queue = Array.prototype.slice.call(files).filter(function (f) {
       return /^image\//.test(f.type);
@@ -1767,13 +1984,16 @@
     var saved = 0;
     var chain = queue.reduce(function (promise, file) {
       return promise.then(function () {
-        return prepareImage(file).then(function (prepared) {
-          if (prepared.shrunk) saved += prepared.from - prepared.to;
-          return api('/admin/uploads', {
-            method: 'POST',
-            body: { name: file.name, dataUrl: prepared.dataUrl }
-          }).then(function (data) {
-            uploaded.push(data.file);
+        return cropStep(file).then(function (choice) {
+          if (choice && choice.skipped) return null;
+          return prepareImage(file, choice && choice.dataUrl).then(function (prepared) {
+            if (prepared.shrunk) saved += prepared.from - prepared.to;
+            return api('/admin/uploads', {
+              method: 'POST',
+              body: { name: file.name, dataUrl: prepared.dataUrl }
+            }).then(function (data) {
+              uploaded.push(data.file);
+            });
           });
         });
       });
@@ -1784,6 +2004,7 @@
         return loadMedia();
       })
       .then(function () {
+        if (!uploaded.length) return;
         toast(
           uploaded.length + ' image' + (uploaded.length === 1 ? '' : 's') + ' uploaded' +
             (saved > 0 ? ' · ' + formatSize(saved) + ' saved by resizing' : ''),
@@ -1969,9 +2190,14 @@
     if (action === 'ig-save-app') {
       var idBox = document.getElementById('ig-app-id');
       var secretBox = document.getElementById('ig-app-secret');
+      var dmBox = document.getElementById('ig-messaging');
       return api('/admin/instagram/app', {
         method: 'POST',
-        body: { appId: idBox ? idBox.value.trim() : '', appSecret: secretBox ? secretBox.value.trim() : '' }
+        body: {
+          appId: idBox ? idBox.value.trim() : '',
+          appSecret: secretBox ? secretBox.value.trim() : '',
+          messaging: dmBox ? dmBox.checked : undefined
+        }
       })
         .then(function () {
           toast('App details saved.');
@@ -1979,6 +2205,33 @@
         })
         .then(function () { render({ preserveFocus: false }); })
         .catch(function (err) { toast(err.message || 'Could not save the app details.', 'error'); });
+    }
+    if (action === 'ig-save-token') {
+      var tokenBox = document.getElementById('ig-token');
+      return api('/admin/instagram/token', {
+        method: 'POST',
+        body: { token: tokenBox ? tokenBox.value.trim() : '' }
+      })
+        .then(function (out) {
+          toast('Token saved' + (out && out.username ? ' — connected as @' + out.username : '') + '.');
+          if (tokenBox) tokenBox.value = '';
+          return loadInstagram();
+        })
+        .then(function () { render({ preserveFocus: false }); })
+        .catch(function (err) { toast(err.message || 'Could not save that token.', 'error'); });
+    }
+    if (action === 'ig-send-dm') {
+      var toBox = document.getElementById('ig-dm-to');
+      var textBox = document.getElementById('ig-dm-text');
+      return api('/admin/instagram/message', {
+        method: 'POST',
+        body: { recipientId: toBox ? toBox.value.trim() : '', text: textBox ? textBox.value : '' }
+      })
+        .then(function () {
+          toast('Message sent.');
+          if (textBox) textBox.value = '';
+        })
+        .catch(function (err) { toast(err.message || 'Could not send the message.', 'error'); });
     }
     if (action === 'ig-forget-app') {
       if (!confirm('Forget the Instagram app ID and secret?')) return;
@@ -2160,6 +2413,98 @@
     var item = event.target.closest('[data-sortable-item]');
     if (item) item.classList.remove('is-drop-target');
   });
+
+  /* Crop: dragging the frame, dragging a corner, and the three ways out. */
+  (function wireCrop() {
+    var modal = document.getElementById('crop-modal');
+    if (!modal) return;
+    var stage = document.getElementById('crop-stage');
+    var drag = null;
+
+    function pointIn(event) {
+      var rect = stage.getBoundingClientRect();
+      return { x: event.clientX - rect.left - cropState.ox, y: event.clientY - rect.top - cropState.oy };
+    }
+
+    stage.addEventListener('pointerdown', function (event) {
+      if (!cropState) return;
+      var handle = event.target.closest('[data-crop-handle]');
+      var onBox = event.target.closest('.crop-box');
+      if (!handle && !onBox) return;
+      event.preventDefault();
+      var at = pointIn(event);
+      drag = {
+        handle: handle ? handle.getAttribute('data-crop-handle') : null,
+        fromX: at.x,
+        fromY: at.y,
+        box: { x: cropState.x, y: cropState.y, w: cropState.w, h: cropState.h }
+      };
+      event.target.setPointerCapture(event.pointerId);
+    });
+
+    stage.addEventListener('pointermove', function (event) {
+      if (!drag || !cropState) return;
+      event.preventDefault();
+      var at = pointIn(event);
+      var dx = at.x - drag.fromX;
+      var dy = at.y - drag.fromY;
+      var b = drag.box;
+
+      if (!drag.handle) {
+        cropState.x = b.x + dx;
+        cropState.y = b.y + dy;
+        cropClamp();
+        cropPaint();
+        return;
+      }
+
+      // Each corner moves its own two edges; the opposite corner stays put.
+      var left = b.x;
+      var top = b.y;
+      var right = b.x + b.w;
+      var bottom = b.y + b.h;
+      if (drag.handle.indexOf('w') > -1) left = b.x + dx;
+      if (drag.handle.indexOf('e') > -1) right = b.x + b.w + dx;
+      if (drag.handle.indexOf('n') > -1) top = b.y + dy;
+      if (drag.handle.indexOf('s') > -1) bottom = b.y + b.h + dy;
+
+      cropState.x = Math.min(left, right);
+      cropState.y = Math.min(top, bottom);
+      cropState.w = Math.abs(right - left);
+      cropState.h = Math.abs(bottom - top);
+      cropClamp();
+      cropPaint();
+    });
+
+    function endDrag(event) {
+      if (!drag) return;
+      drag = null;
+      if (event.target.releasePointerCapture) {
+        try { event.target.releasePointerCapture(event.pointerId); } catch (_) {}
+      }
+    }
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', endDrag);
+
+    modal.addEventListener('click', function (event) {
+      var ratio = event.target.closest('[data-crop-ratio]');
+      if (ratio) {
+        modal.querySelectorAll('[data-crop-ratio]').forEach(function (btn) {
+          btn.setAttribute('aria-pressed', btn === ratio ? 'true' : 'false');
+        });
+        cropReset(Number(ratio.getAttribute('data-crop-ratio')) || 0);
+        return;
+      }
+      if (event.target.closest('[data-crop-apply]')) return cropApply();
+      // The whole image: uploaded as it came, with no re-encode from here.
+      if (event.target.closest('[data-crop-whole]')) return cropFinish({ dataUrl: null });
+      if (event.target.closest('[data-crop-cancel]')) return cropFinish({ skipped: true });
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && cropState) cropFinish({ skipped: true });
+    });
+  })();
 
   el.panel.addEventListener('drop', function (event) {
     var item = event.target.closest('[data-sortable-item]');

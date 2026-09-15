@@ -19,10 +19,12 @@ async function startFakeInstagram({ media = [], state = {} } = {}) {
     if (req.method === 'POST') {
       for await (const chunk of req) body += chunk;
     }
+    const bearer = /^Bearer (.+)$/.exec(String(req.headers.authorization || ''));
     calls.push({
       path: url.pathname,
       method: req.method,
-      token: url.searchParams.get('access_token'),
+      token: url.searchParams.get('access_token') || (bearer ? bearer[1] : null),
+      auth: req.headers.authorization || null,
       fields: url.searchParams.get('fields'),
       grant: url.searchParams.get('grant_type'),
       body
@@ -36,7 +38,9 @@ async function startFakeInstagram({ media = [], state = {} } = {}) {
     if (state.down) return json(500, { error: { message: 'Internal server error' } });
     if (state.hangMs) await new Promise((r) => setTimeout(r, state.hangMs));
 
-    if (!url.searchParams.get('access_token') && url.pathname !== '/oauth/access_token') {
+    // The Send API carries its token in the Authorization header; everything
+    // else puts it in the query string.
+    if (!url.searchParams.get('access_token') && !bearer && url.pathname !== '/oauth/access_token') {
       return json(400, { error: { message: 'Missing access token' } });
     }
     if (state.expired) {
@@ -45,7 +49,11 @@ async function startFakeInstagram({ media = [], state = {} } = {}) {
 
     // The token dance: code -> short-lived -> long-lived -> refreshed.
     if (url.pathname === '/oauth/access_token') {
-      return json(200, { data: [{ access_token: 'short-token', user_id: '1020', permissions: 'instagram_business_basic' }] });
+      // `state.permissions` stands in for what the account owner approved,
+      // which is whatever the authorize URL asked for — and an authorize URL
+      // built in Meta's dashboard asks for every permission the app has.
+      const permissions = state.permissions === undefined ? 'instagram_business_basic' : state.permissions;
+      return json(200, { data: [{ access_token: 'short-token', user_id: '1020', permissions }] });
     }
     if (url.pathname === '/access_token') {
       if (url.searchParams.get('grant_type') !== 'ig_exchange_token') {
@@ -59,6 +67,38 @@ async function startFakeInstagram({ media = [], state = {} } = {}) {
       }
       if (state.refuseRefresh) return json(400, { error: { message: 'Cannot refresh' } });
       return json(200, { access_token: 'refreshed-token', token_type: 'bearer', expires_in: 5183944 });
+    }
+
+    // POST /v25.0/<user>/messages — a direct message.
+    const send = /^\/v\d+\.\d+\/([^/]+)\/messages$/.exec(url.pathname);
+    if (send) {
+      if (req.method !== 'POST') return json(405, { error: { message: 'Must be POST' } });
+      if (!bearer) return json(400, { error: { message: 'An access token is required to request this resource.' } });
+      if (state.outsideWindow) {
+        return json(400, {
+          error: {
+            message:
+              'This message is sent outside of allowed window. Please read the policy: https://developers.facebook.com/docs/messenger-platform/policy/policy-overview'
+          }
+        });
+      }
+      let payload = {};
+      try {
+        payload = JSON.parse(body || '{}');
+      } catch (_) {
+        return json(400, { error: { message: 'Malformed JSON' } });
+      }
+      const to = payload && payload.recipient && payload.recipient.id;
+      if (!to) return json(400, { error: { message: 'Param recipient is required' } });
+      if (!(payload.message && payload.message.text)) {
+        return json(400, { error: { message: 'Param message is required' } });
+      }
+      return json(200, { recipient_id: String(to), message_id: 'mid.fake-1' });
+    }
+
+    // GET /me — what a pasted token is checked against.
+    if (url.pathname === '/me') {
+      return json(200, { id: '29103222949269958', username: 'taylordrew4u' });
     }
 
     const match = /^\/([^/]+)\/media$/.exec(url.pathname);

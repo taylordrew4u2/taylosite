@@ -91,6 +91,44 @@
   </div>
 </div>
 
+<!-- Crop, before an upload rather than after ------------------------------ -->
+<div class="modal" id="crop-modal" hidden>
+  <div class="modal-card crop-card">
+    <header class="modal-head">
+      <h2 id="crop-title">Crop this image</h2>
+      <button class="icon-btn" type="button" data-crop-cancel aria-label="Cancel">✕</button>
+    </header>
+    <div class="modal-body">
+      <p class="hint" id="crop-hint">Drag the frame to choose what stays in shot. The photo panels on the
+        site are square on a wide screen and 4:5 on a phone, so anything outside a square is what gets
+        lost — crop it here and nothing is decided for you.</p>
+      <div class="crop-ratios" role="group" aria-label="Crop shape">
+        <button class="btn btn-sm" type="button" data-crop-ratio="0" aria-pressed="true">Free</button>
+        <button class="btn btn-sm" type="button" data-crop-ratio="1">Square</button>
+        <button class="btn btn-sm" type="button" data-crop-ratio="0.8">4:5</button>
+        <button class="btn btn-sm" type="button" data-crop-ratio="0.5625">9:16</button>
+        <button class="btn btn-sm" type="button" data-crop-ratio="1.7778">16:9</button>
+      </div>
+      <div class="crop-stage" id="crop-stage">
+        <img id="crop-image" alt="">
+        <div class="crop-shade" id="crop-shade"></div>
+        <div class="crop-box" id="crop-box">
+          <span class="crop-handle" data-crop-handle="nw"></span>
+          <span class="crop-handle" data-crop-handle="ne"></span>
+          <span class="crop-handle" data-crop-handle="sw"></span>
+          <span class="crop-handle" data-crop-handle="se"></span>
+        </div>
+      </div>
+      <p class="hint" id="crop-size"></p>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn btn-ghost" type="button" data-crop-cancel>Skip this one</button>
+      <button class="btn btn-ghost" type="button" data-crop-whole>Use the whole image</button>
+      <button class="btn btn-accent" type="button" data-crop-apply>Crop</button>
+    </footer>
+  </div>
+</div>
+
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script src="/assets/js/admin.js" defer></script>

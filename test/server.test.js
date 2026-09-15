@@ -753,6 +753,66 @@ test('connecting Instagram needs a session and a CSRF token', async () => {
   });
 });
 
+test('a direct message goes out over the admin API, or says why not', async () => {
+  const api = await startFakeInstagram({ media: [] });
+  try {
+    await withServer(
+      {
+        INSTAGRAM_APP_ID: '99',
+        INSTAGRAM_APP_SECRET: 'sh',
+        INSTAGRAM_MESSAGING: '1',
+        INSTAGRAM_API_BASE: api.base,
+        INSTAGRAM_OAUTH_BASE: api.base
+      },
+      async (server) => {
+        await server.login();
+
+        // Nothing connected yet: the answer names the missing piece.
+        const early = await server.call('/api/admin/instagram/message', {
+          method: 'POST',
+          body: { recipientId: '17841400000000000', text: 'Hello World' }
+        });
+        assert.strictEqual(early.status, 400);
+        assert.match(early.json.error, /Connect the Instagram account first/);
+
+        assert.strictEqual(
+          (await server.call('/api/admin/instagram', { method: 'POST', body: { code: 'abc' } })).status,
+          200
+        );
+
+        const sent = await server.call('/api/admin/instagram/message', {
+          method: 'POST',
+          body: { recipientId: '17841400000000000', text: 'Hello World' }
+        });
+        assert.strictEqual(sent.status, 200);
+        assert.strictEqual(sent.json.recipientId, '17841400000000000');
+
+        const call = api.calls.find((c) => c.path.endsWith('/messages'));
+        assert.strictEqual(call.auth, 'Bearer long-token', 'the token, never the app ID');
+
+        // An @handle is not an Instagram-scoped ID and is refused here.
+        const bad = await server.call('/api/admin/instagram/message', {
+          method: 'POST',
+          body: { recipientId: '@taylordrew4u', text: 'Hello World' }
+        });
+        assert.strictEqual(bad.status, 400);
+        assert.match(bad.json.error, /Instagram-scoped ID/);
+
+        // And the whole route is behind the same session and CSRF gate.
+        server.forgetCsrf();
+        const forged = await server.call('/api/admin/instagram/message', {
+          method: 'POST',
+          body: { recipientId: '17841400000000000', text: 'Hello World' },
+          csrf: false
+        });
+        assert.strictEqual(forged.status, 403);
+      }
+    );
+  } finally {
+    await api.stop();
+  }
+});
+
 test('a pasted feed URL fills the wall with no Meta app at all', async () => {
   const http = require('node:http');
   const feed = http.createServer((req, res) => {

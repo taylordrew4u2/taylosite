@@ -62,6 +62,15 @@ Editing notes:
 - **Preview** opens a live pane of the real pages beside the form.
 - Media items show where they are in use, and deleting one that is in use says
   so before it goes.
+- **Uploading an image asks how to crop it.** The photo panels have a shape of
+  their own — square on a wide screen, 4:5 on a phone — so anything that is not
+  that shape loses its edges. That used to happen silently at display time,
+  with `object-fit` taking whichever edges it liked; now the frame is yours to
+  place before the file is sent, with the usual shapes as presets and the whole
+  image selected to begin with, so confirming without touching anything crops
+  nothing. **Use the whole image** skips the cut entirely and **Skip this one**
+  drops the file. A GIF is never offered a crop, because re-encoding one would
+  drop its animation, and neither is an SVG, which has no pixels to cut.
 - A headline of one or two words stacks one word per line like `TAYLOR / DREW`;
   longer headings wrap at a smaller size instead.
 - Links pointing at `http(s)` go through `/go/<id>` so clicks are counted; the
@@ -202,6 +211,8 @@ these two and a **Connect Instagram** button appears in **Admin → Reels**.
 | `INSTAGRAM_USER_ID` | optional, defaults to `me` |
 | `INSTAGRAM_LIMIT` | optional, defaults to 24 |
 | `INSTAGRAM_TOKEN` | optional seed: an existing long-lived token, adopted on first sight |
+| `INSTAGRAM_MESSAGING` | optional, off by default — opt in to sending direct messages |
+| `INSTAGRAM_GRAPH_VERSION` | optional, defaults to `v25.0` — the version in the Send API's path |
 
 Both come from **Meta App Dashboard → Instagram → API setup with Instagram
 login → Set up Instagram business login**. Add `https://<your-domain>/admin` to
@@ -210,6 +221,15 @@ send. The button opens Meta's authorization window asking for
 `instagram_business_basic`; approving it returns to `/admin?code=…`, and the
 panel redeems that code, exchanges it for a 60-day token and wipes it from the
 address bar. The account must be a **Business** or **Creator** account.
+
+**A token you already hold.** If a long-lived token was minted elsewhere —
+Meta's dashboard hands one out directly — paste it into **Admin → Reels →
+Paste a long-lived access token** instead of setting `INSTAGRAM_TOKEN` and
+redeploying. It is checked against the account before it is saved, so a typo
+or a dead token cannot replace a working connection, and from then on it is
+refreshed like any other rather than dying at 60 days. Its permissions are not
+stated by Meta on that check, so the panel does not second-guess what it can
+do: a send it was not granted is refused by Meta, in Meta's words.
 
 **Why the token is not simply an environment variable.** A long-lived token
 lasts 60 days, and Meta's rule is that one not refreshed inside that window can
@@ -228,6 +248,56 @@ form post. The admin panel is told the connection's *state*, never the token.
 Reels added by hand in the admin panel are **pinned above** the feed, and a
 pinned reel is matched against the feed by permalink so the same one never
 appears twice.
+
+### Sending a direct message
+
+The same connection can send a DM as the account. It is **off by default**:
+tick *Also let this site send direct messages as the account* under
+**Admin → Reels → App details** (or set `INSTAGRAM_MESSAGING=1`), save, then
+connect — or reconnect, if the account was already connected. The tickbox only
+decides what the authorization window asks for; the permission arrives with the
+new token, so a token issued before it was ticked cannot send, and the panel
+says so rather than failing at the send. Asking for that permission is opt-in
+precisely because an app that was never set up for messaging would have the
+whole authorization refused, taking the reel wall with it.
+
+Two things decide whether a connected account can actually send, and only the
+second one counts:
+
+- The tickbox sets what the **authorize URL asks for**. The connect link also
+  carries `force_reauth=true`, which is what forces the consent screen —
+  without it an account with a live Instagram session can be handed a fresh
+  token carrying the *old* grant, so reconnecting to widen the scope would
+  appear to work and still not be able to send.
+- What Meta says it **granted** is stored with the token and is the authority.
+  An authorize URL built in Meta's own dashboard asks for every permission the
+  app has, so a token minted that way can send whether or not the box here was
+  ever ticked — and the panel reads the granted list rather than telling you to
+  reconnect for a permission you already hold. A refresh renews the same grant
+  and says nothing about it, so the known list is carried across.
+
+Once connected, **Send a direct message** appears under the connection's
+status, and `POST /api/admin/instagram/message` takes
+`{ "recipientId": "…", "text": "…" }` behind the same session and CSRF gate as
+every other admin call.
+
+Three rules of Meta's are worth knowing before the first send, because all
+three are ways an otherwise-correct request comes back refused:
+
+- **The bearer is the access token, not the app ID.** They are both long
+  numbers from the same dashboard page, which is exactly why they get swapped;
+  an app ID is public and identifies nobody, and a request bearing one is
+  answered with an opaque OAuth error. The site sends the stored long-lived
+  token, the same one it keeps alive for the reel wall, so there is nothing to
+  paste and nothing to renew.
+- **The recipient is an Instagram-scoped ID** — the all-digit `sender.id` that
+  arrives on a messaging webhook. It is not an @handle, not the number on the
+  profile, and there is no lookup from one to the other: you know someone's
+  IGSID because they messaged you. A value that is not all digits is refused
+  here before the request is made.
+- **A reply is only allowed within 24 hours** of that person's last message.
+  Outside the window Meta refuses, and their refusal is passed through word for
+  word, because their wording is what says which rule was hit.
 
 The MP4 URLs their API returns are signed and expire within hours, so nothing
 is written into the site document: the wall is rendered from a 20-minute cache
