@@ -1804,6 +1804,38 @@ test('public copy can be rewritten for SEO without changing it before Save', asy
   }
 });
 
+test('a media-library photo can generate reviewable SEO alt text', async () => {
+  const alt = 'Taylor Drew smiles with folded arms against a dark studio backdrop.';
+  const ai = await startFakeAnthropic({ answer: { text: alt } });
+  try {
+    await withServer({ ANTHROPIC_API_KEY: 'sk-ant-env-key-0123456789abcdef', ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      await server.login();
+      const uploaded = await server.call('/api/admin/uploads', {
+        method: 'POST', body: { name: 'taylor-headshot.png', dataUrl: `data:image/png;base64,${PNG.toString('base64')}` }
+      });
+      assert.strictEqual(uploaded.status, 201);
+
+      const result = await server.call('/api/admin/seo-photo', {
+        method: 'POST', body: { imageUrl: uploaded.json.file.url, target: 'home.photoAlt' }
+      });
+      assert.strictEqual(result.status, 200, result.text);
+      assert.strictEqual(result.json.text, alt);
+      const blocks = ai.calls[0].body.messages[0].content;
+      assert.strictEqual(blocks[0].type, 'image');
+      assert.strictEqual(blocks[0].source.media_type, 'image/png');
+      assert.match(blocks[1].text, /accurate alt text/);
+      assert.match(blocks[1].text, /Do not identify another person/);
+
+      const outside = await server.call('/api/admin/seo-photo', {
+        method: 'POST', body: { imageUrl: 'https://example.com/photo.jpg', target: 'home.photoAlt' }
+      });
+      assert.strictEqual(outside.status, 400, 'arbitrary remote URLs are never fetched by the server');
+    });
+  } finally {
+    await ai.stop();
+  }
+});
+
 test('a flyer the model cannot fully read says what is missing; a failed read keeps nothing', async () => {
   const ai = await startFakeAnthropic({
     answer: { ...FLYER_ANSWER, date: 'Friday', url: 'javascript:alert(1)', missing: ['url'], confidence: 'low' }

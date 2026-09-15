@@ -590,6 +590,25 @@ async function handleApi(req, res, url) {
     }
   }
 
+  if (adminRoute === '/seo-photo' && req.method === 'POST') {
+    const body = await readJson(req);
+    const match = /^\/uploads\/([^/?#]+)$/.exec(String(body.imageUrl || ''));
+    if (!match) return sendJson(res, 400, { error: 'Choose a photo from the media library first.' });
+    const image = await store.readUpload(decodeURIComponent(match[1]));
+    if (!image) return sendJson(res, 404, { error: 'That photo is no longer in the media library.' });
+    let buffer = image.buffer || null;
+    if (!buffer && image.file) buffer = await fs.promises.readFile(image.file);
+    if (!buffer) return sendJson(res, 400, { error: 'That hosted photo cannot be analyzed here. Upload it to the media library first.' });
+    const contentType = image.contentType || MIME[path.extname(match[1]).toLowerCase()] || 'application/octet-stream';
+    try {
+      const site = await store.readSite();
+      const text = await seoCopy.describePhoto({ buffer, contentType, target: body.target, site, env: process.env });
+      return sendJson(res, 200, { ok: true, text });
+    } catch (err) {
+      return sendJson(res, err.status || 502, { error: err.message });
+    }
+  }
+
   if (adminRoute === '/uploads' && req.method === 'GET') {
     return sendJson(res, 200, { files: await store.listUploads() });
   }
