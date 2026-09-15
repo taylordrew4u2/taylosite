@@ -315,12 +315,14 @@
     }
   }
 
-  // Three screens in turn: the self-test, the logo, the welcome. The memory
+  // Three screens in turn: the self-test, the logo, the welcome (first with
+  // your name while it loads your settings, then just the word). The memory
   // count on the first is the one part CSS cannot do, so it is counted here.
   var stages = [
-    ['post', 1500],
-    ['os', 2000],
-    ['welcome', 1200]
+    ['post', 1400],
+    ['os', 2300],
+    ['user', 800],
+    ['welcome', 1000]
   ];
   var timers = [];
   var elapsed = 0;
