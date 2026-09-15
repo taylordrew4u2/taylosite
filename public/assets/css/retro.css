@@ -38,7 +38,6 @@ html[data-theme] {
     #3d84dd 100%
   );
   --xp-gloss: linear-gradient(180deg, #ffffff, #dde8f6 48%, #bed3ee);
-  --xp-wall: linear-gradient(180deg, #2e7bd6 0%, #5aa3e8 38%, #8fc36f 60%, #4e9a44 100%);
 
   --xp-mono: 'Courier New', monospace;
 }
@@ -93,11 +92,35 @@ body {
   overflow: hidden;
 }
 
+/*
+ * The wallpaper: sky, cloud and a green hill, drawn in gradients rather than
+ * photographed. Five layers, back to front — the sky, the hill as an ellipse
+ * rising past the bottom of the screen so its top edge curves, and three soft
+ * clouds. No image file, so it stays sharp at any size and costs one paint.
+ */
 .wall {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: var(--xp-wall);
+  background-color: #3585d8;
+  background-image:
+    radial-gradient(ellipse 30% 11% at 19% 21%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(ellipse 19% 8% at 28% 28%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 13% 6% at 11% 27%, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 22% 9% at 70% 12%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(ellipse 15% 6% at 79% 18%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 17% 7% at 92% 33%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(ellipse 12% 5% at 48% 9%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(
+      ellipse 132% 62% at 50% 122%,
+      #2e6b26 0%,
+      #43882f 44%,
+      #5aa53c 66%,
+      #7ec550 79%,
+      #8fd35d 81%,
+      rgba(0, 0, 0, 0) 82%
+    ),
+    linear-gradient(180deg, #1552b4 0%, #2a76cd 22%, #57a3e2 48%, #93c9ef 66%, #c2e0f7 74%, #d7ecfb 100%);
 }
 
 .icons {
@@ -133,16 +156,15 @@ body {
 }
 
 /*
- * 32 pixels square and nothing else: no tile behind it, no gradient, no
- * rounded corner, no shadow. `crispEdges` turns off antialiasing so the
- * outlines stay one hard pixel wide, which is the whole difference between
- * a drawing of the era and a modern app icon.
+ * 32 pixels square, with the soft shadow this machine set its icons down with.
+ * No `crispEdges` here: these are shaded drawings, and the edges are meant to
+ * smooth. What they never had is a tile behind them.
  */
 .icon-art {
   display: block;
   width: 32px;
   height: 32px;
-  shape-rendering: crispEdges;
+  filter: drop-shadow(1px 2px 1px rgba(0, 24, 56, 0.45));
 }
 
 .icon-label {
@@ -151,8 +173,7 @@ body {
   line-height: 1.25;
   color: #fff;
   text-align: center;
-  /* A hard one-pixel shadow, not a blur — the machine had no blur. */
-  text-shadow: 1px 1px 0 #000;
+  text-shadow: 0 1px 2px rgba(0, 20, 48, 0.85);
   overflow-wrap: anywhere;
 }
 
