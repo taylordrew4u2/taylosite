@@ -955,78 +955,423 @@ body {
   cursor: pointer;
 }
 
-/* ----------------------------------------------------------- the splash */
+/* ------------------------------------------------------------- the boot */
 
+/*
+ * Switching the machine on. Three screens in turn, told apart by the
+ * `data-stage` desktop.js steps through: the self-test in white Courier on
+ * black, the logo screen with the blue blocks marching under the name, and the
+ * blue welcome screen. The whole thing is watched on a CRT, so it flickers on
+ * from a line, and has faint scanlines and a dark vignette the desktop under
+ * it does not.
+ */
 .boot {
   position: absolute;
   inset: 0;
   z-index: 9000;
+  overflow: hidden;
+  background: #000;
+  color: #c8c8c8;
+  animation: crt-on 0.55s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes crt-on {
+  0% {
+    transform: scale(1, 0.004);
+    filter: brightness(6);
+  }
+  35% {
+    transform: scale(1, 0.004);
+    filter: brightness(6);
+  }
+  60% {
+    transform: scale(1.02, 0.6);
+    filter: brightness(2.5);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+
+/* The glass: scanlines, a curve of shadow at the corners, a little flicker. */
+.boot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0) 0 2px, rgba(0, 0, 0, 0.16) 2px 3px),
+    radial-gradient(ellipse 85% 80% at 50% 50%, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+.boot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 21;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.025);
+  animation: crt-flicker 0.12s steps(2) infinite;
+}
+
+@keyframes crt-flicker {
+  to {
+    opacity: 0.4;
+  }
+}
+
+.boot-post,
+.boot-os,
+.boot-welcome {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+
+.boot[data-stage='post'] .boot-post,
+.boot[data-stage='os'] .boot-os,
+.boot[data-stage='welcome'] .boot-welcome {
   display: flex;
+}
+
+/* --- 1. the self-test ------------------------------------------------- */
+
+.boot-post {
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 22px 14px;
+  font: 14px/1.35 var(--xp-mono);
+  color: #c8c8c8;
+  text-shadow: 0 0 2px rgba(200, 200, 200, 0.45);
+}
+
+.boot-post-text {
+  margin: 0;
+  font: inherit;
+  white-space: pre;
+  overflow: hidden;
+}
+
+/* Each line arrives a beat after the last, the way the screen filled in. */
+.boot-line {
+  display: block;
+  opacity: 0;
+  animation: boot-line 1ms linear forwards;
+  animation-delay: calc(var(--i) * 75ms + 120ms);
+}
+
+@keyframes boot-line {
+  to {
+    opacity: 1;
+  }
+}
+
+.boot-post-foot {
+  margin: 0;
+  padding-right: 260px;
+  font: inherit;
+}
+
+.boot-post-foot span {
+  margin-left: 3ch;
+  color: #7a7a7a;
+}
+
+/* --- 2. the logo screen ------------------------------------------------ */
+
+.boot-os {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 22px;
-  background: radial-gradient(120% 90% at 50% 40%, #1b4f9c, #061a3c 70%);
+  gap: 54px;
+  background: #000;
+}
+
+.boot-os-mark {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  column-gap: 16px;
+  align-items: center;
+}
+
+/* The four-pane flag in the wind, drawn with four skewed panes. */
+.boot-flag {
+  grid-row: 1 / 3;
+  display: grid;
+  grid-template-columns: 22px 22px;
+  gap: 3px;
+  transform: skewY(-8deg);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+}
+
+.boot-flag i {
+  display: block;
+  height: 22px;
+  border-radius: 3px 5px 3px 5px;
+}
+
+.boot-flag i:nth-child(1) {
+  background: linear-gradient(135deg, #ff7f5f, #e4321f);
+}
+
+.boot-flag i:nth-child(2) {
+  background: linear-gradient(135deg, #a4ef62, #3fa722);
+}
+
+.boot-flag i:nth-child(3) {
+  background: linear-gradient(135deg, #6fb6ff, #1b58d4);
+}
+
+.boot-flag i:nth-child(4) {
+  background: linear-gradient(135deg, #ffe37a, #f2a800);
 }
 
 .boot-name {
   margin: 0;
-  font: 700 38px Tahoma, Verdana, sans-serif;
+  font: 700 34px/1 Tahoma, Verdana, sans-serif;
   letter-spacing: -0.02em;
   color: #fff;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-  text-align: center;
 }
 
 .boot-sub {
-  margin: -15px 0 0;
+  margin: 4px 0 0;
   font: 11px var(--xp-mono);
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: #9fc2ef;
+  color: #9a9a9a;
 }
 
+/* The track with the three blue blocks that went across it, over and over. */
 .boot-bar {
-  width: 230px;
+  position: relative;
+  width: 154px;
   height: 14px;
-  padding: 2px;
-  border: 1px solid #6a97d8;
-  border-radius: 3px;
-  background: #0a2450;
+  border: 1px solid #7d7d7d;
+  border-radius: 4px;
+  background: #000;
+  overflow: hidden;
 }
 
 .boot-bar span {
+  position: absolute;
+  top: 2px;
+  left: -46px;
+  width: 42px;
+  height: 8px;
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, #3a7be8 0 12px, #000 12px 15px, #3a7be8 15px 27px, #000 27px 30px, #3a7be8 30px);
+  box-shadow: 0 0 6px rgba(58, 123, 232, 0.6);
+  animation: boot-bar 1.15s linear infinite;
+}
+
+@keyframes boot-bar {
+  to {
+    left: 156px;
+  }
+}
+
+.boot-os-foot {
+  position: absolute;
+  left: 18px;
+  right: 260px;
+  bottom: 16px;
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  font: 11px Tahoma, Verdana, sans-serif;
+  color: #8a8a8a;
+}
+
+/* --- 3. welcome ---------------------------------------------------------- */
+
+.boot-welcome {
+  flex-direction: row;
+  align-items: center;
+  background: linear-gradient(180deg, #5a7edc 0%, #4f72d3 50%, #3b5ec2 100%);
+  color: #fff;
+}
+
+/* The dark bands top and bottom, the orange rule under the top one. */
+.boot-welcome::before,
+.boot-welcome::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 14%;
+  background: linear-gradient(180deg, #00309c, #0a3fb0);
+}
+
+.boot-welcome::before {
+  top: 0;
+  border-bottom: 3px solid #e8a02a;
+  box-shadow: 0 3px 0 #c76d0c;
+}
+
+.boot-welcome::after {
+  bottom: 0;
+  border-top: 3px solid #e8a02a;
+}
+
+.boot-welcome-left,
+.boot-welcome-right {
+  flex: 1 1 50%;
+  min-width: 0;
+  padding: 0 6%;
+}
+
+.boot-welcome-left {
+  border-right: 1px solid rgba(255, 255, 255, 0.5);
+  text-align: right;
+}
+
+.boot-welcome-brand {
+  margin: 0;
+  font: 700 30px/1.1 Tahoma, Verdana, sans-serif;
+  text-shadow: 1px 2px 3px rgba(0, 20, 80, 0.6);
+}
+
+.boot-welcome-hint {
+  margin: 14px 0 0;
+  font: 13px Tahoma, Verdana, sans-serif;
+  color: #dbe6ff;
+}
+
+.boot-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: 100%;
+  margin-bottom: 26px;
+  padding: 6px 14px 6px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* The picture on the account: a little scene in a white frame. */
+.boot-avatar {
   display: block;
-  width: 4%;
+  width: 46px;
+  height: 46px;
+  padding: 2px;
+  border: 1px solid #fff;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 2px 3px rgba(0, 20, 80, 0.5);
+}
+
+.boot-avatar i {
+  display: block;
+  width: 100%;
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, #6ef3a5, #2fb4e0);
-  animation: bootbar 2.1s linear forwards;
+  background:
+    radial-gradient(circle at 50% 38%, #f6d7b8 0 9px, rgba(0, 0, 0, 0) 10px),
+    radial-gradient(ellipse 60% 40% at 50% 100%, #c8322a 0 60%, rgba(0, 0, 0, 0) 62%),
+    linear-gradient(180deg, #8fc3f5, #3f8fdc);
 }
 
-@keyframes bootbar {
-  from {
-    width: 4%;
-  }
-  to {
-    width: 100%;
-  }
+.boot-user-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: 12px Tahoma, Verdana, sans-serif;
 }
+
+.boot-user-text b {
+  font-size: 15px;
+}
+
+.boot-user-text small {
+  font-size: 11px;
+  color: #e6eeff;
+}
+
+/* Franklin Gothic shipped with the machine; Tahoma stands in where it did not. */
+.boot-welcome-word {
+  margin: 0;
+  font: italic 500 42px/1 'Franklin Gothic Medium', 'Trebuchet MS', Tahoma, Verdana, sans-serif;
+  letter-spacing: 0.02em;
+  text-shadow: 1px 2px 3px rgba(0, 20, 80, 0.6);
+}
+
+/* --- skip ----------------------------------------------------------------- */
 
 .boot-skip {
-  padding: 6px 16px;
-  border: 1px solid #6a97d8;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.12);
-  font: 11px Tahoma, Verdana, sans-serif;
-  color: #cfe2fb;
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  z-index: 30;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.35);
+  font: 11px var(--xp-mono);
+  color: #d8d8d8;
   cursor: pointer;
+}
+
+.boot-skip::before {
+  content: 'Press any key to skip \00b7 ';
+  color: #8a8a8a;
 }
 
 /* Someone who asked for less motion gets the desktop, not the show. */
 @media (prefers-reduced-motion: reduce) {
   .boot {
     display: none;
+  }
+}
+
+/* The welcome screen stacks on a phone; the self-test wraps. */
+@media (max-width: 719px) {
+  .boot {
+    position: fixed;
+  }
+
+  .boot-post {
+    font-size: 11px;
+  }
+
+  .boot-post-foot {
+    padding-right: 70px;
+  }
+
+  .boot-post-foot span {
+    display: none;
+  }
+
+  .boot-welcome {
+    flex-direction: column;
+    justify-content: center;
+    gap: 22px;
+  }
+
+  .boot-welcome-left {
+    flex: 0 0 auto;
+    border-right: 0;
+    text-align: center;
+  }
+
+  .boot-welcome-right {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .boot-user {
+    margin-bottom: 16px;
+  }
+
+  .boot-skip::before {
+    content: '';
   }
 }
 
