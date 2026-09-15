@@ -291,6 +291,225 @@ body {
   flex: 0 0 auto;
 }
 
+/* ---------------------------------------------------------- the assistant */
+
+/*
+ * A home-computer helper rather than a modern chat widget. The character is
+ * an original beige CRT assembled from CSS, so it stays crisp, tiny and ours.
+ * Its choices are real links; the visible summaries inside them are useful to
+ * people and crawlers even when the desktop JavaScript never runs.
+ */
+.assistant-win {
+  left: auto;
+  right: 22px;
+  top: 72px;
+  z-index: 9;
+  width: 382px;
+  max-height: calc(100% - 142px);
+}
+
+.assistant-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  overflow: auto;
+  background: linear-gradient(180deg, #fffef4, #e9e4c8);
+}
+
+.assistant-character {
+  position: relative;
+  flex: 0 0 auto;
+  width: 76px;
+  height: 79px;
+  margin-top: 7px;
+  border: 3px solid #786f59;
+  border-radius: 10px 10px 7px 7px;
+  background: linear-gradient(135deg, #f3e7bb, #b9a978);
+  box-shadow: inset 2px 2px #fff7d7, 3px 3px 0 rgba(64, 54, 34, 0.28);
+  animation: assistant-arrives 0.42s steps(3, end) 1;
+}
+
+.assistant-screen {
+  position: absolute;
+  left: 10px;
+  top: 9px;
+  width: 50px;
+  height: 36px;
+  border: 3px solid #5f5a4b;
+  border-radius: 7px;
+  background: #9fd4ce;
+  box-shadow: inset 0 0 8px rgba(18, 70, 73, 0.55);
+}
+
+.assistant-eye {
+  position: absolute;
+  top: 9px;
+  width: 7px;
+  height: 9px;
+  border-radius: 50%;
+  background: #172938;
+}
+
+.assistant-eye-left { left: 10px; }
+.assistant-eye-right { right: 10px; }
+
+.assistant-mouth {
+  position: absolute;
+  left: 15px;
+  bottom: 6px;
+  width: 14px;
+  height: 6px;
+  border-bottom: 2px solid #172938;
+  border-radius: 50%;
+}
+
+.assistant-antenna {
+  position: absolute;
+  left: 34px;
+  top: -17px;
+  width: 3px;
+  height: 16px;
+  background: #776f5a;
+  transform: rotate(-12deg);
+  transform-origin: bottom;
+}
+
+.assistant-antenna::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: -5px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #8f1c12;
+  border-radius: 50%;
+  background: #ef4123;
+}
+
+.assistant-speaker {
+  position: absolute;
+  left: 15px;
+  bottom: 9px;
+  display: flex;
+  gap: 3px;
+}
+
+.assistant-speaker i {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #786f59;
+}
+
+.assistant-foot {
+  position: absolute;
+  left: 18px;
+  bottom: -9px;
+  width: 35px;
+  height: 8px;
+  border-radius: 0 0 5px 5px;
+  background: #8e846b;
+}
+
+.assistant-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.assistant-hello,
+.assistant-prompt {
+  margin: 0;
+}
+
+.assistant-hello {
+  font-weight: 700;
+  color: var(--xp-deep);
+}
+
+.assistant-prompt {
+  margin-top: 3px;
+  line-height: 1.45;
+}
+
+.assistant-actions {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.assistant-action {
+  display: block;
+  padding: 7px 9px;
+  border: 1px solid #6f8fb8;
+  border-radius: 4px;
+  background: var(--xp-gloss);
+  box-shadow: inset 0 1px 0 #fff;
+  color: var(--xp-blue);
+}
+
+.assistant-action span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assistant-action small {
+  display: block;
+  max-height: 0;
+  overflow: hidden;
+  font: 10px/1.45 var(--xp-mono);
+  color: #526781;
+  opacity: 0;
+  transition: max-height 0.18s ease, margin-top 0.18s ease, opacity 0.18s ease;
+}
+
+.assistant-action:focus small,
+.assistant-action:active small {
+  max-height: 8em;
+  margin-top: 4px;
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .assistant-action:hover {
+    background: linear-gradient(180deg, #ffffff, #d5e5fb 50%, #b8d2f1);
+  }
+
+  .assistant-action:hover small {
+    max-height: 8em;
+    margin-top: 4px;
+    opacity: 1;
+  }
+}
+
+.assistant-status {
+  padding: 6px 10px;
+  border-top: 1px solid #c3d0e2;
+  background: linear-gradient(180deg, #f3f6fb, #e3eaf4);
+  font: 10px var(--xp-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--xp-mute);
+}
+
+.assistant-status span {
+  color: #3a8f2f;
+}
+
+@keyframes assistant-arrives {
+  0% { transform: translateY(7px) rotate(-2deg); }
+  60% { transform: translateY(-3px) rotate(1deg); }
+  100% { transform: translateY(0) rotate(0); }
+}
+
+@media (min-width: 1180px) {
+  .page-home .win[data-win='main'] {
+    width: min(850px, calc(100% - 540px));
+  }
+}
+
 /* Two windows on a narrow screen is one window too many: the viewer becomes
    the block of the page it came out of, under the document it belongs to. */
 @media (max-width: 719px) {
@@ -1524,6 +1743,10 @@ body {
   .boot {
     display: none;
   }
+
+  .assistant-character {
+    animation: none;
+  }
 }
 
 /* On a phone: the self-test wraps its long lines with a hanging indent so no
@@ -1756,6 +1979,13 @@ body {
     left: 5%;
     top: 16%;
     width: 90%;
+  }
+
+  .assistant-win {
+    right: auto;
+    width: 100%;
+    max-height: none;
+    margin-top: 10px;
   }
 }
 
