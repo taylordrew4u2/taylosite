@@ -1766,6 +1766,44 @@ test('the API key can be pasted into the panel, and never leaves the server', as
   }
 });
 
+test('public copy can be rewritten for SEO without changing it before Save', async () => {
+  const ai = await startFakeAnthropic({
+    answer: { text: 'Taylor Drew is a New York City stand-up comedian known for sharp crowd work.' }
+  });
+  try {
+    await withServer({ ANTHROPIC_API_KEY: 'sk-ant-env-key-0123456789abcdef', ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      const locked = await server.call('/api/admin/seo-copy', {
+        method: 'POST',
+        body: { text: 'Taylor does comedy.', path: 'about.body.0', label: 'Text' }
+      });
+      assert.strictEqual(locked.status, 401, 'the generator is an authenticated admin tool');
+
+      await server.login();
+      const before = (await server.call('/api/admin/site')).json.site.about.body[0];
+      const rewritten = await server.call('/api/admin/seo-copy', {
+        method: 'POST',
+        body: { text: before, path: 'about.body.0', label: 'Text' }
+      });
+      assert.strictEqual(rewritten.status, 200, rewritten.text);
+      assert.strictEqual(rewritten.json.text, 'Taylor Drew is a New York City stand-up comedian known for sharp crowd work.');
+      assert.strictEqual((await server.call('/api/admin/site')).json.site.about.body[0], before, 'generating is a preview until Save');
+
+      const prompt = ai.calls[0].body.messages[0].content;
+      assert.match(prompt, /Never invent an award, credit, date, venue/);
+      assert.match(prompt, /Do not keyword-stuff/);
+      assert.match(prompt, /Field path: about\.body\.0/);
+      assert.match(prompt, /Taylor Drew/);
+
+      const empty = await server.call('/api/admin/seo-copy', {
+        method: 'POST', body: { text: '', path: 'about.body.0', label: 'Text' }
+      });
+      assert.strictEqual(empty.status, 400);
+    });
+  } finally {
+    await ai.stop();
+  }
+});
+
 test('a flyer the model cannot fully read says what is missing; a failed read keeps nothing', async () => {
   const ai = await startFakeAnthropic({
     answer: { ...FLYER_ANSWER, date: 'Friday', url: 'javascript:alert(1)', missing: ['url'], confidence: 'low' }
