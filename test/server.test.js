@@ -119,6 +119,22 @@ test('public pages render', async () => {
   });
 });
 
+test('the homepage includes the progressive-enhancement desktop assistant', async () => {
+  await withServer({}, async (server) => {
+    const home = await server.call('/');
+    assert.strictEqual(home.status, 200);
+    assert.match(home.text, /T\.A\.Y\.L\.O\.R\. Assistant/);
+    assert.match(home.text, /I know too much/);
+    assert.match(home.text, /href="\/about"[^>]*><span>Who is Taylor\?/);
+    assert.match(home.text, /href="\/reels"[^>]*><span>Watch clips/);
+    assert.match(home.text, /href="\/contact"[^>]*><span>Book Taylor/);
+    assert.match(home.text, /data-task-for="assistant"/);
+
+    const about = await server.call('/about');
+    assert.doesNotMatch(about.text, /id="assistant-win"/, 'the helper only occupies the home desktop');
+  });
+});
+
 test('pages carry the meta a phone needs', async () => {
   await withServer({}, async (server) => {
     for (const page of ['/', '/about', '/links']) {
