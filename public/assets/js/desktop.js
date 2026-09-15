@@ -93,7 +93,7 @@
   Array.prototype.forEach.call(windows, function (win) {
     raise(win);
 
-    win.addEventListener('mousedown', function () {
+    win.addEventListener(window.PointerEvent ? 'pointerdown' : 'mousedown', function () {
       raise(win);
     });
 
@@ -149,39 +149,91 @@
   var windows = document.querySelectorAll('.win[data-win]');
   if (!windows.length) return;
 
-  // Dragging is a desktop affordance. On a phone the window is the page, and
-  // on a touch screen a drag is how you scroll.
-  var fine = window.matchMedia && window.matchMedia('(min-width: 720px) and (pointer: fine)');
+  // A window is picked up by its title bar, with a mouse or a finger alike:
+  // pointer events cover both, and `touch-action: none` on the bar (in the
+  // stylesheet) is what stops a phone reading the drag as a scroll. Browsers
+  // without pointer events get the mouse names and lose nothing else.
+  var pointer = Boolean(window.PointerEvent);
+  var DOWN = pointer ? 'pointerdown' : 'mousedown';
+  var MOVE = pointer ? 'pointermove' : 'mousemove';
+  var UP = pointer ? 'pointerup' : 'mouseup';
   var drag = null;
+
+  function deskOf(win) {
+    return win.offsetParent || document.documentElement;
+  }
+
+  // Keep enough of the title bar on the desk to pick the window up again:
+  // a window dragged off the edge, or stranded by a phone turning sideways,
+  // would otherwise be gone for good.
+  function place(win, left, top) {
+    var desk = deskOf(win);
+    var bar = win.querySelector('.topbar');
+    var barHeight = bar ? bar.offsetHeight : 28;
+    var maxLeft = desk.clientWidth - Math.min(win.offsetWidth, 90);
+    var maxTop = desk.clientHeight - barHeight - 48;
+    win.style.left = Math.min(Math.max(0, left), Math.max(0, maxLeft)) + 'px';
+    win.style.top = Math.min(Math.max(0, top), Math.max(0, maxTop)) + 'px';
+  }
 
   Array.prototype.forEach.call(windows, function (win) {
     var bar = win.querySelector('.topbar');
     if (!bar) return;
-    bar.addEventListener('mousedown', function (event) {
-      if (!fine || !fine.matches) return;
+    bar.addEventListener(DOWN, function (event) {
       if (win.classList.contains('is-max')) return;
+      // Only the main button; a right-click or a second finger is not a drag.
+      if (event.button !== undefined && event.button !== 0) return;
+      if (pointer && !event.isPrimary) return;
       // The buttons and the title link have their own jobs.
       if (event.target.closest('button, a')) return;
       var box = win.getBoundingClientRect();
-      drag = { win: win, dx: event.clientX - box.left, dy: event.clientY - box.top };
+      var deskBox = deskOf(win).getBoundingClientRect();
+      drag = {
+        win: win,
+        dx: event.clientX - box.left,
+        dy: event.clientY - box.top,
+        ox: deskBox.left,
+        oy: deskBox.top,
+        id: event.pointerId
+      };
       // A window pinned by its right edge has to be re-pinned by its left one
       // before it can be moved, or it fights the drag.
       win.style.right = 'auto';
       win.style.bottom = 'auto';
-      win.style.left = box.left + 'px';
-      win.style.top = box.top + 'px';
+      win.style.left = box.left - deskBox.left + 'px';
+      win.style.top = box.top - deskBox.top + 'px';
+      // The finger can wander off the bar mid-drag; capture keeps it ours.
+      if (pointer && bar.setPointerCapture) {
+        try {
+          bar.setPointerCapture(event.pointerId);
+        } catch (_) {}
+      }
       event.preventDefault();
     });
   });
 
-  window.addEventListener('mousemove', function (event) {
+  window.addEventListener(MOVE, function (event) {
     if (!drag) return;
-    drag.win.style.left = Math.max(0, event.clientX - drag.dx) + 'px';
-    drag.win.style.top = Math.max(0, event.clientY - drag.dy) + 'px';
+    if (pointer && event.pointerId !== drag.id) return;
+    place(drag.win, event.clientX - drag.ox - drag.dx, event.clientY - drag.oy - drag.dy);
   });
 
-  window.addEventListener('mouseup', function () {
+  function drop(event) {
+    if (!drag) return;
+    if (pointer && event.pointerId !== undefined && event.pointerId !== drag.id) return;
     drag = null;
+  }
+  window.addEventListener(UP, drop);
+  if (pointer) window.addEventListener('pointercancel', drop);
+
+  // A phone turned sideways, or a window made smaller: whatever was dragged
+  // somewhere is brought back within reach.
+  window.addEventListener('resize', function () {
+    Array.prototype.forEach.call(windows, function (win) {
+      if (win.style.left && !win.classList.contains('is-max')) {
+        place(win, parseFloat(win.style.left) || 0, parseFloat(win.style.top) || 0);
+      }
+    });
   });
 })();
 

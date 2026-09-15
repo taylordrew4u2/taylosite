@@ -186,12 +186,12 @@ body {
   user-select: none;
 }
 
-/* A title bar you can pick the window up by — pointer only, and never when
-   the window fills the screen or the desktop has collapsed to one column. */
-@media (min-width: 720px) and (pointer: fine) {
-  .win:not(.is-max) .topbar {
-    cursor: move;
-  }
+/* A title bar you can pick the window up by — mouse or finger — except when
+   the window fills the screen. `touch-action: none` is what lets a finger
+   drag the window rather than scroll the page. */
+.win:not(.is-max) .topbar {
+  cursor: move;
+  touch-action: none;
 }
 
 .logo {
@@ -510,15 +510,16 @@ body {
   }
 }
 
-/* Two windows on a narrow screen is one window too many: the viewer becomes
-   the block of the page it came out of, under the document it belongs to. */
+/* On a phone the viewer floats over the document like it does on a desk —
+   smaller, lower, and draggable out of the way by its title bar. */
 @media (max-width: 719px) {
   .photo-win {
+    left: 14px;
+    top: 156px;
     right: auto;
     bottom: auto;
-    width: 100%;
-    max-height: none;
-    margin-top: 10px;
+    width: calc(100% - 28px);
+    max-height: calc(100% - 156px - 70px);
   }
 
   .photo-win-body {
@@ -1919,45 +1920,57 @@ body {
 /* ------------------------------------------------------------ narrow */
 
 /*
- * Under 720px there is no room for a desktop: the wallpaper stays, the
- * shortcuts go, and the window becomes the page — full width, scrolling with
- * the document rather than inside itself, with the taskbar pinned to the
- * bottom of the screen the way it is on the real thing.
+ * Under 720px the desktop stays a desktop: the wallpaper, the shortcuts, the
+ * window on top of it and the taskbar pinned to the bottom — only laid out for
+ * a hand. The shortcuts become a row along the top instead of a column down
+ * the side, the window opens below them at nearly the full width, and it
+ * scrolls inside itself, so it can be picked up by its title bar and dragged
+ * about with a finger exactly as it can with a mouse.
  */
 @media (max-width: 719px) {
   .desk {
-    height: auto;
-    min-height: 100vh;
-    min-height: 100svh;
-    padding: 10px 10px 62px;
-    padding-bottom: calc(62px + env(safe-area-inset-bottom));
-    overflow: visible;
-  }
-
-  .wall {
-    position: fixed;
+    min-height: 0;
   }
 
   .icons {
+    left: 6px;
+    right: 6px;
+    top: 6px;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 68px;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .icons::-webkit-scrollbar {
     display: none;
   }
 
+  .icon {
+    width: 68px;
+    padding: 4px 1px;
+  }
+
+  .icon-label {
+    font-size: 10px;
+  }
+
   .win {
-    position: relative;
-    left: auto;
-    top: auto;
-    width: 100%;
-    max-height: none;
+    left: 8px;
+    top: 88px;
+    width: calc(100% - 16px);
+    max-height: calc(100% - 88px - 56px - env(safe-area-inset-bottom));
   }
 
   .win.is-max {
-    height: auto;
-    max-height: none;
-    border-radius: 9px 9px 4px 4px;
-  }
-
-  .main {
-    overflow: visible;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: calc(100% - 46px - env(safe-area-inset-bottom));
+    max-height: calc(100% - 46px - env(safe-area-inset-bottom));
   }
 
   .sidebar {
@@ -1982,10 +1995,11 @@ body {
   }
 
   .assistant-win {
+    left: 12px;
     right: auto;
-    width: 100%;
-    max-height: none;
-    margin-top: 10px;
+    top: 120px;
+    width: calc(100% - 24px);
+    max-height: calc(100% - 120px - 70px);
   }
 }
 
