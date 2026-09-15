@@ -286,6 +286,67 @@ body {
   display: flex;
 }
 
+/* --------------------------------------------------- the picture viewer */
+
+/*
+ * A second window, holding the home page's photo. It sits over the bottom
+ * right of the main one the way a file you just opened lands on top of what
+ * you were already doing — and it can be dragged out from there, or shut.
+ */
+.photo-win {
+  left: auto;
+  top: auto;
+  right: 26px;
+  bottom: 70px;
+  width: min(340px, calc(100% - 180px));
+  max-height: calc(100% - 140px);
+}
+
+.photo-win-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  /* The chequerboard a viewer of the era put behind a picture. */
+  background: repeating-conic-gradient(#ffffff 0% 25%, #eef2f8 0% 50%) 0 0 / 16px 16px;
+  border: 1px solid #9fb3cd;
+  border-width: 0 0 1px;
+}
+
+.photo-win-body img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.photo-win-status {
+  justify-content: space-between;
+}
+
+.photo-win-size {
+  flex: 0 0 auto;
+}
+
+/* Two windows on a narrow screen is one window too many: the viewer becomes
+   the block of the page it came out of, under the document it belongs to. */
+@media (max-width: 719px) {
+  .photo-win {
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    max-height: none;
+    margin-top: 10px;
+  }
+
+  .photo-win-body {
+    max-height: 60vh;
+  }
+}
+
 /* ---------------------------------------------------------- the sidebar */
 
 .sidebar {
@@ -380,6 +441,13 @@ body {
    viewport, and a hero taller than it would push the fold inside the frame. */
 .hero-main {
   min-height: 0;
+}
+
+/* With the photo opened in its own window, the hero's second column holds only
+   the upcoming block — so it stops where that stops instead of ruling a line
+   down a panel of nothing. */
+.hero-side:not(:has(.hero-photo-wrap)) {
+  align-self: start;
 }
 
 .hero-photo,

@@ -60,97 +60,147 @@
   });
 })();
 
-/* ---------------------------------------------- minimise, maximise, close */
+/* ------------------------------------------- windows: raise, hide, restore */
 (function () {
   'use strict';
 
-  var win = document.getElementById('win');
-  var task = document.querySelector('.task');
-  if (!win) return;
+  var windows = document.querySelectorAll('.win[data-win]');
+  if (!windows.length) return;
 
-  var maximise = win.querySelector('[data-window="maximise"]');
+  // The topmost window so far. Clicking any window brings it above the others,
+  // which on a desktop with two of them is the whole of window management.
+  var top = 10;
 
-  function show(open) {
+  function taskFor(win) {
+    return document.querySelector('.task[data-task-for="' + win.getAttribute('data-win') + '"]');
+  }
+
+  function raise(win) {
+    top += 1;
+    win.style.zIndex = String(top);
+  }
+
+  function show(win, open) {
     win.hidden = !open;
+    var task = taskFor(win);
     if (task) {
       task.classList.toggle('is-active', open);
       task.classList.toggle('is-idle', !open);
     }
+    if (open) raise(win);
   }
 
-  win.addEventListener('click', function (event) {
-    var button = event.target.closest('[data-window]');
-    if (!button) return;
-    var action = button.getAttribute('data-window');
-    if (action === 'minimise' || action === 'close') {
-      show(false);
-    } else if (action === 'maximise') {
-      var max = win.classList.toggle('is-max');
-      button.setAttribute('aria-pressed', String(max));
-      // A maximised window has nowhere to be dragged to.
-      win.style.left = '';
-      win.style.top = '';
+  Array.prototype.forEach.call(windows, function (win) {
+    raise(win);
+
+    win.addEventListener('mousedown', function () {
+      raise(win);
+    });
+
+    win.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-window]');
+      if (!button) return;
+      var action = button.getAttribute('data-window');
+      if (action === 'minimise' || action === 'close') {
+        show(win, false);
+      } else if (action === 'maximise') {
+        var max = win.classList.toggle('is-max');
+        button.setAttribute('aria-pressed', String(max));
+        // A maximised window has nowhere to be dragged to.
+        win.style.left = '';
+        win.style.top = '';
+      }
+    });
+
+    var task = taskFor(win);
+    // The taskbar button is the way back in, as it always was.
+    if (task) {
+      task.addEventListener('click', function () {
+        if (win.hidden) show(win, true);
+        else raise(win);
+      });
     }
   });
 
-  // The taskbar button is the way back in, as it always was.
-  if (task) {
-    task.addEventListener('click', function () {
-      show(win.hidden);
-      if (!win.hidden) win.focus({ preventScroll: true });
+  // A shortcut reopens whatever was closed, and so does Escape — neither
+  // should leave anyone stranded on an empty wallpaper.
+  function reopenAll() {
+    Array.prototype.forEach.call(windows, function (win) {
+      if (win.hidden) show(win, true);
     });
   }
 
-  // So is double-clicking the shortcut the window came from.
   var icons = document.querySelector('.icons');
   if (icons) {
     icons.addEventListener('click', function (event) {
-      if (win.hidden && event.target.closest('a[href]')) show(true);
+      if (event.target.closest('a[href]')) reopenAll();
     });
   }
 
-  // Escape on a closed window reopens it rather than stranding the visitor.
   document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && win.hidden) show(true);
+    if (event.key === 'Escape') reopenAll();
   });
-
-  void maximise;
 })();
 
 /* ------------------------------------------------------------ dragging */
 (function () {
   'use strict';
 
-  var win = document.getElementById('win');
-  var bar = win && win.querySelector('.topbar');
-  if (!win || !bar) return;
+  var windows = document.querySelectorAll('.win[data-win]');
+  if (!windows.length) return;
 
   // Dragging is a desktop affordance. On a phone the window is the page, and
   // on a touch screen a drag is how you scroll.
   var fine = window.matchMedia && window.matchMedia('(min-width: 720px) and (pointer: fine)');
   var drag = null;
 
-  bar.addEventListener('mousedown', function (event) {
-    if (!fine || !fine.matches) return;
-    if (win.classList.contains('is-max')) return;
-    // The buttons and the title link have their own jobs.
-    if (event.target.closest('button, a')) return;
-    var box = win.getBoundingClientRect();
-    drag = { dx: event.clientX - box.left, dy: event.clientY - box.top };
-    win.style.left = box.left + 'px';
-    win.style.top = box.top + 'px';
-    event.preventDefault();
+  Array.prototype.forEach.call(windows, function (win) {
+    var bar = win.querySelector('.topbar');
+    if (!bar) return;
+    bar.addEventListener('mousedown', function (event) {
+      if (!fine || !fine.matches) return;
+      if (win.classList.contains('is-max')) return;
+      // The buttons and the title link have their own jobs.
+      if (event.target.closest('button, a')) return;
+      var box = win.getBoundingClientRect();
+      drag = { win: win, dx: event.clientX - box.left, dy: event.clientY - box.top };
+      // A window pinned by its right edge has to be re-pinned by its left one
+      // before it can be moved, or it fights the drag.
+      win.style.right = 'auto';
+      win.style.bottom = 'auto';
+      win.style.left = box.left + 'px';
+      win.style.top = box.top + 'px';
+      event.preventDefault();
+    });
   });
 
   window.addEventListener('mousemove', function (event) {
     if (!drag) return;
-    win.style.left = Math.max(0, event.clientX - drag.dx) + 'px';
-    win.style.top = Math.max(0, event.clientY - drag.dy) + 'px';
+    drag.win.style.left = Math.max(0, event.clientX - drag.dx) + 'px';
+    drag.win.style.top = Math.max(0, event.clientY - drag.dy) + 'px';
   });
 
   window.addEventListener('mouseup', function () {
     drag = null;
   });
+})();
+
+/* ------------------------------------------------------ the picture's size */
+(function () {
+  'use strict';
+
+  var img = document.querySelector('.photo-win-body img');
+  var size = document.querySelector('.photo-win-size');
+  if (!img || !size) return;
+
+  // A viewer of the era told you what you were looking at. The server cannot
+  // know the pixels, so the status bar fills in once the file is decoded.
+  function fill() {
+    if (img.naturalWidth) size.textContent = img.naturalWidth + ' × ' + img.naturalHeight;
+  }
+
+  if (img.complete) fill();
+  img.addEventListener('load', fill);
 })();
 
 /* ------------------------------------------------------------- dialogs */
