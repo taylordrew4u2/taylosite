@@ -676,26 +676,40 @@ Two behaviours differ on Vercel, both by design:
 `vercel.json` routes every request to `api/index.js`, which passes it to the same
 `server.js` used everywhere else — there is no separate serverless codebase.
 
-## Free combined SEO + GEO generation
+## AI providers and combined SEO + GEO
 
-Every eligible text field has one **Generate SEO + GEO** button. Review the
-result and Save to publish. Photo generation includes home, about, sharing
-images, show flyers and reel covers. Flyer and poster alt text is stored
-separately from show notes and reel captions.
+Open **Admin → AI providers** to add connections, edit models and keys,
+disable a provider, or move providers earlier/later in the fallback order.
+Choose **Use my APIs** to enable the saved providers, or **Use free browser AI**
+to generate locally. Adding a key alone does not switch modes.
 
-Generation uses [WebLLM](https://webllm.mlc.ai/) 0.2.85 in a browser worker:
-Qwen2.5 1.5B for text and Phi 3.5 Vision for image descriptions and flyers.
-These are open-source models, not OpenAI's hosted API. No API key, account,
-subscription or inference credits are required. Models download from Hugging
-Face and MLC on first use and are cached by the browser. Text and images are
-processed locally. Downloads require network access and local disk space.
-Text needs roughly 2 GB of GPU memory; vision requires about 4 GB with float16
-support, or about 6 GB without it. Use a WebGPU-compatible browser such as
-current Chrome on a supported computer. Progress is shown while loading.
+The form accepts a public HTTPS API base URL, model ID and key. Custom services
+must implement OpenAI-compatible Chat Completions or Anthropic Messages.
+OpenAI, Anthropic and Gemini presets fill the connection defaults; model IDs
+remain editable. This is protocol compatibility, not support for arbitrary
+API formats such as a private Azure gateway or an unrelated REST service.
+Keys stay server-side and are not returned to the admin or public site.
 
-Unsupported hardware, network errors and invalid model output preserve the
-original content. Users can edit manually. There is no automatic paid fallback.
-Server hosted inference is disabled by default even if old provider keys exist.
-Legacy hosted adapters are retained for compatibility and can only execute
-when a server operator explicitly sets `AI_HOSTED_ENABLED=true`; this is not
-needed for any browser generator. The admin no longer asks for provider keys.
+Hosted mode tries enabled providers in order when authentication, quota,
+rate limits, timeouts, service errors or unusable JSON prevent a result.
+Refusals are returned without bypassing them through another provider.
+Provider attempts share a bounded request deadline. Each provider uses the
+user's account/billing; no external provider runs in browser mode.
+
+Every eligible text field has one **Generate SEO + GEO** button. Instructions
+and context match its purpose: metadata, biography, FAQ answer, link,
+event note or short label. Exact identity facts, quotations, official credits
+and photo descriptions are excluded from text rewriting. Photo descriptions
+use the image generator instead. Results that repeat previous copy, exceed
+field limits or fail validation are retried once, then the original is kept.
+Newer edits made while a request runs are preserved. Review and Save to publish.
+
+Free mode uses WebLLM 0.2.85 in a browser worker: Qwen2.5 1.5B for text and
+Phi 3.5 Vision for images. Models download on first use and are cached locally.
+Text needs roughly 2 GB GPU memory, vision about 4 GB with float16 support or
+6 GB without it. A WebGPU-compatible browser is required. Vision inputs are
+padded to 4:3, never cropped. Errors preserve the original content.
+
+Legacy server integrations can explicitly opt into hosted inference with
+`AI_HOSTED_ENABLED=true`; a saved browser-mode selection overrides that flag.
+For normal admin use, select the desired mode in **AI providers**.
