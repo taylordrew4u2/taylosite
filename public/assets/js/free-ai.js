@@ -54,7 +54,7 @@ export function createGenerator(loadEngine = browserEngine) {
   let current;
   let currentVision;
   let busy = false;
-  return async function ({ messages, schema, vision = false, onProgress = () => {} }) {
+  return async function ({ messages, schema, vision = false, onProgress = () => {}, temperature = 0.2, maxTokens }) {
     if (busy) throw new Error('Free AI is already working. Wait for the current request to finish.');
     busy = true;
     const controller = new AbortController();
@@ -73,8 +73,8 @@ export function createGenerator(loadEngine = browserEngine) {
       onProgress('Generating on your device…');
       const response = await current.engine.chat.completions.create({
         messages,
-        temperature: 0.2,
-        max_tokens: vision ? 512 : 1800,
+        temperature: temperature,
+        max_tokens: maxTokens || (vision ? 512 : 1800),
         response_format: { type: 'json_object', schema: JSON.stringify(schema) }
       });
       const choice = response.choices?.[0];

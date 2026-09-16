@@ -579,14 +579,66 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true, ...flyer.status(await store.readSite(), process.env) });
   }
 
-  if (adminRoute === '/ai-provider' && ['POST', 'DELETE'].includes(req.method)) {
+  if (adminRoute === '/ai-provider' && ['POST', 'PATCH', 'DELETE'].includes(req.method)) {
     const body = await readJson(req);
     try {
       if (req.method === 'POST') await aiProviders.save({ ...body, store });
+      else if (req.method === 'PATCH') await aiProviders.configure({ ...body, store });
       else await aiProviders.remove({ store, provider: body.provider });
       return sendJson(res, 200, { ok: true, ...aiProviders.status(await store.readSite()) });
     } catch (err) {
       return sendJson(res, 400, { error: err.message });
+    }
+  }
+
+  if (adminRoute === '/ai-generate' && req.method === 'POST') {
+    const body = await readJson(req);
+    try {
+      const bad = (message) => { throw Object.assign(new Error(message), { status: 400 }); };
+      if (!Array.isArray(body.messages) || !body.messages.length || body.messages.length > 6) bad('Supply 1 to 6 messages.');
+      if (!body.schema || typeof body.schema !== 'object' || Array.isArray(body.schema) || body.schema.type !== 'object' || JSON.stringify(body.schema).length > 16000) bad('Supply a JSON object schema.');
+      if (body.temperature !== undefined && (!Number.isFinite(body.temperature) || body.temperature < 0 || body.temperature > 1.5)) bad('Choose a temperature from 0 to 1.5.');
+      if (body.maxTokens !== undefined && (!Number.isInteger(body.maxTokens) || body.maxTokens < 1 || body.maxTokens > 2048)) bad('Choose a token limit from 1 to 2048.');
+      let textLength = 0;
+      let imageBytes = 0;
+      const textBlock = (value) => {
+        if (typeof value !== 'string') bad('Message text must be a string.');
+        textLength += value.length;
+        if (textLength > 32000) bad('The text is too long for one request.');
+        return value;
+      };
+      const imageBlock = (contentType, data) => {
+        if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(contentType) || typeof data !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) bad('Use an uploaded PNG, JPEG, WebP or GIF image.');
+        imageBytes += Buffer.byteLength(data, 'base64');
+        if (imageBytes > 5 * 1024 * 1024) bad('Images must total 5 MB or less.');
+        return { type: 'image', source: { type: 'base64', media_type: contentType, data } };
+      };
+      const messages = body.messages.map((message) => {
+        if (!message || !['system', 'user', 'assistant'].includes(message.role)) bad('Invalid message role.');
+        const content = typeof message.content === 'string' ? textBlock(message.content) : Array.isArray(message.content) && message.content.length <= 4 ? message.content.map((block) => {
+          if (!block || typeof block !== 'object') bad('Invalid message content.');
+          if (block.type === 'text') return { type: 'text', text: textBlock(block.text) };
+          if (block.type === 'image_url') {
+            const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]+=*)$/.exec(block.image_url?.url || '');
+            if (!match) bad('Images must be inline uploaded data, not external URLs.');
+            return imageBlock(match[1], match[2]);
+          }
+          if (block.type === 'image' && block.source?.type === 'base64') return imageBlock(block.source.media_type, block.source.data);
+          bad('Unsupported message content.');
+        }) : bad('Invalid message content.');
+        if (message.role === 'system' && typeof content !== 'string') bad('System instructions must be text.');
+        return { role: message.role, content };
+      });
+      const response = await aiProviders.create({ site: await store.readSite(), request: {
+        messages, max_tokens: body.maxTokens || 1024, temperature: body.temperature ?? 0.2,
+        output_config: { format: { type: 'json_schema', schema: body.schema } }
+      } });
+      if (response.stop_reason === 'refusal') return sendJson(res, 422, { error: 'The model declined this request. Your content was kept.' });
+      const result = JSON.parse((response.content || []).filter(block => block.type === 'text').map(block => block.text).join(''));
+      if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('The provider returned an unusable result.');
+      return sendJson(res, 200, { ...result, ok: true, _provider: response.provider || null, _fallbackCount: response.fallbackCount || 0 });
+    } catch (err) {
+      return sendJson(res, err.status || 502, { error: err.message });
     }
   }
 
@@ -870,7 +922,7 @@ async function handle(req, res) {
     const file = safeJoin(PUBLIC_DIR, pathname);
     if (!file) return sendJson(res, 404, { error: 'Not found' });
     // Admin modules must revalidate after a deployment so the UI and worker agree.
-    const adminAsset = /^\/assets\/(?:js\/(?:admin|free-ai|free-ai-worker)\.js|css\/admin\.css)$/.test(pathname);
+    const adminAsset = /^\/assets\/(?:js\/(?:admin|copy-editor|free-ai|free-ai-worker)\.js|css\/admin\.css)$/.test(pathname);
     return serveFile(req, res, file, { cache: adminAsset ? 'no-cache' : 'public, max-age=600' });
   }
 

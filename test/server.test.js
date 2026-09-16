@@ -2251,3 +2251,152 @@ test('browser-read flyers normalize and persist images without calling a hosted 
     });
   } finally { await ai.stop(); }
 });
+
+function hostedGenerationRequest(overrides = {}) {
+  return {
+    messages: [
+      { role: 'system', content: 'Rewrite only the supplied field, preserving its facts.' },
+      { role: 'user', content: 'Find upcoming Taylor Drew shows and performance clips.' }
+    ],
+    schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+    temperature: 0.65,
+    maxTokens: 512,
+    vision: false,
+    ...overrides
+  };
+}
+
+test('hosted generation and mode changes require a session and CSRF, and refuse content API keys', async () => {
+  const ai = await startFakeAnthropic({ answer: { text: 'Find show dates and performance clips.' } });
+  try {
+    await withServer({ AI_HOSTED_ENABLED: 'true', ANTHROPIC_API_KEY: 'sk-ant-test-generation-0123456789', ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      const routes = [
+        ['/api/admin/ai-generate', 'POST', hostedGenerationRequest()],
+        ['/api/admin/ai-provider', 'PATCH', { mode: 'hosted' }]
+      ];
+      for (const [pathname, method, body] of routes) {
+        assert.strictEqual((await server.call(pathname, { method, body })).status, 401, pathname);
+      }
+      await server.login();
+      for (const [pathname, method, body] of routes) {
+        assert.strictEqual((await server.call(pathname, { method, body, csrf: false })).status, 403, pathname);
+      }
+      const api = bearer(server, await mintKey(server));
+      for (const [pathname, method, body] of routes) {
+        assert.strictEqual((await api(pathname, { method, body })).status, 403, pathname);
+      }
+      assert.strictEqual(ai.calls.length, 0, 'unauthorized requests never reach a provider');
+    });
+  } finally { await ai.stop(); }
+});
+
+test('hosted generation validates requests before calling a provider', async () => {
+  const ai = await startFakeAnthropic({ answer: { text: 'A usable description.' } });
+  try {
+    await withServer({ AI_HOSTED_ENABLED: 'true', ANTHROPIC_API_KEY: 'sk-ant-test-generation-0123456789', ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      await server.login();
+      const invalid = [
+        { schema: null },
+        { schema: [] },
+        { schema: 'Return JSON' },
+        { messages: [] },
+        { messages: Array.from({ length: 7 }, () => ({ role: 'user', content: 'Too many turns.' })) },
+        { messages: [{ role: 'tool', content: 'Unsupported role.' }] },
+        { messages: [{ role: 'user', content: { text: 'Unsupported content.' } }] },
+        { messages: [{ role: 'user', content: 'a'.repeat(16001) }, { role: 'assistant', content: 'b'.repeat(16000) }] },
+        { messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'https://example.com/private-photo.png' } }] }], vision: true },
+        { messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'url', url: 'http://127.0.0.1/private' } }] }], vision: true },
+        { messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:text/html;base64,PHNjcmlwdD4=' } }] }], vision: true },
+        { maxTokens: 0 },
+        { maxTokens: 2049 },
+        { temperature: -0.1 },
+        { temperature: 1.6 }
+      ];
+      for (const overrides of invalid) {
+        const result = await server.call('/api/admin/ai-generate', { method: 'POST', body: hostedGenerationRequest(overrides) });
+        assert.strictEqual(result.status, 400, `${Object.keys(overrides).join(', ')}: ${result.text}`);
+      }
+      const oversized = await server.call('/api/admin/ai-generate', { method: 'POST', body: hostedGenerationRequest({
+        vision: true,
+        messages: [{ role: 'user', content: [{ type: 'image', source: {
+          type: 'base64', media_type: 'image/png', data: Buffer.alloc(5 * 1024 * 1024 + 1).toString('base64')
+        } }] }]
+      }) });
+      assert.strictEqual(oversized.status, 400, oversized.text);
+      assert.strictEqual(ai.calls.length, 0, 'invalid requests never send data to a provider');
+    });
+  } finally { await ai.stop(); }
+});
+
+test('hosted generation preserves schema, instructions and image data and returns reviewable provider metadata', async () => {
+  const text = 'Explore Taylor Drew’s show dates and performance clips.';
+  const ai = await startFakeAnthropic({ answer: { text } });
+  try {
+    await withServer({ AI_HOSTED_ENABLED: 'true', ANTHROPIC_API_KEY: 'sk-ant-test-generation-0123456789', ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      await server.login();
+      const before = (await server.call('/api/admin/site')).json.site;
+      const request = hostedGenerationRequest();
+      const result = await server.call('/api/admin/ai-generate', { method: 'POST', body: request });
+      assert.strictEqual(result.status, 200, result.text);
+      assert.strictEqual(result.json.ok, true);
+      assert.strictEqual(result.json.text, text);
+      assert.deepStrictEqual(result.json._provider, { id: 'anthropic', label: 'Anthropic' });
+      assert.strictEqual(result.json._fallbackCount, 0);
+      assert.strictEqual(ai.calls.length, 1);
+      assert.deepStrictEqual(ai.calls[0].body.output_config.format.schema, request.schema);
+      assert.match(JSON.stringify(ai.calls[0].body.system), /Rewrite only the supplied field, preserving its facts\./);
+      assert.strictEqual(ai.calls[0].body.temperature, 0.65);
+      assert.strictEqual(ai.calls[0].body.max_tokens, 512);
+      assert.ok(ai.calls[0].body.messages.every(message => message.role !== 'system'), 'Anthropic receives its system prompt separately');
+
+      const photoRequest = hostedGenerationRequest({ vision: true, messages: [{ role: 'user', content: [
+        { type: 'text', text: 'Describe only this visible photo.' },
+        { type: 'image_url', image_url: { url: `data:image/png;base64,${PNG.toString('base64')}` } }
+      ] }] });
+      const photo = await server.call('/api/admin/ai-generate', { method: 'POST', body: photoRequest });
+      assert.strictEqual(photo.status, 200, photo.text);
+      const image = ai.calls[1].body.messages[0].content.find(block => block.type === 'image');
+      assert.ok(image, 'a data URL becomes an Anthropic image block');
+      assert.strictEqual(image.source.media_type, 'image/png');
+      assert.strictEqual(image.source.data, PNG.toString('base64'));
+      assert.deepStrictEqual((await server.call('/api/admin/site')).json.site, before, 'generation never publishes or mutates site content');
+    });
+  } finally { await ai.stop(); }
+});
+
+test('hosted generation stays disabled after saving a key until hosted mode is explicitly selected', async () => {
+  const ai = await startFakeAnthropic({ answer: { text: 'A specific rewritten field.' } });
+  try {
+    await withServer({ AI_HOSTED_ENABLED: 'false', ANTHROPIC_API_KEY: null, OPENAI_API_KEY: null, GEMINI_API_KEY: null, ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      await server.login();
+      const saved = await server.call('/api/admin/ai-provider', { method: 'POST', body: {
+        provider: 'anthropic', apiKey: 'sk-ant-saved-generation-0123456789', primary: true
+      } });
+      assert.strictEqual(saved.status, 200, saved.text);
+      const blocked = await server.call('/api/admin/ai-generate', { method: 'POST', body: hostedGenerationRequest() });
+      assert.strictEqual(blocked.status, 400, blocked.text);
+      assert.strictEqual(ai.calls.length, 0);
+      const enabled = await server.call('/api/admin/ai-provider', { method: 'PATCH', body: { mode: 'hosted' } });
+      assert.strictEqual(enabled.status, 200, enabled.text);
+      const generated = await server.call('/api/admin/ai-generate', { method: 'POST', body: hostedGenerationRequest() });
+      assert.strictEqual(generated.status, 200, generated.text);
+      assert.strictEqual(ai.calls.length, 1);
+    });
+  } finally { await ai.stop(); }
+});
+
+test('hosted generation obeys an explicit browser mode even when the environment enables hosting', async () => {
+  const ai = await startFakeAnthropic({ answer: { text: 'A specific rewritten field.' } });
+  try {
+    await withServer({ AI_HOSTED_ENABLED: 'true', ANTHROPIC_API_KEY: 'sk-ant-test-generation-0123456789', ANTHROPIC_BASE_URL: ai.base }, async (server) => {
+      await server.login();
+      const disabled = await server.call('/api/admin/ai-provider', { method: 'PATCH', body: { mode: 'browser' } });
+      assert.strictEqual(disabled.status, 200, disabled.text);
+      const result = await server.call('/api/admin/ai-generate', { method: 'POST', body: hostedGenerationRequest() });
+      assert.strictEqual(result.status, 400, result.text);
+      assert.strictEqual(ai.calls.length, 0);
+      const invalid = await server.call('/api/admin/ai-provider', { method: 'PATCH', body: { mode: 'unexpected' } });
+      assert.strictEqual(invalid.status, 400, invalid.text);
+    });
+  } finally { await ai.stop(); }
+});
