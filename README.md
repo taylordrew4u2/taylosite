@@ -114,14 +114,10 @@ Editing notes:
   marked noindex.
 - **Shows → Post a flyer** takes the flyer image and adds the show for you: the
   date, time, venue, city, street address, ticket link and a one-line note are
-  read off it by Claude, the flyer is kept in the media library and attached to
-  the row, and it goes live at once if nothing else was waiting to be saved.
-  When the flyer leaves out the date or the venue, the row is added but held
-  for you to fill in. A flyer on a show is drawn beside the date on the links
-  page and published as the event's picture in the structured data. Reading a
-  flyer needs an Anthropic API key — paste one into that card, or set
-  `ANTHROPIC_API_KEY` on the server. `ANTHROPIC_MODEL` overrides the model
-  (default `claude-opus-5`).
+  read by a free browser vision model. The flyer is kept in the media library
+  and attached to a draft row for review before saving. Missing details stay
+  blank. No API key is required; first use downloads a model and requires a
+  compatible WebGPU device. Manual show entry is always available.
 
 ## How it is put together
 
@@ -602,8 +598,8 @@ can set, the panel can set too, except where the server itself is concerned.
 | `GITHUB_TOKEN` (or `GH_TOKEN`) | github backend |
 | `GITHUB_REPO` | `owner/name`; on Vercel read from the linked repository |
 | `GITHUB_BRANCH`, `GITHUB_CONTENT_PATH`, `GITHUB_UPLOAD_DIR` | github backend: `main`, `data/site.json`, `data/uploads` |
-| `ANTHROPIC_API_KEY` | flyer reading and the SEO / GEO generators; can be pasted into the panel instead |
-| `ANTHROPIC_MODEL` | defaults to `claude-opus-5` |
+| `ANTHROPIC_API_KEY` | legacy hosted adapter only; ignored for generation by default |
+| `ANTHROPIC_MODEL` | legacy hosted adapter model; not used by free browser AI |
 | `INSTAGRAM_*` | the connection — see *Connecting the Instagram account* |
 | `INDEXNOW` | `off` stops the announcements after a save |
 
@@ -679,3 +675,27 @@ Two behaviours differ on Vercel, both by design:
 
 `vercel.json` routes every request to `api/index.js`, which passes it to the same
 `server.js` used everywhere else — there is no separate serverless codebase.
+
+## Free combined SEO + GEO generation
+
+Every eligible text field has one **Generate SEO + GEO** button. Review the
+result and Save to publish. Photo generation includes home, about, sharing
+images, show flyers and reel covers. Flyer and poster alt text is stored
+separately from show notes and reel captions.
+
+Generation uses [WebLLM](https://webllm.mlc.ai/) 0.2.85 in a browser worker:
+Qwen2.5 1.5B for text and Phi 3.5 Vision for image descriptions and flyers.
+These are open-source models, not OpenAI's hosted API. No API key, account,
+subscription or inference credits are required. Models download from Hugging
+Face and MLC on first use and are cached by the browser. Text and images are
+processed locally. Downloads require network access and local disk space.
+Text needs roughly 2 GB of GPU memory; vision requires about 4 GB with float16
+support, or about 6 GB without it. Use a WebGPU-compatible browser such as
+current Chrome on a supported computer. Progress is shown while loading.
+
+Unsupported hardware, network errors and invalid model output preserve the
+original content. Users can edit manually. There is no automatic paid fallback.
+Server hosted inference is disabled by default even if old provider keys exist.
+Legacy hosted adapters are retained for compatibility and can only execute
+when a server operator explicitly sets `AI_HOSTED_ENABLED=true`; this is not
+needed for any browser generator. The admin no longer asks for provider keys.

@@ -638,7 +638,7 @@ a {
 }
 
 /* Inside a table cell or a mini-field there is no room for the full label:
-   the same two buttons, small, reading SEO and GEO. */
+   one compact button for both SEO and GEO. */
 .search-generators.is-compact {
   gap: 4px;
   margin-top: 3px;
@@ -1838,4 +1838,11 @@ a {
   .crop-stage img {
     max-height: 46svh;
   }
+}
+
+/* First-use model progress must wrap on narrow photo editors. */
+[data-action="seo-photo"] {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }

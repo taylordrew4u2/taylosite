@@ -14,6 +14,7 @@ const instagram = require('./lib/instagram');
 const indexnow = require('./lib/indexnow');
 const flyer = require('./lib/flyer');
 const seoCopy = require('./lib/seo-copy');
+const aiProviders = require('./lib/ai-providers');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -522,7 +523,12 @@ async function handleApi(req, res, url) {
     const site = await store.readSite();
     let details;
     try {
-      details = await flyer.extract({ buffer, contentType, env: process.env, site });
+      if (buffer.length > flyer.MAX_IMAGE_BYTES) return sendJson(res, 413, { error: 'That flyer is over 5 MB. Use a smaller image.' });
+      if (body.details && typeof body.details === 'object' && !Array.isArray(body.details)) {
+        details = flyer.normalize(body.details);
+      } else {
+        details = await flyer.extract({ buffer, contentType, env: process.env, site });
+      }
     } catch (err) {
       return sendJson(res, err.status || 502, { error: err.message });
     }
@@ -573,6 +579,17 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { ok: true, ...flyer.status(await store.readSite(), process.env) });
   }
 
+  if (adminRoute === '/ai-provider' && ['POST', 'DELETE'].includes(req.method)) {
+    const body = await readJson(req);
+    try {
+      if (req.method === 'POST') await aiProviders.save({ ...body, store });
+      else await aiProviders.remove({ store, provider: body.provider });
+      return sendJson(res, 200, { ok: true, ...aiProviders.status(await store.readSite()) });
+    } catch (err) {
+      return sendJson(res, 400, { error: err.message });
+    }
+  }
+
   if (adminRoute === '/seo-copy' && req.method === 'POST') {
     const body = await readJson(req);
     try {
@@ -581,7 +598,7 @@ async function handleApi(req, res, url) {
         text: body.text,
         path: String(body.path || '').slice(0, 160),
         label: String(body.label || '').slice(0, 120),
-        mode: body.mode === 'geo' ? 'geo' : 'seo',
+        mode: 'both',
         site,
         env: process.env
       });
@@ -852,7 +869,9 @@ async function handle(req, res) {
   if (pathname.startsWith('/assets/')) {
     const file = safeJoin(PUBLIC_DIR, pathname);
     if (!file) return sendJson(res, 404, { error: 'Not found' });
-    return serveFile(req, res, file, { cache: 'public, max-age=600' });
+    // Admin modules must revalidate after a deployment so the UI and worker agree.
+    const adminAsset = /^\/assets\/(?:js\/(?:admin|free-ai|free-ai-worker)\.js|css\/admin\.css)$/.test(pathname);
+    return serveFile(req, res, file, { cache: adminAsset ? 'no-cache' : 'public, max-age=600' });
   }
 
   if (pathname === '/admin') {
@@ -970,7 +989,9 @@ async function handle(req, res) {
     // search; a crawler will not pair them up on its own.
     const photos = {
       '/': [{ url: site.home.photo, caption: site.home.photoAlt }],
-      '/about': [{ url: site.about.photo, caption: site.about.photoAlt }]
+      '/about': [{ url: site.about.photo, caption: site.about.photoAlt }],
+      '/shows': (site.shows || []).filter(show => show.visible !== false).map(show => ({ url: show.flyer, caption: show.flyerAlt || `Flyer for ${show.venue || 'a performance'}` })),
+      '/reels': ((site.reels || {}).items || []).filter(reel => reel.visible !== false).map(reel => ({ url: reel.poster, caption: reel.posterAlt || reel.caption }))
     };
     const urls = Object.keys(PAGES)
       .map((page) => {
