@@ -67,6 +67,7 @@ test('reels come back as tiles the wall can play', async () => {
       video: 'https://cdn.example/111.mp4?sig=abc',
       poster: 'https://cdn.example/111.jpg',
       caption: 'Crowd work at the Cellar',
+      published: '2026-08-01T12:00:00+0000',
       visible: true,
       source: 'instagram'
     });
@@ -376,6 +377,7 @@ test('one pasted feed URL is the whole setup', async () => {
       video: 'https://cdn.example/a.mp4',
       poster: 'https://cdn.example/a.jpg',
       caption: 'Crowd work at the Cellar',
+      published: '',
       visible: true,
       source: 'instagram'
     });
