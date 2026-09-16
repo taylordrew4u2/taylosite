@@ -62,6 +62,31 @@
     };
   }
   function normalize(text) { return String(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
+  function words(text) { return normalize(text).split(' ').filter(Boolean); }
+  function overlap(a, b) {
+    var left = new Set(words(a)), right = new Set(words(b));
+    if (!left.size || !right.size) return 0;
+    var shared = 0;
+    left.forEach(function (word) { if (right.has(word)) shared++; });
+    return shared / (left.size + right.size - shared);
+  }
+  // Two accurate rewrites are rarely equally good. Prefer the one that fills the
+  // field without overrunning it, ends on a complete thought, moves furthest
+  // from the original wording, names the subject where a search result needs it,
+  // and does not repeat one word into keyword stuffing.
+  function score(text, options) {
+    var limit = (fieldPolicy(options.path) || {}).maxLength || 240;
+    var ratio = text.length / limit;
+    var points = ratio > 1 ? 0 : ratio >= 0.55 ? 2 : ratio >= 0.35 ? 1 : 0;
+    if (limit > 80 && /[.!?…]$/.test(text)) points += 1;
+    points += 2 * (1 - overlap(text, options.source || ''));
+    var name = String(options.site?.brand?.name || '').trim();
+    if (name && limit >= 60 && text.indexOf(name) !== -1) points += 1;
+    var counts = {};
+    words(text).forEach(function (word) { if (word.length > 3) counts[word] = (counts[word] || 0) + 1; });
+    if (Object.keys(counts).some(function (word) { return counts[word] > 2; })) points -= 2;
+    return points;
+  }
   function tooSimilar(a, b) {
     var left = normalize(a), right = normalize(b);
     if (left === right) return true;
@@ -105,9 +130,14 @@
   async function rewrite(options) {
     var policy = fieldPolicy(options.path);
     if (!policy) throw new Error('This field should be edited directly to preserve its exact facts.');
+    // Short metadata carries the most search weight and costs little to write
+    // twice, so two valid versions compete and the better one wins. A long
+    // paragraph stops at the first good version.
+    var wanted = options.bestOf || (policy.maxLength <= 240 ? 2 : 1);
+    var passed = [];
     var reason = '';
-    for (var attempt = 0; attempt < TEMPERATURES.length; attempt++) {
-      if (attempt && options.onProgress) options.onProgress('Trying a more distinct rewrite…');
+    for (var attempt = 0; attempt < TEMPERATURES.length && passed.length < wanted; attempt++) {
+      if (attempt && options.onProgress) options.onProgress(passed.length ? 'Writing a second version to compare…' : 'Trying a more distinct rewrite…');
       var result = await options.generate({
         messages: buildMessages(Object.assign({}, options, { retryReason: reason })),
         schema: { type: 'object', additionalProperties: false, required: ['text'], properties: { text: { type: 'string' } } },
@@ -117,9 +147,17 @@
       });
       var candidate = repair(typeof result?.text === 'string' ? result.text : '', policy.maxLength);
       reason = assess(candidate, { source: options.text, path: options.path, site: options.site, recent: options.recent });
-      if (!reason) return { text: candidate, changed: true };
+      if (!reason) {
+        passed.push(candidate);
+        reason = 'That version is usable. Write a different, equally accurate version of the same field with a new opening.';
+      }
     }
-    return { text: options.text, changed: false };
+    if (!passed.length) return { text: options.text, changed: false };
+    var judged = { source: options.text, path: options.path, site: options.site };
+    var best = passed.reduce(function (winner, candidate) {
+      return score(candidate, judged) > score(winner, judged) ? candidate : winner;
+    });
+    return { text: best, changed: true };
   }
-  return { fieldPolicy: fieldPolicy, contextFor: contextFor, buildMessages: buildMessages, assess: assess, rewrite: rewrite, tooSimilar: tooSimilar, repair: repair };
+  return { fieldPolicy: fieldPolicy, contextFor: contextFor, buildMessages: buildMessages, assess: assess, rewrite: rewrite, tooSimilar: tooSimilar, repair: repair, score: score };
 });

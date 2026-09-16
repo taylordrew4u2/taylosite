@@ -705,20 +705,30 @@ quotes, prefaces such as "Here is the rewritten version", markdown, stray
 character counts and overruns past the field limit are cleaned up, trimming on
 a sentence or word boundary. A result that still repeats previous copy or fails
 validation is retried up to three times, at rising temperature, then the
-original is kept. Newer edits made while a request runs are preserved. Review
-and Save to publish.
+original is kept. Short metadata — anything with a limit of 240 characters or
+less, including the SEO title and description — is written twice and the
+stronger version wins on a local score: fills the field without overrunning it,
+ends on a complete sentence, moves furthest from the original wording, names the
+subject, and does not repeat one word into keyword stuffing. Longer paragraphs
+stop at the first usable version. Newer edits made while a request runs are
+preserved. Review and Save to publish.
 
-Free mode uses WebLLM 0.2.85 in a browser worker. For text it loads the largest
-model the device can hold, preferring Qwen2.5 7B, then Hermes 3 / Llama 3.1 8B,
-then Qwen2.5 3B or Llama 3.2 3B, and falling back to Qwen2.5 1.5B on small
-GPUs; small models write unusable SEO copy, so the tier is chosen from the
-WebGPU buffer limits and the list is walked downwards when a model fails to
-load. Devices without `shader-f16` get the float32 builds. Images use Phi 3.5
-Vision. Models download on first use and are cached locally, so the first
-generation on a capable machine downloads several GB. Vision needs about 4 GB
-GPU memory with float16 support or 6 GB without it. A WebGPU-compatible browser
-is required. Vision inputs are padded to 4:3, never cropped. Errors preserve
-the original content.
+Free mode uses WebLLM 0.2.85 in a browser worker and loads the strongest text
+model the device can hold, newest generation first: Qwen3.5 9B, Qwen3 8B, Llama
+3.1 8B, Hermes 3 8B, Qwen2.5 7B, Qwen3.5 4B, Phi 4 mini, Qwen3 4B, Qwen2.5 3B,
+Qwen3.5 2B, Llama 3.2 3B, and Qwen2.5 1.5B only on a small GPU. Small models
+write unusable SEO copy, so the tier is taken from the WebGPU buffer limits
+(held back on a device reporting 4 GB of RAM or less) against each model's
+published VRAM requirement, and a model that is missing from the build or fails
+to load falls through to the next — nearest size first, never more than 1.5×
+the estimated budget. Every id is checked against the runtime catalog, so an
+unavailable model is skipped rather than thrown. Devices without `shader-f16`
+get the float32 builds. Qwen3 and Qwen3.5 reasoning blocks are disabled because
+the JSON grammar cannot hold them. Images use Phi 3.5 Vision. Models download on
+first use and are cached locally, so the first generation on a capable machine
+downloads several GB. Vision needs about 4 GB GPU memory with float16 support or
+6 GB without it. A WebGPU-compatible browser is required. Vision inputs are
+padded to 4:3, never cropped. Errors preserve the original content.
 
 Legacy server integrations can explicitly opt into hosted inference with
 `AI_HOSTED_ENABLED=true`; a saved browser-mode selection overrides that flag.

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { fieldPolicy, contextFor, buildMessages, assess, rewrite, repair } = require('../public/assets/js/copy-editor');
+const { fieldPolicy, contextFor, buildMessages, assess, rewrite, repair, score } = require('../public/assets/js/copy-editor');
 
 function exampleSite() {
   return {
@@ -134,13 +134,13 @@ test('metadata length limits reject oversized results instead of silently trunca
   assert.ok(assess('Upcoming shows, performance clips and booking information. '.repeat(4), { source: 'Taylor Drew comedy', path: 'seo.description', site }));
 });
 
-test('a duplicate result is retried once and a useful rewrite is returned without mutating the site', async () => {
+test('a duplicate result is retried and a useful rewrite is returned without mutating the site', async () => {
   const site = exampleSite();
   const before = json(site);
   const source = 'Taylor Drew performs stand-up comedy in New York City.';
   const candidate = 'Find Taylor Drew’s upcoming New York City shows, watch performance clips, and get in touch about booking.';
   const requests = [];
-  const result = await rewrite({ site, path: 'seo.description', label: 'Description', text: source,
+  const result = await rewrite({ site, path: 'seo.description', label: 'Description', text: source, bestOf: 1,
     generate: async (request) => { requests.push(request); return { text: requests.length === 1 ? source : candidate }; }
   });
   assert.deepEqual(result, { text: candidate, changed: true });
@@ -149,6 +149,40 @@ test('a duplicate result is retried once and a useful rewrite is returned withou
   assert.equal(requests[1].temperature, 0.7);
   assert.notDeepEqual(requests[1].messages, requests[0].messages);
   assert.equal(json(site), before);
+});
+
+test('short metadata is written twice and the stronger version is kept', async () => {
+  const site = exampleSite();
+  const source = 'Taylor Drew performs stand-up comedy in New York City.';
+  const weak = 'Comedy shows and clips.';
+  const strong = 'Catch Taylor Drew live around New York City: upcoming club dates, clips from recent sets, and booking details.';
+  const requests = [];
+  const result = await rewrite({ site, path: 'seo.description', text: source,
+    generate: async (request) => { requests.push(request); return { text: requests.length === 1 ? weak : strong }; }
+  });
+  assert.equal(requests.length, 2, 'a second version is written to compare against the first');
+  assert.match(requests[1].messages[1].content, /equally accurate version/);
+  assert.deepEqual(result, { text: strong, changed: true });
+});
+
+test('a long paragraph stops at the first usable version', async () => {
+  const site = exampleSite();
+  let calls = 0;
+  const result = await rewrite({ site, path: 'about.body.0', text: site.about.body[0],
+    generate: async () => { calls++; return { text: 'Stand-up is where Taylor Drew works, on stages around New York City, between filmed sets and club dates that fill most weeks of the year.' }; }
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.changed, true);
+});
+
+test('scoring prefers a complete, distinct, well-sized version over a thin or stuffed one', () => {
+  const site = exampleSite();
+  const source = 'Taylor Drew performs stand-up comedy in New York City.';
+  const context = { source, path: 'seo.description', site };
+  const strong = 'Catch Taylor Drew live around New York City: upcoming club dates, clips from recent sets, and booking details.';
+  assert.ok(score(strong, context) > score('Comedy shows and clips.', context), 'a thin version loses');
+  assert.ok(score(strong, context) > score(source, context), 'a near-copy of the original loses');
+  assert.ok(score(strong, context) > score('Comedy, comedy and more comedy from a comedy comedian in New York City comedy clubs today.', context), 'a stuffed version loses');
 });
 
 test('unusable outputs are retried a few times and then leave the original text intact', async () => {
@@ -178,7 +212,7 @@ test('a rewrite that only overruns its limit is repaired instead of discarded', 
   const source = 'Taylor Drew performs stand-up comedy in New York City.';
   const verbose = '"Catch Taylor Drew live across New York City comedy clubs. Watch clips from recent sets, check the next dates, and send booking details through the contact form today."';
   let calls = 0;
-  const result = await rewrite({ site, path: 'seo.description', text: source, generate: async () => { calls++; return { text: verbose }; } });
+  const result = await rewrite({ site, path: 'seo.description', text: source, bestOf: 1, generate: async () => { calls++; return { text: verbose }; } });
   assert.equal(calls, 1);
   assert.equal(result.changed, true);
   assert.ok(result.text.length <= 160);

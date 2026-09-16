@@ -1,16 +1,21 @@
 // Open-source models run on this device. No hosted inference or API credentials.
-// Ordered best first. A 1.5B model writes unusable SEO/GEO copy, so the largest
-// model this device can actually hold is loaded and the list is walked downwards
-// only when a model is missing from the build or fails to load.
+// Strongest first, newest generation preferred at every size. A 1.5B model
+// writes unusable SEO/GEO copy, so the best model this device can actually hold
+// is loaded, and the list is walked downwards only when a model is missing from
+// the WebLLM build or fails to load. Every id below exists in WebLLM 0.2.85 and
+// is checked against the runtime catalog before use.
 const TEXT_MODELS = [
-  'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+  'Qwen3.5-9B-q4f16_1-MLC',
+  'Qwen3-8B-q4f16_1-MLC',
+  'Llama-3.1-8B-Instruct-q4f16_1-MLC',
   'Hermes-3-Llama-3.1-8B-q4f16_1-MLC',
-  'Llama-3.1-8B-Instruct-q4f16_1-MLC-1k',
-  'Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC',
-  'gemma-2-9b-it-q4f16_1-MLC',
+  'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+  'Qwen3.5-4B-q4f16_1-MLC',
+  'Phi-4-mini-instruct-q4f16_1-MLC',
+  'Qwen3-4B-q4f16_1-MLC',
   'Qwen2.5-3B-Instruct-q4f16_1-MLC',
+  'Qwen3.5-2B-q4f16_1-MLC',
   'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-  'Phi-3.5-mini-instruct-q4f16_1-MLC',
   'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'
 ];
 const VISION_MODELS = ['Phi-3.5-vision-instruct-q4f16_1-MLC'];
@@ -20,26 +25,31 @@ const WEB_LLM = 'https://esm.run/@mlc-ai/web-llm@0.2.85';
 // WebGPU never reports total VRAM. maxBufferSize tracks the device class closely
 // enough to pick a starting tier, and a failed load falls through to the next
 // model anyway, so an optimistic estimate costs a retry rather than a dead end.
-export function budgetFromLimits(limits) {
+// navigator.deviceMemory is only used to hold back the large models on a
+// genuinely small machine; Chrome caps it at 8, so it never limits a big one.
+export function budgetFromLimits(limits, deviceMemoryGB) {
   const largest = Math.max(limits?.maxBufferSize || 0, limits?.maxStorageBufferBindingSize || 0) / (1024 * 1024);
-  if (!largest) return 2048;
-  return Math.min(16384, Math.max(2048, Math.round(largest * 4)));
+  const budget = largest ? Math.min(16384, Math.max(2048, Math.round(largest * 4))) : 2048;
+  if (deviceMemoryGB && deviceMemoryGB <= 4) return Math.min(budget, deviceMemoryGB <= 2 ? 2048 : 3000);
+  return budget;
 }
 
 export function chooseModels(available, { vision = false, supportsF16 = true, budgetMB = 2048 } = {}) {
   const entries = new Map((available || []).map((entry) => [entry.model_id, entry]));
   const variant = (id) => (supportsF16 ? id : id.replace('q4f16', 'q4f32'));
   const wanted = vision ? VISION_MODELS : TEXT_MODELS;
+  const vram = (id) => entries.get(id)?.vram_required_MB || 0;
   const chosen = [];
-  const add = (id, checkBudget) => {
-    const entry = entries.get(id);
-    if (!entry || chosen.includes(id)) return;
-    if (checkBudget && entry.vram_required_MB && entry.vram_required_MB > budgetMB) return;
-    chosen.push(id);
-  };
-  for (const id of wanted) add(variant(id), !vision);
-  if (!vision) for (const id of wanted) add(variant(id), false);
-  if (!vision) add(variant(LAST_RESORT), false);
+  const add = (id) => { if (entries.has(id) && !chosen.includes(id)) chosen.push(id); };
+  for (const id of wanted) if (vision || vram(variant(id)) <= budgetMB) add(variant(id));
+  // The budget is an estimate, so a slightly larger model is still worth an
+  // attempt — nearest first, and never far enough above to waste a download
+  // this device could never hold.
+  if (!vision) {
+    wanted.map(variant).filter((id) => entries.has(id) && !chosen.includes(id) && vram(id) <= budgetMB * 1.5)
+      .sort((a, b) => vram(a) - vram(b)).forEach(add);
+    add(variant(LAST_RESORT));
+  }
   return chosen.length ? chosen : [variant(wanted[0])];
 }
 
@@ -56,7 +66,8 @@ async function browserEngine(vision, onProgress, signal) {
   if (signal.aborted) throw new Error('Loading timed out.');
   const available = webllm.prebuiltAppConfig?.model_list || [];
   const models = chooseModels(available, {
-    vision, supportsF16: adapter.features.has('shader-f16'), budgetMB: budgetFromLimits(adapter.limits)
+    vision, supportsF16: adapter.features.has('shader-f16'),
+    budgetMB: budgetFromLimits(adapter.limits, navigator.deviceMemory)
   });
   let lastError;
   for (const model of models) {
@@ -134,7 +145,10 @@ export function createGenerator(loadEngine = browserEngine) {
         messages,
         temperature: temperature,
         max_tokens: maxTokens || (vision ? 512 : 1800),
-        response_format: { type: 'json_object', schema: JSON.stringify(schema) }
+        response_format: { type: 'json_object', schema: JSON.stringify(schema) },
+        // Qwen3 and Qwen3.5 open with a reasoning block that the JSON grammar
+        // cannot hold. Turn it off rather than have the model fight the schema.
+        extra_body: { enable_thinking: false }
       });
       const choice = response.choices?.[0];
       if (choice?.finish_reason === 'length') throw new Error('The result was cut short. Try a shorter field.');

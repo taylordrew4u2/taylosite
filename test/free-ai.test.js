@@ -53,10 +53,15 @@ test('vision framing preserves every edge of square and portrait images', async 
 });
 
 const catalog = [
+  { model_id: 'Qwen3.5-9B-q4f16_1-MLC', vram_required_MB: 6433 },
+  { model_id: 'Qwen3-8B-q4f16_1-MLC', vram_required_MB: 5696 },
+  { model_id: 'Qwen3.5-4B-q4f16_1-MLC', vram_required_MB: 3868 },
+  { model_id: 'Qwen3.5-4B-q4f32_1-MLC', vram_required_MB: 4680 },
   { model_id: 'Qwen2.5-7B-Instruct-q4f16_1-MLC', vram_required_MB: 5106 },
   { model_id: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', vram_required_MB: 2504 },
   { model_id: 'Qwen2.5-3B-Instruct-q4f32_1-MLC', vram_required_MB: 3495 },
   { model_id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', vram_required_MB: 2263 },
+  { model_id: 'Qwen3.5-2B-q4f16_1-MLC', vram_required_MB: 2245 },
   { model_id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', vram_required_MB: 1629 },
   { model_id: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC', vram_required_MB: 1888 },
   { model_id: 'Phi-3.5-vision-instruct-q4f16_1-MLC', vram_required_MB: 3952 }
@@ -65,13 +70,17 @@ const catalog = [
 test('a roomy GPU gets a capable writing model and a small one still gets a fallback chain', async () => {
   const { chooseModels } = await modulePromise;
   const big = chooseModels(catalog, { budgetMB: 8192 });
-  assert.equal(big[0], 'Qwen2.5-7B-Instruct-q4f16_1-MLC');
+  assert.equal(big[0], 'Qwen3.5-9B-q4f16_1-MLC');
+  assert.equal(big[1], 'Qwen3-8B-q4f16_1-MLC');
   assert.equal(big[big.length - 1], 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC');
+  const roomy = chooseModels(catalog, { budgetMB: 4096 });
+  assert.equal(roomy[0], 'Qwen3.5-4B-q4f16_1-MLC');
   const mid = chooseModels(catalog, { budgetMB: 2600 });
   assert.equal(mid[0], 'Qwen2.5-3B-Instruct-q4f16_1-MLC');
   const small = chooseModels(catalog, { budgetMB: 2048 });
   assert.equal(small[0], 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC');
-  assert.ok(small.includes('Qwen2.5-7B-Instruct-q4f16_1-MLC'), 'over-budget models stay as later attempts');
+  assert.ok(!small.includes('Qwen3.5-9B-q4f16_1-MLC'), 'a model this device could never hold is not downloaded');
+  assert.equal(small[1], 'Qwen3.5-2B-q4f16_1-MLC', 'the next attempt is the nearest larger model, not the biggest');
   assert.equal(new Set(small).size, small.length);
 });
 
@@ -79,7 +88,7 @@ test('a GPU without shader-f16 gets f32 builds, and vision keeps its own model',
   const { chooseModels } = await modulePromise;
   const models = chooseModels(catalog, { budgetMB: 8192, supportsF16: false });
   assert.ok(models.every((id) => id.includes('q4f32')), models.join(', '));
-  assert.equal(models[0], 'Qwen2.5-3B-Instruct-q4f32_1-MLC');
+  assert.equal(models[0], 'Qwen3.5-4B-q4f32_1-MLC');
   assert.deepEqual(chooseModels(catalog, { vision: true, budgetMB: 1024 }), ['Phi-3.5-vision-instruct-q4f16_1-MLC']);
   assert.deepEqual(chooseModels([], { vision: true }), ['Phi-3.5-vision-instruct-q4f16_1-MLC']);
 });
@@ -90,4 +99,8 @@ test('the VRAM budget is derived from WebGPU limits and stays within sane bounds
   assert.equal(budgetFromLimits({ maxBufferSize: 128 * 1024 * 1024 }), 2048);
   assert.equal(budgetFromLimits({ maxBufferSize: 2 * 1024 * 1024 * 1024 }), 8192);
   assert.equal(budgetFromLimits({ maxStorageBufferBindingSize: 8 * 1024 * 1024 * 1024 }), 16384);
+  // A small machine is held back, and Chrome's 8 GB ceiling never holds a big one back.
+  assert.equal(budgetFromLimits({ maxBufferSize: 2 * 1024 * 1024 * 1024 }, 4), 3000);
+  assert.equal(budgetFromLimits({ maxBufferSize: 2 * 1024 * 1024 * 1024 }, 2), 2048);
+  assert.equal(budgetFromLimits({ maxBufferSize: 2 * 1024 * 1024 * 1024 }, 8), 8192);
 });
