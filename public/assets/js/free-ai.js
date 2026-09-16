@@ -46,23 +46,40 @@ export function budgetFor(limits, deviceMemoryGB, size) {
   return Math.min(budgetFromLimits(limits, deviceMemoryGB), ceiling);
 }
 
-export function chooseModels(available, { vision = false, supportsF16 = true, budgetMB = 2048 } = {}) {
+export function chooseModels(available, { vision = false, supportsF16 = true, budgetMB = 2048, storageMB = Infinity } = {}) {
   const entries = new Map((available || []).map((entry) => [entry.model_id, entry]));
   const variant = (id) => (supportsF16 ? id : id.replace('q4f16', 'q4f32'));
   const wanted = vision ? VISION_MODELS : TEXT_MODELS;
   const vram = (id) => entries.get(id)?.vram_required_MB || 0;
+  // Weights are cached on disk. A model the browser will not let this origin
+  // store is not a fallback, it is a download that dies near the end.
+  const storable = (id) => vram(id) <= storageMB;
   const chosen = [];
-  const add = (id) => { if (entries.has(id) && !chosen.includes(id)) chosen.push(id); };
+  const add = (id) => { if (entries.has(id) && storable(id) && !chosen.includes(id)) chosen.push(id); };
   for (const id of wanted) if (vision || vram(variant(id)) <= budgetMB) add(variant(id));
-  // The budget is an estimate, so a slightly larger model is still worth an
-  // attempt — nearest first, and never far enough above to waste a download
+  // The VRAM budget is an estimate, so a slightly larger model is still worth
+  // an attempt — nearest first, and never far enough above to waste a download
   // this device could never hold.
   if (!vision) {
     wanted.map(variant).filter((id) => entries.has(id) && !chosen.includes(id) && vram(id) <= budgetMB * 1.5)
       .sort((a, b) => vram(a) - vram(b)).forEach(add);
     add(variant(LAST_RESORT));
   }
-  return chosen.length ? chosen : [variant(wanted[0])];
+  if (chosen.length) return chosen;
+  return storable(variant(wanted[0])) ? [variant(wanted[0])] : [];
+}
+
+// Safari caps what one site may store and evicts it after a week of disuse, so
+// ask for persistence and find out how much room there really is before
+// starting a multi-gigabyte download.
+export async function freeStorageMB(storage = globalThis.navigator?.storage) {
+  try {
+    if (!storage?.estimate) return Infinity;
+    if (storage.persist) await storage.persist();
+    const { quota = 0, usage = 0 } = (await storage.estimate()) || {};
+    if (!quota) return Infinity;
+    return Math.max(0, (quota - usage) / (1024 * 1024));
+  } catch (_) { return Infinity; }
 }
 
 function describe(id, available) {
@@ -71,16 +88,20 @@ function describe(id, available) {
 }
 
 async function browserEngine(vision, onProgress, signal, size) {
-  if (!globalThis.navigator?.gpu) throw new Error('Free AI needs a browser with WebGPU. Try current Chrome on a computer, or edit this field manually. Your content is unchanged.');
+  if (!globalThis.navigator?.gpu) throw new Error('Free AI needs WebGPU: Safari 18 or later, or Chrome, on macOS. Or edit this field manually — your content is unchanged.');
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) throw new Error('No compatible GPU is available. Try Chrome on a computer, or edit manually.');
   const webllm = await import(WEB_LLM);
   if (signal.aborted) throw new Error('Loading timed out.');
   const available = webllm.prebuiltAppConfig?.model_list || [];
+  const storageMB = await freeStorageMB();
   const models = chooseModels(available, {
-    vision, supportsF16: adapter.features.has('shader-f16'),
+    vision, supportsF16: adapter.features.has('shader-f16'), storageMB,
     budgetMB: budgetFor(adapter.limits, navigator.deviceMemory, size)
   });
+  if (!models.length) {
+    throw new Error(`This browser will only let the site store about ${Math.round(storageMB)} MB, and the smallest free model needs roughly 1.6 GB. Keep the panel open and allow storage when asked, free up disk space, or use your own API provider.`);
+  }
   let lastError;
   for (const model of models) {
     if (signal.aborted) throw new Error('Loading timed out.');

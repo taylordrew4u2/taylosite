@@ -1741,7 +1741,7 @@
         '<div class="row-actions"><button class="btn btn-sm btn-accent" type="button" data-action="ai-save">Save provider</button>' +
         (editor.id ? '<button class="btn btn-sm" type="button" data-action="ai-new">Add another provider</button>' : '') + '</div>') +
       card('Free browser option',
-        '<p class="hint">The free model runs on your device without API keys. It needs WebGPU and a one-time model download that your browser then caches. Pick the size that suits the computer you edit on — saved in this browser only.</p>' +
+        '<p class="hint">The free model runs on your device without API keys. It needs WebGPU — Safari 18 or later, or Chrome, on a Mac — and a one-time model download that your browser then caches. If the browser asks to store data on this site, allow it, or the download is thrown away. Pick the size that suits the computer you edit on — saved in this browser only.</p>' +
         '<div class="row-actions">' + FREE_SIZES.map(function (option) {
           return '<button class="btn btn-sm' + (freeSize() === option.id ? ' btn-accent' : '') + '" type="button" data-action="ai-size" data-size="' + option.id + '" aria-pressed="' + (freeSize() === option.id) + '">' + esc(option.label) + '</button>';
         }).join('') + '</div>' +

@@ -138,3 +138,26 @@ test('changing the size reloads the engine, and the model id is reported back', 
   assert.deepEqual(sizes, ['balanced', 'best']);
   assert.deepEqual(seen, ['Model-balanced', 'Model-balanced', 'Model-best']);
 });
+
+test('a model the browser cannot store is never offered, however much VRAM there is', async () => {
+  const { chooseModels } = await modulePromise;
+  const cramped = chooseModels(catalog, { budgetMB: 8192, storageMB: 2500 });
+  assert.equal(cramped[0], 'Qwen3.5-2B-q4f16_1-MLC');
+  assert.ok(cramped.every((id) => id !== 'Qwen3.5-9B-q4f16_1-MLC'));
+  assert.deepEqual(chooseModels(catalog, { budgetMB: 8192, storageMB: 400 }), [], 'nothing fits, so nothing is downloaded');
+  assert.deepEqual(chooseModels([], { budgetMB: 8192, storageMB: 400 }), ['Qwen3.5-9B-q4f16_1-MLC'], 'an unknown catalog is not second-guessed');
+});
+
+test('storage is made persistent and the free space is reported in MB', async () => {
+  const { freeStorageMB } = await modulePromise;
+  let persisted = false;
+  assert.equal(await freeStorageMB({
+    persist: async () => { persisted = true; return true; },
+    estimate: async () => ({ quota: 3 * 1024 * 1024 * 1024, usage: 1024 * 1024 * 1024 })
+  }), 2048);
+  assert.equal(persisted, true);
+  assert.equal(await freeStorageMB(undefined), Infinity, 'an old browser is not blocked by a missing API');
+  assert.equal(await freeStorageMB({ estimate: async () => ({ quota: 0 }) }), Infinity);
+  assert.equal(await freeStorageMB({ estimate: async () => { throw new Error('denied'); } }), Infinity);
+  assert.equal(await freeStorageMB({ estimate: async () => ({ quota: 1024 * 1024 * 1024, usage: 2 * 1024 * 1024 * 1024 }) }), 0);
+});

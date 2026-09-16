@@ -725,9 +725,14 @@ site, and the panel shows which model actually ran. Within the chosen size the
 tier is taken from the WebGPU buffer limits (held back on a device reporting
 4 GB of RAM or less) against each model's published VRAM requirement, and a
 model that is missing from the build or fails to load falls through to the
-next — nearest size first, never more than 1.5×
-the estimated budget. Every id is checked against the runtime catalog, so an
-unavailable model is skipped rather than thrown. Devices without `shader-f16`
+next. Before any download the panel asks for persistent storage and reads
+`navigator.storage.estimate()`, and drops every model that does not fit the
+origin's quota — on Safari that quota is limited and evicted after a week of
+disuse, so a model that cannot be stored is never started rather than failing
+near the end of a multi-gigabyte download. Models that do fit are tried in
+order, nearest size first, and never more than 1.5x the estimated VRAM budget.
+Every id is checked against the runtime catalog, so an unavailable model is
+skipped rather than thrown. Devices without `shader-f16`
 get the float32 builds. Qwen3 and Qwen3.5 reasoning blocks are disabled because
 the JSON grammar cannot hold them. Images use Phi 3.5 Vision. Models download on
 first use and are cached locally, so the first generation on a capable machine
