@@ -1,24 +1,83 @@
 // Open-source models run on this device. No hosted inference or API credentials.
-const TEXT_MODEL = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
-const VISION_MODEL = 'Phi-3.5-vision-instruct-q4f16_1-MLC';
+// Ordered best first. A 1.5B model writes unusable SEO/GEO copy, so the largest
+// model this device can actually hold is loaded and the list is walked downwards
+// only when a model is missing from the build or fails to load.
+const TEXT_MODELS = [
+  'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+  'Hermes-3-Llama-3.1-8B-q4f16_1-MLC',
+  'Llama-3.1-8B-Instruct-q4f16_1-MLC-1k',
+  'Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC',
+  'gemma-2-9b-it-q4f16_1-MLC',
+  'Qwen2.5-3B-Instruct-q4f16_1-MLC',
+  'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+  'Phi-3.5-mini-instruct-q4f16_1-MLC',
+  'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'
+];
+const VISION_MODELS = ['Phi-3.5-vision-instruct-q4f16_1-MLC'];
+const LAST_RESORT = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+const WEB_LLM = 'https://esm.run/@mlc-ai/web-llm@0.2.85';
+
+// WebGPU never reports total VRAM. maxBufferSize tracks the device class closely
+// enough to pick a starting tier, and a failed load falls through to the next
+// model anyway, so an optimistic estimate costs a retry rather than a dead end.
+export function budgetFromLimits(limits) {
+  const largest = Math.max(limits?.maxBufferSize || 0, limits?.maxStorageBufferBindingSize || 0) / (1024 * 1024);
+  if (!largest) return 2048;
+  return Math.min(16384, Math.max(2048, Math.round(largest * 4)));
+}
+
+export function chooseModels(available, { vision = false, supportsF16 = true, budgetMB = 2048 } = {}) {
+  const entries = new Map((available || []).map((entry) => [entry.model_id, entry]));
+  const variant = (id) => (supportsF16 ? id : id.replace('q4f16', 'q4f32'));
+  const wanted = vision ? VISION_MODELS : TEXT_MODELS;
+  const chosen = [];
+  const add = (id, checkBudget) => {
+    const entry = entries.get(id);
+    if (!entry || chosen.includes(id)) return;
+    if (checkBudget && entry.vram_required_MB && entry.vram_required_MB > budgetMB) return;
+    chosen.push(id);
+  };
+  for (const id of wanted) add(variant(id), !vision);
+  if (!vision) for (const id of wanted) add(variant(id), false);
+  if (!vision) add(variant(LAST_RESORT), false);
+  return chosen.length ? chosen : [variant(wanted[0])];
+}
+
+function describe(id, available) {
+  const size = (available || []).find((entry) => entry.model_id === id)?.vram_required_MB;
+  return size ? `${id} (~${Math.round(size / 1024 * 10) / 10} GB)` : id;
+}
 
 async function browserEngine(vision, onProgress, signal) {
   if (!globalThis.navigator?.gpu) throw new Error('Free AI needs a browser with WebGPU. Try current Chrome on a computer, or edit this field manually. Your content is unchanged.');
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) throw new Error('No compatible GPU is available. Try Chrome on a computer, or edit manually.');
-  let model = vision ? VISION_MODEL : TEXT_MODEL;
-  if (!adapter.features.has('shader-f16')) model = model.replace('q4f16', 'q4f32');
-  const webllm = await import('https://esm.run/@mlc-ai/web-llm@0.2.85');
+  const webllm = await import(WEB_LLM);
   if (signal.aborted) throw new Error('Loading timed out.');
-  const worker = new Worker('/assets/js/free-ai-worker.js', { type: 'module' });
-  const dispose = () => { worker.terminate(); signal.removeEventListener('abort', dispose); };
-  signal.addEventListener('abort', dispose, { once: true });
-  try {
-    const engine = await webllm.CreateWebWorkerMLCEngine(worker, model, {
-      initProgressCallback: (report) => onProgress(report.text || 'Loading free AI…')
-    });
-    return { engine, dispose };
-  } catch (error) { dispose(); throw error; }
+  const available = webllm.prebuiltAppConfig?.model_list || [];
+  const models = chooseModels(available, {
+    vision, supportsF16: adapter.features.has('shader-f16'), budgetMB: budgetFromLimits(adapter.limits)
+  });
+  let lastError;
+  for (const model of models) {
+    if (signal.aborted) throw new Error('Loading timed out.');
+    const worker = new Worker('/assets/js/free-ai-worker.js', { type: 'module' });
+    const dispose = () => { worker.terminate(); signal.removeEventListener('abort', dispose); };
+    signal.addEventListener('abort', dispose, { once: true });
+    try {
+      onProgress(`Loading ${describe(model, available)}…`);
+      const engine = await webllm.CreateWebWorkerMLCEngine(worker, model, {
+        initProgressCallback: (report) => onProgress(report.text || `Loading ${model}…`)
+      });
+      return { engine, dispose, model };
+    } catch (error) {
+      dispose();
+      lastError = error;
+      if (signal.aborted) throw error;
+      onProgress('That model did not fit on this device. Trying a smaller one…');
+    }
+  }
+  throw lastError || new Error('No free model could be loaded on this device.');
 }
 
 // Phi's compiled image prefill fits a 4:3 frame. Letterbox, never crop.

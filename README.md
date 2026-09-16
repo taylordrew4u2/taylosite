@@ -700,15 +700,25 @@ Every eligible text field has one **Generate SEO + GEO** button. Instructions
 and context match its purpose: metadata, biography, FAQ answer, link,
 event note or short label. Exact identity facts, quotations, official credits
 and photo descriptions are excluded from text rewriting. Photo descriptions
-use the image generator instead. Results that repeat previous copy, exceed
-field limits or fail validation are retried once, then the original is kept.
-Newer edits made while a request runs are preserved. Review and Save to publish.
+use the image generator instead. Every result is first repaired — surrounding
+quotes, prefaces such as "Here is the rewritten version", markdown, stray
+character counts and overruns past the field limit are cleaned up, trimming on
+a sentence or word boundary. A result that still repeats previous copy or fails
+validation is retried up to three times, at rising temperature, then the
+original is kept. Newer edits made while a request runs are preserved. Review
+and Save to publish.
 
-Free mode uses WebLLM 0.2.85 in a browser worker: Qwen2.5 1.5B for text and
-Phi 3.5 Vision for images. Models download on first use and are cached locally.
-Text needs roughly 2 GB GPU memory, vision about 4 GB with float16 support or
-6 GB without it. A WebGPU-compatible browser is required. Vision inputs are
-padded to 4:3, never cropped. Errors preserve the original content.
+Free mode uses WebLLM 0.2.85 in a browser worker. For text it loads the largest
+model the device can hold, preferring Qwen2.5 7B, then Hermes 3 / Llama 3.1 8B,
+then Qwen2.5 3B or Llama 3.2 3B, and falling back to Qwen2.5 1.5B on small
+GPUs; small models write unusable SEO copy, so the tier is chosen from the
+WebGPU buffer limits and the list is walked downwards when a model fails to
+load. Devices without `shader-f16` get the float32 builds. Images use Phi 3.5
+Vision. Models download on first use and are cached locally, so the first
+generation on a capable machine downloads several GB. Vision needs about 4 GB
+GPU memory with float16 support or 6 GB without it. A WebGPU-compatible browser
+is required. Vision inputs are padded to 4:3, never cropped. Errors preserve
+the original content.
 
 Legacy server integrations can explicitly opt into hosted inference with
 `AI_HOSTED_ENABLED=true`; a saved browser-mode selection overrides that flag.

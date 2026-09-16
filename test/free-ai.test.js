@@ -51,3 +51,43 @@ test('vision framing preserves every edge of square and portrait images', async 
   assert.deepEqual(imagePlacement(600, 1200), { width: 384, height: 768, x: 320, y: 0 });
   assert.deepEqual(imagePlacement(1600, 600), { width: 1024, height: 384, x: 0, y: 192 });
 });
+
+const catalog = [
+  { model_id: 'Qwen2.5-7B-Instruct-q4f16_1-MLC', vram_required_MB: 5106 },
+  { model_id: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', vram_required_MB: 2504 },
+  { model_id: 'Qwen2.5-3B-Instruct-q4f32_1-MLC', vram_required_MB: 3495 },
+  { model_id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', vram_required_MB: 2263 },
+  { model_id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', vram_required_MB: 1629 },
+  { model_id: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC', vram_required_MB: 1888 },
+  { model_id: 'Phi-3.5-vision-instruct-q4f16_1-MLC', vram_required_MB: 3952 }
+];
+
+test('a roomy GPU gets a capable writing model and a small one still gets a fallback chain', async () => {
+  const { chooseModels } = await modulePromise;
+  const big = chooseModels(catalog, { budgetMB: 8192 });
+  assert.equal(big[0], 'Qwen2.5-7B-Instruct-q4f16_1-MLC');
+  assert.equal(big[big.length - 1], 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC');
+  const mid = chooseModels(catalog, { budgetMB: 2600 });
+  assert.equal(mid[0], 'Qwen2.5-3B-Instruct-q4f16_1-MLC');
+  const small = chooseModels(catalog, { budgetMB: 2048 });
+  assert.equal(small[0], 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC');
+  assert.ok(small.includes('Qwen2.5-7B-Instruct-q4f16_1-MLC'), 'over-budget models stay as later attempts');
+  assert.equal(new Set(small).size, small.length);
+});
+
+test('a GPU without shader-f16 gets f32 builds, and vision keeps its own model', async () => {
+  const { chooseModels } = await modulePromise;
+  const models = chooseModels(catalog, { budgetMB: 8192, supportsF16: false });
+  assert.ok(models.every((id) => id.includes('q4f32')), models.join(', '));
+  assert.equal(models[0], 'Qwen2.5-3B-Instruct-q4f32_1-MLC');
+  assert.deepEqual(chooseModels(catalog, { vision: true, budgetMB: 1024 }), ['Phi-3.5-vision-instruct-q4f16_1-MLC']);
+  assert.deepEqual(chooseModels([], { vision: true }), ['Phi-3.5-vision-instruct-q4f16_1-MLC']);
+});
+
+test('the VRAM budget is derived from WebGPU limits and stays within sane bounds', async () => {
+  const { budgetFromLimits } = await modulePromise;
+  assert.equal(budgetFromLimits(undefined), 2048);
+  assert.equal(budgetFromLimits({ maxBufferSize: 128 * 1024 * 1024 }), 2048);
+  assert.equal(budgetFromLimits({ maxBufferSize: 2 * 1024 * 1024 * 1024 }), 8192);
+  assert.equal(budgetFromLimits({ maxStorageBufferBindingSize: 8 * 1024 * 1024 * 1024 }), 16384);
+});

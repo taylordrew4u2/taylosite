@@ -1739,7 +1739,7 @@
         '<label class="switch"><input id="ai-enabled" type="checkbox"' + (editor.enabled !== false ? ' checked' : '') + '> Enable this provider</label>' +
         '<div class="row-actions"><button class="btn btn-sm btn-accent" type="button" data-action="ai-save">Save provider</button>' +
         (editor.id ? '<button class="btn btn-sm" type="button" data-action="ai-new">Add another provider</button>' : '') + '</div>') +
-      card('Free browser option', '<p class="hint">The free model runs on your device without API keys. It needs WebGPU and a first-use model download. API mode uses only your enabled providers; switching modes is always your choice.</p>');
+      card('Free browser option', '<p class="hint">The free model runs on your device without API keys. It needs WebGPU and a first-use model download, and it picks the strongest model your GPU can hold, so that first download can be several GB on a capable computer. Small phones and laptops fall back to a smaller model that writes weaker copy — use your own API providers for the best results. API mode uses only your enabled providers; switching modes is always your choice.</p>');
   }
 
   function generateAI(options) {
