@@ -24,6 +24,8 @@ async function startServer(env = {}) {
   // A null value removes an inherited variable — this machine may well have a
   // GITHUB_TOKEN of its own, which some cases need absent.
   const childEnv = { ...process.env, PORT: '0', TAYLOSITE_DATA_DIR: dir, ...env };
+  // Only local stand-in tests opt into the legacy hosted path.
+  if (env.ANTHROPIC_BASE_URL && !Object.hasOwn(env, 'AI_HOSTED_ENABLED')) childEnv.AI_HOSTED_ENABLED = 'true';
   for (const [key, value] of Object.entries(childEnv)) {
     if (value === null) delete childEnv[key];
   }
@@ -1681,7 +1683,10 @@ test('posting a flyer reads the show off it and keeps the image', async () => {
       await server.login();
 
       const status = await server.call('/api/admin/site');
-      assert.deepStrictEqual(status.json.flyer, { configured: true, source: 'environment', model: 'claude-opus-5' });
+      assert.strictEqual(status.json.flyer.configured, true);
+      assert.strictEqual(status.json.flyer.source, 'environment');
+      assert.strictEqual(status.json.flyer.model, 'claude-opus-5');
+      assert.strictEqual(status.json.flyer.providers.length, 3);
 
       const res = await server.call('/api/admin/shows/flyer', {
         method: 'POST',
@@ -1746,7 +1751,7 @@ test('the API key can be pasted into the panel, and never leaves the server', as
   try {
     await withServer({ ANTHROPIC_API_KEY: null, ANTHROPIC_BASE_URL: ai.base }, async (server) => {
       await server.login();
-      assert.deepStrictEqual((await server.call('/api/admin/site')).json.flyer, { configured: false, source: null, model: 'claude-opus-5' });
+      assert.strictEqual((await server.call('/api/admin/site')).json.flyer.configured, false);
 
       const without = await server.call('/api/admin/shows/flyer', {
         method: 'POST',
@@ -1810,6 +1815,9 @@ test('public copy can be rewritten for SEO without changing it before Save', asy
       assert.strictEqual((await server.call('/api/admin/site')).json.site.about.body[0], before, 'generating is a preview until Save');
 
       const prompt = ai.calls[0].body.messages[0].content;
+      assert.match(prompt, /traditional search engine optimization \(SEO\)/);
+      assert.match(prompt, /generative engine optimization \(GEO\)/);
+      assert.strictEqual(ai.calls.length, 1, 'one request combines both optimizations');
       assert.match(prompt, /Never invent an award, credit, date, venue/);
       assert.match(prompt, /Do not keyword-stuff/);
       assert.match(prompt, /Field path: about\.body\.0/);
@@ -2185,4 +2193,61 @@ test('a real feed URL still wins, and a profile URL alone still points the way',
     await api.stop();
     await new Promise((r) => feed.close(r));
   }
+});
+
+test('AI provider settings require a session and CSRF and never expose saved keys', async () => {
+  await withServer({}, async (server) => {
+    const body = { provider: 'openai', apiKey: 'sk-test-private-0123456789abcdef', model: 'gpt-4.1-mini', primary: true };
+    assert.strictEqual((await server.call('/api/admin/ai-provider', { method: 'POST', body })).status, 401);
+    await server.login();
+    assert.strictEqual((await server.call('/api/admin/ai-provider', { method: 'POST', body, csrf: false })).status, 403);
+    const saved = await server.call('/api/admin/ai-provider', { method: 'POST', body });
+    assert.strictEqual(saved.status, 200, saved.text);
+    assert.strictEqual(saved.json.primary, 'openai');
+    assert.ok(!saved.text.includes(body.apiKey));
+    const admin = await server.call('/api/admin/site');
+    assert.ok(!admin.text.includes(body.apiKey));
+    assert.strictEqual(admin.json.flyer.providers.find(p => p.id === 'openai').configured, true);
+    const removed = await server.call('/api/admin/ai-provider', { method: 'DELETE', body: { provider: 'openai' } });
+    assert.strictEqual(removed.status, 200);
+    assert.strictEqual(removed.json.providers.find(p => p.id === 'openai').configured, false);
+  });
+});
+
+test('flyer and reel photo descriptions survive save and reach HTML and image sitemap', async () => {
+  await withServer({}, async (server) => {
+    await server.login();
+    const site = (await server.call('/api/admin/site')).json.site;
+    site.shows = [{ id: 'photo-show', date: '2031-10-03', venue: 'Test Venue', flyer: '/uploads/flyer.png', flyerAlt: 'A comedy night at Test Venue.', visible: true }];
+    site.reels.items = [{ id: 'photo-reel', poster: '/uploads/cover.png', posterAlt: 'Taylor Drew performs on stage.', caption: 'Keep this original caption.', visible: true }];
+    const saved = await server.call('/api/admin/site', { method: 'PUT', body: { site } });
+    assert.strictEqual(saved.status, 200, saved.text);
+    const after = (await server.call('/api/admin/site')).json.site;
+    assert.strictEqual(after.shows[0].flyerAlt, site.shows[0].flyerAlt);
+    assert.strictEqual(after.reels.items[0].caption, 'Keep this original caption.');
+    assert.match((await server.call('/shows')).text, /alt="A comedy night at Test Venue\."/);
+    assert.match((await server.call('/reels')).text, /alt="Taylor Drew performs on stage\."/);
+    const sitemap = (await server.call('/sitemap.xml')).text;
+    assert.match(sitemap, /uploads\/flyer\.png/);
+    assert.match(sitemap, /Taylor Drew performs on stage/);
+  });
+});
+
+test('browser-read flyers normalize and persist images without calling a hosted provider', async () => {
+  const ai = await startFakeAnthropic({ state: { down: true } });
+  try {
+    await withServer({ AI_HOSTED_ENABLED: 'false', ANTHROPIC_API_KEY: 'sk-ant-unused-0123456789abcdef', ANTHROPIC_BASE_URL: ai.base }, async server => {
+      await server.login();
+      const result = await server.call('/api/admin/shows/flyer', { method: 'POST', body: {
+        name: 'local-flyer.png', dataUrl: `data:image/png;base64,${PNG.toString('base64')}`,
+        details: { date: '2031-10-03', venue: 'A real venue', url: 'javascript:alert(1)', missing: [], soldOut: false, confidence: 'high' }
+      } });
+      assert.strictEqual(result.status, 200, result.text);
+      assert.strictEqual(result.json.show.venue, 'A real venue');
+      assert.strictEqual(result.json.show.url, '');
+      assert.match(result.json.show.flyer, /^\/uploads\//);
+      assert.strictEqual(ai.calls.length, 0);
+      assert.strictEqual((await server.call('/api/admin/site')).json.site.shows.length, 0, 'AI output stays a draft until saved');
+    });
+  } finally { await ai.stop(); }
 });
