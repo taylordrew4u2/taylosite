@@ -16,7 +16,7 @@ const flyer = require('./lib/flyer');
 const seoCopy = require('./lib/seo-copy');
 const aiProviders = require('./lib/ai-providers');
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = process.env.PORT === '0' ? 0 : Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_BODY = 12 * 1024 * 1024; // generous enough for a base64 photo
@@ -863,6 +863,7 @@ const PAGES = {
   '/shows': render.renderShows,
   '/links': render.renderLinks,
   '/reels': render.renderReels,
+  '/photos': render.renderPhotos,
   '/contact': render.renderContact
 };
 
@@ -1043,16 +1044,18 @@ async function handle(req, res) {
       '/': [{ url: site.home.photo, caption: site.home.photoAlt }],
       '/about': [{ url: site.about.photo, caption: site.about.photoAlt }],
       '/shows': (site.shows || []).filter(show => show.visible !== false).map(show => ({ url: show.flyer, caption: show.flyerAlt || `Flyer for ${show.venue || 'a performance'}` })),
-      '/reels': ((site.reels || {}).items || []).filter(reel => reel.visible !== false).map(reel => ({ url: reel.poster, caption: reel.posterAlt || reel.caption }))
+      '/reels': ((site.reels || {}).items || []).filter(reel => reel.visible !== false).map(reel => ({ url: reel.poster, caption: reel.posterAlt || reel.caption })),
+      '/photos': render.visiblePhotos(site).map(photo => ({ url: photo.photo, title: photo.title, caption: photo.photoAlt || photo.caption }))
     };
     const urls = Object.keys(PAGES)
+      .filter(page => page !== '/photos' || photos['/photos'].length)
       .map((page) => {
         const images = (photos[page] || [])
           .filter((p) => p.url)
           .map(
             (p) =>
               `<image:image><image:loc>${escapeXml(new URL(p.url, origin).href)}</image:loc>` +
-              `<image:title>${escapeXml(site.brand.name)}</image:title>` +
+              `<image:title>${escapeXml(p.title || site.brand.name)}</image:title>` +
               // The caption is the alt text — the one sentence that says what is
               // in the picture, which is all image search has to go on.
               `<image:caption>${escapeXml(p.caption || site.brand.name)}</image:caption></image:image>`
@@ -1128,8 +1131,9 @@ const server = http.createServer((req, res) => {
 
 if (require.main === module) {
   server.listen(PORT, HOST, () => {
-    console.log(`\n  Taylor Drew site running at http://localhost:${PORT}`);
-    console.log(`  Admin panel:                http://localhost:${PORT}/admin`);
+    const port = server.address().port;
+    console.log(`\n  Taylor Drew site running at http://localhost:${port}`);
+    console.log(`  Admin panel:                http://localhost:${port}/admin`);
     console.log(`  Storage:                    ${store.describe()}`);
     auth
       .usingDefaultPassword()
