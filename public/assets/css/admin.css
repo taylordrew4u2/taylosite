@@ -637,6 +637,21 @@ a {
   opacity: 0.6;
 }
 
+/* Inside a table cell or a mini-field there is no room for the full label:
+   the same two buttons, small, reading SEO and GEO. */
+.search-generators.is-compact {
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.search-generators.is-compact .seo-generate {
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+}
+
 .switch {
   display: inline-flex;
   align-items: center;

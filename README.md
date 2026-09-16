@@ -61,14 +61,17 @@ Editing notes:
   recommended discovery fields are counted, linked to the correct section and
   explained step by step. The same instructions appear beside an incomplete
   field, and sidebar badges show which sections still need attention.
-- Public-facing text inputs include separate **Generate SEO version** and
-  **Generate GEO version** buttons. SEO targets traditional search wording;
-  GEO produces a self-contained, factual block that AI answer engines can
-  extract and attribute. Both use
-  the same Anthropic key as flyer reading, preserves the supplied facts, and
-  places the draft in the field without saving it. Review the wording and press
-  Save to publish it. Technical or factual inputs such as URLs, email addresses,
-  dates, venues, IDs, verification codes and colours are not rewritten.
+- Every text field whose words reach the site carries a **Generate SEO
+  version** and a **Generate GEO version** button — page copy, bios, FAQ
+  answers, quotes, captions, alt text, menu labels, and the compact rows too
+  (a link's label and sub-label, a show's venue, city, note and button label
+  read **SEO** / **GEO** beside the cell). SEO targets traditional search
+  wording; GEO produces a self-contained, factual block that AI answer engines
+  can extract and attribute. Both use the same Anthropic key as flyer reading,
+  preserve the supplied facts, and place the draft in the field without saving
+  it. Review the wording and press Save to publish it. What is not rewritten:
+  the brand name and logo text, URLs, email addresses, dates, times, street
+  addresses, postal codes, countries, IDs, verification codes and colours.
 - Hero, About, social-share and reel-cover images include **Generate photo SEO
   + GEO**. Claude looks at the selected media-library image and drafts factual alt
   text or a cover description. The draft remains unsaved until it is reviewed.
