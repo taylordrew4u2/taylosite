@@ -259,6 +259,21 @@ test('the machine-readable surface answers for the site', async (t) => {
       assert.ok(!res.text.includes('hidden.example'), 'a hidden link stays hidden here too');
     });
 
+    await t.test('/llms-full.txt carries the whole site, and llms.txt points at it', async () => {
+      const index = (await server.call('/llms.txt')).text;
+      assert.match(index, /Full text: https?:\/\/[^\s]+\/llms-full\.txt/, 'the index names the full document');
+      const res = await server.call('/llms-full.txt');
+      assert.strictEqual(res.status, 200);
+      assert.match(res.headers.get('content-type'), /text\/plain/);
+      assert.match(res.text, /^# Taylor Drew/m);
+      assert.match(res.text, /A New York City stand-up comedian\./);
+      assert.match(res.text, /## Page copy/, 'and the copy the pages themselves show');
+      assert.ok(!/hash|salt|password|csrf/i.test(res.text), 'without credentials');
+      assert.ok(!res.text.includes('hidden.example'), 'or anything hidden');
+      const robots = (await server.call('/robots.txt')).text;
+      assert.match(robots, /# llms-full\.txt: https?:\/\/[^\s]+\/llms-full\.txt/);
+    });
+
     await t.test('and never leaks what the pages do not show', async () => {
       const res = await server.call('/llms.txt');
       assert.ok(!/hash|salt|password|csrf/i.test(res.text), 'no credentials in the file crawlers read first');
@@ -279,6 +294,43 @@ test('the machine-readable surface answers for the site', async (t) => {
       const { text } = await server.call('/sitemap.xml');
       assert.match(text, /xmlns:image="http:\/\/www\.google\.com\/schemas\/sitemap-image\/1\.1"/);
       assert.match(text, /<image:loc>[^<]+<\/image:loc>/);
+    });
+
+    await t.test('a clip is published as a video, in the sitemap and in the graph', async () => {
+      await server.call('/api/admin/site', {
+        method: 'PUT',
+        body: {
+          site: {
+            reels: {
+              feedUrl: '',
+              items: [{
+                id: 'clip', url: 'https://www.instagram.com/reel/ZZZ/', video: '/uploads/clip.mp4',
+                poster: '/uploads/clip.jpg', posterAlt: 'On stage at a club',
+                caption: 'Crowd work in Brooklyn', published: '2026-05-01T10:00:00.000Z', visible: true
+              }]
+            }
+          }
+        }
+      });
+
+      const sitemap = (await server.call('/sitemap.xml')).text;
+      assert.match(sitemap, /xmlns:video="http:\/\/www\.google\.com\/schemas\/sitemap-video\/1\.1"/);
+      assert.match(sitemap, /<video:title>Crowd work in Brooklyn<\/video:title>/);
+      assert.match(sitemap, /<video:thumbnail_loc>[^<]+\/uploads\/clip\.jpg<\/video:thumbnail_loc>/);
+      assert.match(sitemap, /<video:player_loc>https:\/\/www\.instagram\.com\/reel\/ZZZ\/<\/video:player_loc>/);
+      assert.match(sitemap, /<video:publication_date>2026-05-01T10:00:00\.000Z<\/video:publication_date>/);
+
+      const page = (await server.call('/reels')).text;
+      const graph = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page)[1].replace(/\\u003c/g, '<'))['@graph'];
+      const video = graph.find((node) => node['@type'] === 'VideoObject');
+      assert.ok(video, 'the clip is a VideoObject');
+      assert.strictEqual(video.name, 'Crowd work in Brooklyn');
+      assert.strictEqual(video.uploadDate, '2026-05-01T10:00:00.000Z');
+      assert.match(video.thumbnailUrl, /\/uploads\/clip\.jpg$/);
+      assert.strictEqual(video.embedUrl, 'https://www.instagram.com/reel/ZZZ/');
+      assert.ok(video.creator['@id'].endsWith('#person'), 'and it is credited to her');
+      const collection = graph.find((node) => Array.isArray(node['@type']) && node['@type'].includes('VideoGallery'));
+      assert.ok(collection, 'the page says it is a gallery of videos');
     });
 
     await t.test('a missing page asks not to be indexed', async () => {
@@ -682,11 +734,19 @@ test('the wall fills itself from the connected account', async () => {
       const html = (await server.call('/reels')).text;
 
       assert.match(html, /\/uploads\/mine\.mp4/, 'the pinned one leads');
+      // Counted in the markup alone: the structured data names the same clip
+      // again on purpose, as the video it is.
+      const markup = html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '');
       assert.strictEqual(
-        (html.match(/instagram\.com\/reel\/AAA/g) || []).length,
+        (markup.match(/instagram\.com\/reel\/AAA/g) || []).length,
         1,
         'and the same reel from the feed does not appear twice'
       );
+      const graph = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)[1].replace(/\\u003c/g, '<'));
+      const clips = graph['@graph'].filter((node) => node['@type'] === 'VideoObject');
+      assert.strictEqual(clips.length, 1, 'one clip on the page, one VideoObject');
+      assert.strictEqual(clips[0].embedUrl, 'https://www.instagram.com/reel/AAA');
+      assert.match(clips[0].contentUrl, /\/uploads\/mine\.mp4$/);
       assert.ok(!html.includes('cdn.example/111.mp4'), 'the pinned version wins over the fetched one');
       assert.ok(!html.includes('A photo'), 'a photo is not a reel');
 

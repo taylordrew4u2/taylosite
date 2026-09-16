@@ -903,6 +903,7 @@ function robotsTxt(origin) {
     // Not a standard directive, but it is where the crawlers that look for a
     // plain-text summary look first, and robots.txt is the file they all fetch.
     `# llms.txt: ${origin}/llms.txt`,
+    `# llms-full.txt: ${origin}/llms-full.txt`,
     ''
   ].join('\n');
 }
@@ -1035,6 +1036,15 @@ async function handle(req, res) {
     });
   }
 
+  // The whole site as one document, for the crawler that wants the answer
+  // rather than the index.
+  if (pathname === '/llms-full.txt') {
+    return send(res, 200, render.llmsFullTxt(await store.readSite(), origin), {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'public, max-age=300'
+    });
+  }
+
   if (pathname === '/sitemap.xml') {
     const site = await store.readSite();
     const updated = (site.meta || {}).updatedAt || new Date().toISOString();
@@ -1047,9 +1057,37 @@ async function handle(req, res) {
       '/reels': ((site.reels || {}).items || []).filter(reel => reel.visible !== false).map(reel => ({ url: reel.poster, caption: reel.posterAlt || reel.caption })),
       '/photos': render.visiblePhotos(site).map(photo => ({ url: photo.photo, title: photo.title, caption: photo.photoAlt || photo.caption }))
     };
+    // A clip is not an image. Video search indexes it from its own entry, with
+    // the thumbnail, the title and somewhere to play it.
+    const videos = {
+      '/reels': render.visibleReels(site)
+        .filter((reel) => reel.video || reel.url)
+        .map((reel) => ({
+          title: reel.caption || reel.posterAlt || `${site.brand.name} clip`,
+          description: reel.caption || reel.posterAlt || `A clip of ${site.brand.name}.`,
+          thumbnail: reel.poster,
+          content: reel.video,
+          player: reel.url,
+          published: reel.published
+        }))
+        .filter((video) => video.thumbnail && (video.content || video.player))
+    };
     const urls = Object.keys(PAGES)
       .filter(page => page !== '/photos' || photos['/photos'].length)
       .map((page) => {
+        const clips = (videos[page] || [])
+          .map(
+            (v) =>
+              '<video:video>' +
+              `<video:thumbnail_loc>${escapeXml(new URL(v.thumbnail, origin).href)}</video:thumbnail_loc>` +
+              `<video:title>${escapeXml(v.title)}</video:title>` +
+              `<video:description>${escapeXml(v.description)}</video:description>` +
+              (v.content ? `<video:content_loc>${escapeXml(new URL(v.content, origin).href)}</video:content_loc>` : '') +
+              (v.player ? `<video:player_loc>${escapeXml(v.player)}</video:player_loc>` : '') +
+              (v.published ? `<video:publication_date>${escapeXml(v.published)}</video:publication_date>` : '') +
+              '</video:video>'
+          )
+          .join('');
         const images = (photos[page] || [])
           .filter((p) => p.url)
           .map(
@@ -1061,13 +1099,13 @@ async function handle(req, res) {
               `<image:caption>${escapeXml(p.caption || site.brand.name)}</image:caption></image:image>`
           )
           .join('');
-        return `  <url><loc>${origin}${page}</loc><lastmod>${updated.slice(0, 10)}</lastmod>${images}</url>`;
+        return `  <url><loc>${origin}${page}</loc><lastmod>${updated.slice(0, 10)}</lastmod>${images}${clips}</url>`;
       })
       .join('\n');
     return send(
       res,
       200,
-      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls}\n</urlset>\n`,
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">\n${urls}\n</urlset>\n`,
       { 'Content-Type': 'application/xml; charset=utf-8' }
     );
   }

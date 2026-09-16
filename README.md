@@ -280,7 +280,12 @@ is what it has to repeat instead of guessing.
 
 `/llms.txt` is the plain-text summary answer engines fetch before crawling —
 generated from the same content the pages render, linked from every page's head
-and pointed at from `robots.txt`. Verification codes for Google Search Console
+and pointed at from `robots.txt`. `/llms-full.txt` is the same site with
+nothing left out: the index, plus press quotes, past shows, every clip with its
+date, and the copy each page shows. Both files end with a pointer to the other,
+and `robots.txt` names both. Neither is a standard Google reads — see the note
+above — they exist so an engine that does read them has the answer rather than
+a guess. Verification codes for Google Search Console
 and Bing Webmaster Tools go in **Brand & SEO**; either accepts the bare token
 or the whole `<meta>` tag pasted in, and anything that is not a token is
 refused rather than written into the head.
@@ -753,7 +758,11 @@ changes** to publish them at `/photos`. The Media library also has an **Add to
 Photos** button. Gallery uploads use the existing image resizing and storage.
 
 Published photos appear in server-rendered HTML, image sitemap entries and
-ImageObject metadata. An empty gallery stays out of navigation and the sitemap;
+ImageObject metadata. Clips on the reels page are published the same way as
+video: each one is a `VideoObject` with its title, description, thumbnail, file
+or player URL and, when Instagram supplies it, the date it was posted, and each
+gets a `video:video` entry in the sitemap. The markup describes the clips on
+the page being rendered, so page two of the wall lists page two's clips. An empty gallery stays out of navigation and the sitemap;
 the Photos menu link appears after the first photo is published. Descriptions
 help visitors and search engines understand the photos; search placement is not
 guaranteed. Photo description generation uses the selected AI provider mode.
