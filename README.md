@@ -4,18 +4,22 @@ The Taylor Drew website — a retro desktop-window site with a full admin
 panel at `/admin` where every word, link, photo, date and colour on the public
 pages can be edited.
 
-No build step, no framework, no npm dependencies. Node 18+ and `node server.js`.
+No build step and no framework. Node 18+, `npm install` for the two runtime
+dependencies (the Anthropic SDK behind the flyer reader and the copy
+generators, and Vercel Blob for image storage), then `node server.js`.
 
 Production is `main`: pushing to it deploys the live site.
 
 ## Running it
 
 ```bash
+npm install
 npm start          # http://localhost:3000
 PORT=8080 npm start
 ```
 
-- Public site: `/`, `/about`, `/reels`, `/links`, `/contact`
+- Public site: `/`, `/about`, `/shows`, `/reels`, `/links`, `/contact` — and
+  `/play`, the game, which is kept out of the sitemap
 - Admin panel: `/admin`
 - Default password: **`weed`** — change it in **Admin → Security**. (Set
   `ADMIN_PASSWORD` before the very first run to seed a different one.)
@@ -28,13 +32,19 @@ npm test
 
 Node's built-in runner, no test dependencies. Covers input sanitising (unsafe
 URL schemes, forged click counts, credentials in the payload, oversized text),
-both storage backends against one shared contract, and the HTTP surface
-end-to-end against a real server process — auth, CSRF, rate limiting, upload
-validation, path traversal, click counting, snapshots and restore.
+all three storage backends against one shared contract, the discovery surface
+(structured data, sitemap, `llms.txt`, profile links), the Instagram client
+(connecting, refreshing, paging, messaging, pasted feeds), IndexNow, and the
+HTTP surface end-to-end against a real server process — auth, CSRF, rate
+limiting, the API key, upload validation, path traversal, click counting,
+snapshots and restore, flyer reading and the SEO / GEO generators.
 
-The serverless backend is exercised against a stand-in for Upstash's REST API
-(`test/helpers/fake-redis.js`), so the Redis path runs for real without needing
-credentials.
+Every outside service is exercised against a stand-in in `test/helpers/` —
+Upstash's REST API (`fake-redis.js`), the GitHub Contents API
+(`fake-github.js`), Instagram's Graph API (`fake-instagram.js`) and the
+Anthropic API (`fake-anthropic.js`) — so every backend and integration runs
+for real without credentials. CI (`.github/workflows/test.yml`) runs the suite
+on Node 20 and 22 for every push to `main` and every pull request.
 
 ## What the admin panel can edit
 
@@ -94,8 +104,10 @@ Editing notes:
   longer headings wrap at a smaller size instead.
 - Links pointing at `http(s)` go through `/go/<id>` so clicks are counted; the
   visitor lands on the real URL.
-- Shows whose date has passed drop off the home page and move to a "Past"
-  list at the bottom of the links page automatically.
+- Shows whose date has passed drop off the home page and move to a **Past
+  appearances** list automatically — the last six at the bottom of the links
+  page, the last twenty on `/shows`, which is the calendar proper: every
+  upcoming date with its ticket button, then the ones that have been.
 - `/play` is a small game, for no reason: hecklers pop up in a grid of seats
   and the visitor taps them before they get a word in. It is in the menu by
   default (hide it under Navigation if you like), out of the sitemap, and
@@ -118,13 +130,20 @@ server.js            HTTP server, routing, JSON API, sessions, uploads
 api/index.js         Vercel entrypoint — hands each invocation to that server
 lib/defaults.js      the starting content for a fresh install
 lib/schema.js        validates + sanitises everything the admin panel sends
-lib/storage.js       the two storage backends (filesystem / serverless)
+lib/storage.js       the three storage backends (filesystem / github / serverless)
 lib/store.js         site document, snapshots and uploads on top of a backend
-lib/auth.js          scrypt password hashing, sessions, login rate limiting
-lib/render.js        server-side HTML for the three public pages
+lib/auth.js          scrypt password hashing, sessions, the API key, login rate limiting
+lib/render.js        server-side HTML for every public page, the desktop,
+                     llms.txt, the favicon and the web manifest
+lib/instagram.js     the Instagram connection: tokens, the reel feed, messaging
+lib/flyer.js         reads a show off a flyer image with Claude
+lib/seo-copy.js      the SEO / GEO copy and photo-description generators
+lib/indexnow.js      tells Bing and Yandex which pages changed after a save
 public/admin.html    the admin panel shell
 public/assets/       site + admin CSS and JS
-                     (css/retro.css + js/desktop.js are the desktop; see below)
+                     (css/retro.css + js/desktop.js are the desktop; see below;
+                     js/play.js is the game)
+test/                the suite, with stand-ins for every outside service
 data/                site.json, sessions, snapshots, uploads (git-ignored)
 ```
 
@@ -174,6 +193,14 @@ photo set there is no window — the hero keeps the "add a photo" empty state,
 which is addressed to whoever is about to go and add one. Under 720px the
 viewer still floats, smaller and lower, and moves out of the way by its title
 bar like every other window.
+
+The home page also has an assistant: **T.A.Y.L.O.R. Assistant**, a small
+window of its own on the wallpaper with a drawn character, a greeting and four
+things it can do — who Taylor is (answered with the first bio paragraph), the
+upcoming shows, the clips and booking. Each answer is an ordinary link to the
+page that holds it, so a crawler and a screen reader get a list of links, and
+with JavaScript off the window simply stays open. It minimises to its own
+taskbar button and closes like any other window. It appears on `/` only.
 
 **Nothing on the site is set in a typeface newer than the machine it is drawn
 as.** The whole thing runs on Tahoma (1994), Verdana (1996), Courier New (1955)
@@ -268,6 +295,18 @@ the head, and a linked X profile supplies the Twitter card's `creator`. The
 `/sitemap.xml` and `/robots.txt` are generated from the live content, and a URL
 with a trailing slash is redirected rather than answering as a duplicate.
 
+**IndexNow.** A crawler decides for itself when to come back, and for a small
+site that can be weeks. So every **Save changes** in the admin panel also
+announces the public pages to `api.indexnow.org`, which Bing and Yandex act on
+within minutes — and Bing is what sits behind Copilot and ChatGPT's web
+results. There is nothing to set up: a key is minted on first use, kept with
+the other credentials, and served at `/<key>.txt`, which is how ownership is
+proved. The announcement is fire-and-forget (a slow search engine never slows
+a save) and its outcome is written down, so `/healthz` reports under
+`indexnow` whether the key exists and how the last submission went. Nothing is
+sent from `localhost`, and `INDEXNOW=off` disables it. Google does not take
+IndexNow; Search Console is still the route there.
+
 The hero image is preloaded and marked `fetchpriority="high"`, and images below
 the fold are lazy, which is what the Core Web Vitals measurement actually
 rewards.
@@ -316,7 +355,9 @@ vendor, and a feed in a shape nothing recognises says so rather than rendering
 an empty wall.
 
 **The long way**, for anyone who would rather hold their own Meta app: set
-these two and a **Connect Instagram** button appears in **Admin → Reels**.
+these two and a **Connect Instagram** button appears in **Admin → Reels**. The
+app ID and secret can equally be pasted under **Admin → Reels → App details**,
+which wins over the environment and never shows the secret back.
 
 | Variable | |
 | --- | --- |
@@ -464,7 +505,11 @@ Escape.
 - Eight failed sign-ins from one IP triggers a 15-minute lockout.
 - All admin input is validated server-side: text is length-capped, colours must
   be hex, `javascript:` and other unsafe URL schemes are rejected, uploads must
-  be images under 8 MB, and every value is HTML-escaped on output.
+  be images (or `mp4` / `webm` video) under 8 MB, and every value is
+  HTML-escaped on output.
+- Sessions are signed with a key derived from the password hash, so changing
+  the password signs everyone out; set `SESSION_SECRET` to use your own key
+  instead.
 - `/admin` is excluded in `robots.txt`.
 
 #### The API key
@@ -507,14 +552,16 @@ attaches an `Authorization` header, so a hostile page cannot forge one of these.
 
 ### Data
 
-There are two storage backends and the right one is picked automatically. The
-admin panel shows which is live under **Overview → Site status**, and so does
-`/healthz`:
+There are three storage backends and the right one is picked automatically.
+The admin panel shows which is live under **Overview → Site status**, and so
+does `/healthz`:
 
 ```json
 { "ok": true,
   "storage": "Redis + images in Redis",
-  "credentials": { "redis": true, "blob": false, "github": false },
+  "credentials": { "redis": true, "blob": false, "github": false, "instagram": true },
+  "indexnow": { "configured": true, "lastAt": "2026-09-15T20:02:46.000Z",
+                "lastOk": true, "lastStatus": 202, "lastError": null },
   "build": { "env": "production", "commit": "a9703b2", "branch": "main",
              "deployment": "…vercel.app" } }
 ```
@@ -538,6 +585,27 @@ mounted volume to keep the data outside the checkout.
 
 To move a site between hosts, use **Backups & data → Download a copy** and
 import the file on the other end.
+
+### Every environment variable
+
+None is required for local development. Everything an environment variable
+can set, the panel can set too, except where the server itself is concerned.
+
+| Variable | |
+| --- | --- |
+| `PORT`, `HOST` | where the server listens — `3000` on `0.0.0.0` |
+| `ADMIN_PASSWORD` | seeds the password on the very first run only |
+| `SESSION_SECRET` | signing key for sessions; default derives from the password hash |
+| `TAYLOSITE_DATA_DIR` | filesystem backend: where `data/` lives |
+| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | serverless backend (Vercel's `KV_REST_API_*` and `REDIS_REST_API_*` pairs are read too) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob for images, on top of Redis |
+| `GITHUB_TOKEN` (or `GH_TOKEN`) | github backend |
+| `GITHUB_REPO` | `owner/name`; on Vercel read from the linked repository |
+| `GITHUB_BRANCH`, `GITHUB_CONTENT_PATH`, `GITHUB_UPLOAD_DIR` | github backend: `main`, `data/site.json`, `data/uploads` |
+| `ANTHROPIC_API_KEY` | flyer reading and the SEO / GEO generators; can be pasted into the panel instead |
+| `ANTHROPIC_MODEL` | defaults to `claude-opus-5` |
+| `INSTAGRAM_*` | the connection — see *Connecting the Instagram account* |
+| `INDEXNOW` | `off` stops the announcements after a save |
 
 ## Deploying to Vercel
 
