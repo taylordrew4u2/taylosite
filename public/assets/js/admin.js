@@ -26,6 +26,7 @@
     expandedShows: {},
     flyer: null,
     flyerBusy: false,
+    galleryBusy: false,
     aiEditor: null,
     aiLastProvider: null,
     apiKey: null,
@@ -54,6 +55,7 @@
     contact: '<rect x="1.5" y="3" width="13" height="10"/><path d="M1.5 4 8 9l6.5-5"/>',
     footer: '<rect x="1.5" y="1.5" width="13" height="13"/><path d="M1.5 11h13"/>',
     media: '<rect x="1.5" y="2.5" width="13" height="11"/><circle cx="5.5" cy="6" r="1.2"/><path d="M2 12l3.5-3.5 3 3L11 8l3 3.5"/>',
+    photos: '<rect x="1.5" y="2.5" width="13" height="11"/><circle cx="5.5" cy="6" r="1.2"/><path d="M2 12l3.5-3.5 3 3L11 8l3 3.5"/>',
     data: '<path d="M2 5h9l-2-2M14 11H5l2 2"/><path d="M2 5l2-2M14 11l-2 2"/>',
     ai: '<path d="M2 4h12M2 8h12M2 12h12"/><circle cx="5" cy="4" r="2"/><circle cx="11" cy="8" r="2"/>',
     security: '<rect x="3" y="7" width="10" height="7.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>'
@@ -66,6 +68,7 @@
     { id: 'links', label: 'Links', hint: 'Every link, in the order they appear.', keys: ['links'] },
     { id: 'shows', label: 'Shows', hint: 'Tour dates shown on the home and links pages.', keys: ['shows'] },
     { id: 'reels', label: 'Reels', hint: 'The wall of clips.', keys: ['reels'] },
+    { id: 'photos', label: 'Photos', hint: 'Your public photo gallery and image search descriptions.', keys: ['photos'] },
     { id: 'about', label: 'About page', hint: 'Bio, facts, credits, press quotes and questions.', keys: ['about'] },
     { id: 'contact', label: 'Contact page', hint: 'The message people send you.', keys: ['contact'] },
     { id: 'nav', label: 'Navigation', hint: 'The menu in the header.', keys: ['nav'] },
@@ -1497,6 +1500,65 @@
     );
   }
 
+  function sectionPhotos() {
+    var photos = state.site.photos || { kicker: 'Photos', title: 'Photos', intro: '', items: [] };
+    var items = (photos.items || []).map(function (photo, i) {
+      var base = 'photos.items.' + i;
+      return repeatItem({ list: 'photos.items', index: i, title: photo.title || 'Photo ' + (i + 1),
+        badges: photo.visible === false ? [{ text: 'Hidden' }] : [],
+        body: imageField({ label: 'Photo', path: base + '.photo', value: photo.photo, seoTarget: base + '.photoAlt' }) +
+          field({ label: 'Photo title', path: base + '.title', value: photo.title, titleSource: true, seo: false, attrs: ' maxlength="120"', placeholder: 'Taylor Drew performing stand-up' }) +
+          textareaField({ label: 'Image description (alt text)', path: base + '.photoAlt', value: photo.photoAlt, rows: 2, seo: false, hint: 'Describe what is actually in this photo. Include your name when you are pictured, plus the setting or event when known.' }) +
+          textareaField({ label: 'Caption', path: base + '.caption', value: photo.caption, rows: 2, seo: false, hint: 'Shown below the photo. Add useful context rather than repeating keywords.' }) +
+          field({ label: 'Photographer / credit', path: base + '.credit', value: photo.credit, seo: false, attrs: ' maxlength="160"', hint: 'Optional. Use the photographer’s requested credit.' }) +
+          toggleField({ label: 'Show on the site', path: base + '.visible', checked: photo.visible !== false })
+      });
+    }).join('');
+    return card('Photo gallery',
+      '<p class="hint">Publish photos on <a href="/photos" target="_blank" rel="noopener">your Photos page ↗</a>. Published photos are included in the image sitemap. Add accurate descriptions and captions, then save changes.</p>' +
+      '<label class="upload-drop" data-gallery-drop="1"><input type="file" accept="image/*" multiple hidden data-gallery-input="1"' + (state.galleryBusy ? ' disabled' : '') + '><span>' + (state.galleryBusy ? 'Uploading photos…' : 'Drop photos here or click to upload several') + '</span><small>Photos are resized for fast loading. Up to 100 gallery photos.</small></label>' +
+      '<div class="grid-2">' + field({ label: 'Page title', path: 'photos.title', value: photos.title, seo: false }) + field({ label: 'Kicker', path: 'photos.kicker', value: photos.kicker, seo: false }) + '</div>' +
+      textareaField({ label: 'Introduction', path: 'photos.intro', value: photos.intro, rows: 2, seo: false })
+    ) + card('Photos', items ? '<div class="repeat-list" data-sortable="photos.items">' + items + '</div>' : emptyState('Upload photos above, or add one from your media library.'), {
+      actions: '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="photos.items">Add photo from library</button>'
+    });
+  }
+
+  function addGalleryPhoto(url) {
+    var items = getPath(state.site, 'photos.items') || [];
+    if (items.length >= 100) { toast('The gallery holds up to 100 photos.', 'error'); return false; }
+    var photo = TEMPLATES['photos.items']();
+    photo.photo = url || '';
+    items.push(photo);
+    setPath(state.site, 'photos.items', items);
+    markDirty();
+    return true;
+  }
+
+  async function uploadGalleryFiles(files) {
+    if (state.galleryBusy) return;
+    if (state.saving) return toast('Let the current save finish before uploading photos.', 'info');
+    var queue = Array.from(files || []).filter(function (file) { return /^image\//.test(file.type); });
+    var available = 100 - (getPath(state.site, 'photos.items') || []).length;
+    if (!queue.length) return toast('Choose image files to add to the gallery.', 'error');
+    if (queue.length > available) return toast('There is room for ' + available + ' more photos. Select fewer files.', 'error');
+    state.galleryBusy = true;
+    render({ preserveFocus: false });
+    var uploaded = 0;
+    try {
+      for (var file of queue) {
+        try {
+          var prepared = await prepareImage(file);
+          var data = await api('/admin/uploads', { method: 'POST', body: { name: file.name, dataUrl: prepared.dataUrl } });
+          if (state.site && addGalleryPhoto(data.file.url)) uploaded++;
+        } catch (err) { toast(file.name + ': ' + err.message, 'error'); }
+      }
+      await loadMedia();
+      if (uploaded) toast(uploaded + ' photos added. Add descriptions, then save to publish.', 'ok');
+    } catch (err) { toast(err.message, 'error'); }
+    finally { state.galleryBusy = false; if (state.site) render({ preserveFocus: false }); }
+  }
+
   /** Where an uploaded image is currently used, so nothing vanishes by surprise. */
   var MEDIA_SLOTS = [
     { path: 'home.photo', label: 'Hero photo' },
@@ -1511,7 +1573,7 @@
       return getPath(state.site, slot.path) === url;
     }).map(function (slot) {
       return slot.label;
-    });
+    }).concat(((state.site.photos || {}).items || []).filter(function (photo) { return photo.photo === url; }).map(function (photo) { return 'Gallery: ' + (photo.title || 'photo'); }));
   }
 
   function mediaCard(file, withPick) {
@@ -1525,7 +1587,7 @@
       '<div class="media-actions">' +
       (withPick
         ? '<button class="btn btn-sm btn-accent" type="button" data-action="choose-media" data-url="' + esc(file.url) + '">Use</button>'
-        : '<button class="btn btn-sm" type="button" data-action="copy-media" data-url="' + esc(file.url) + '">Copy URL</button>') +
+        : '<button class="btn btn-sm" type="button" data-action="copy-media" data-url="' + esc(file.url) + '">Copy URL</button><button class="btn btn-sm" type="button" data-action="gallery-add-media" data-url="' + esc(file.url) + '">Add to Photos</button>') +
       '<button class="btn btn-sm btn-danger" type="button" data-action="delete-media" data-name="' + esc(file.name) + '">Delete</button>' +
       '</div></div>'
     );
@@ -1740,6 +1802,7 @@
     themes: sectionThemes,
     footer: sectionFooter,
     media: sectionMedia,
+    photos: sectionPhotos,
     data: sectionData,
     ai: aiProvidersCard,
     security: sectionSecurity
@@ -1766,7 +1829,8 @@
       links: (state.site.links.items || []).length,
       shows: (state.site.shows || []).length,
       nav: (state.site.nav || []).length,
-      media: state.media.length
+      media: state.media.length,
+      photos: ((state.site.photos || {}).items || []).length
     };
     var changed = changedSections();
     var setupCounts = {};
@@ -1884,12 +1948,19 @@
     'reels.items': function () {
       return { id: uid('reel'), url: '', video: '', poster: '', caption: '', visible: true };
     },
+    'photos.items': function () {
+      return { id: uid('photo'), photo: '', photoAlt: '', title: '', caption: '', credit: '', visible: true };
+    },
     'about.faqs': function () {
       return { id: uid('faq'), question: '', answer: '', visible: true };
     }
   };
 
   function listAdd(path) {
+    if (path === 'photos.items') {
+      if (addGalleryPhoto('')) render({ preserveFocus: false });
+      return;
+    }
     var list = getPath(state.site, path) || [];
     list.push(TEMPLATES[path]());
     setPath(state.site, path, list);
@@ -1985,6 +2056,7 @@
   }
 
   function save() {
+    if (state.galleryBusy) { toast('Wait for the photos to finish uploading, then save.', 'info'); return Promise.resolve(); }
     if (state.saving) return Promise.resolve();
     state.saving = true;
     el.saveState.textContent = 'Saving…';
@@ -2372,6 +2444,11 @@
 
     var target = event.target;
     if (target.dataset && target.dataset.path && target.dataset.rerender) render();
+    if (target.dataset && target.dataset.galleryInput) {
+      var galleryFiles = Array.from(target.files);
+      target.value = '';
+      uploadGalleryFiles(galleryFiles);
+    }
     if (target.dataset && target.dataset.uploadInput) {
       uploadFiles(target.files, function () {
         renderMediaViews();
@@ -2384,10 +2461,12 @@
       postFlyer(flyerFile);
     }
     if (target.dataset && target.dataset.importInput) {
+      if (state.galleryBusy) { target.value = ''; return toast('Finish uploading photos before replacing content.', 'info'); }
       var file = target.files[0];
       if (!file) return;
       var reader = new FileReader();
       reader.onload = function () {
+        if (state.galleryBusy) return toast('Finish uploading photos before replacing content.', 'info');
         var parsed;
         try {
           parsed = JSON.parse(reader.result);
@@ -2525,6 +2604,8 @@
       trigger.textContent = 'Analyzing…';
       var originalAlt = String(getPath(state.site, photoTarget) || '');
       var originalImagePath = trigger.dataset.imagePath;
+      var photoRow = /^(?:photos\.items|shows|reels\.items)\.\d+/.exec(originalImagePath);
+      var photoRowId = photoRow && getPath(state.site, photoRow[0] + '.id');
       return fetch(imageUrl, { credentials: 'same-origin' })
         .then(function (response) { if (!response.ok) throw new Error('Could not load that photo. Choose an uploaded image.'); return response.blob(); })
         .then(function (blob) { if (!/^image\/(png|jpeg|webp|gif)$/.test(blob.type)) throw new Error('Use a PNG, JPEG, WebP or GIF photo.'); return readAsDataUrl(blob); })
@@ -2537,7 +2618,7 @@
         })
         .then(function (data) {
           if (!data || typeof data.text !== 'string' || !data.text.trim()) throw new Error('No usable description was generated. Your original was kept.');
-          if (String(getPath(state.site, photoTarget) || '') !== originalAlt || String(getPath(state.site, originalImagePath) || '') !== imageUrl) throw new Error('This photo or description changed while AI was running. Your edits were kept.');
+          if ((photoRow && getPath(state.site, photoRow[0] + '.id') !== photoRowId) || String(getPath(state.site, photoTarget) || '') !== originalAlt || String(getPath(state.site, originalImagePath) || '') !== imageUrl) throw new Error('This photo or description changed while AI was running. Your edits were kept.');
           setPath(state.site, photoTarget, data.text.trim().slice(0, 160));
           markDirty();
           render({ preserveFocus: false });
@@ -2688,6 +2769,10 @@
     if (action === 'list-move') return listMove(trigger.dataset.list, Number(trigger.dataset.index), Number(trigger.dataset.dir));
 
     if (action === 'pick-image') return openMediaModal(trigger.dataset.target);
+    if (action === 'gallery-add-media') {
+      if (addGalleryPhoto(trigger.dataset.url)) { go('photos'); toast('Photo added. Add its description, then save.', 'ok'); }
+      return;
+    }
     if (action === 'clear-image') {
       setPath(state.site, trigger.dataset.target, '');
       markDirty();
@@ -2725,6 +2810,7 @@
         });
     }
 
+    if (state.galleryBusy && ['reset-analytics', 'restore-backup', 'reset-site'].includes(action)) return toast('Finish uploading photos before replacing content.', 'info');
     if (action === 'reset-analytics') {
       if (!confirm('Reset every link click count to zero?')) return;
       return api('/admin/analytics/reset', { method: 'POST' })
@@ -2959,6 +3045,15 @@
 
   // drag-and-drop upload onto the drop zone
   el.panel.addEventListener('dragover', function (event) {
+    if (event.target.closest('[data-gallery-drop]')) event.preventDefault();
+  });
+  el.panel.addEventListener('drop', function (event) {
+    if (!event.target.closest('[data-gallery-drop]') || !event.dataTransfer.files.length) return;
+    event.preventDefault();
+    uploadGalleryFiles(event.dataTransfer.files);
+  });
+
+  el.panel.addEventListener('dragover', function (event) {
     var drop = event.target.closest('[data-upload-drop]');
     if (!drop) return;
     event.preventDefault();
@@ -3001,6 +3096,7 @@
   el.save.addEventListener('click', save);
 
   el.revert.addEventListener('click', function () {
+    if (state.galleryBusy) return toast('Finish uploading photos before discarding changes.', 'info');
     if (state.dirty && !confirm('Discard unsaved changes?')) return;
     loadSite().then(function () {
       render({ preserveFocus: false });
@@ -3043,6 +3139,7 @@
   });
 
   document.getElementById('sign-out').addEventListener('click', function () {
+    if (state.galleryBusy) return toast('Finish uploading photos before signing out.', 'info');
     if (state.dirty && !confirm('You have unsaved changes. Sign out anyway?')) return;
     api('/logout', { method: 'POST' }).then(function () {
       showLogin('Signed out.');
@@ -3060,7 +3157,7 @@
   });
 
   window.addEventListener('beforeunload', function (event) {
-    if (!state.dirty) return;
+    if (!state.dirty && !state.galleryBusy) return;
     event.preventDefault();
     event.returnValue = '';
   });

@@ -713,3 +713,17 @@ padded to 4:3, never cropped. Errors preserve the original content.
 Legacy server integrations can explicitly opt into hosted inference with
 `AI_HOSTED_ENABLED=true`; a saved browser-mode selection overrides that flag.
 For normal admin use, select the desired mode in **AI providers**.
+
+## Photo gallery
+
+Open **Admin → Photos** to upload several photos at once or choose existing
+media. Add a title, an accurate image description, an optional caption and
+photographer credit. Reorder photos or hide individual items, then **Save
+changes** to publish them at `/photos`. The Media library also has an **Add to
+Photos** button. Gallery uploads use the existing image resizing and storage.
+
+Published photos appear in server-rendered HTML, image sitemap entries and
+ImageObject metadata. An empty gallery stays out of navigation and the sitemap;
+the Photos menu link appears after the first photo is published. Descriptions
+help visitors and search engines understand the photos; search placement is not
+guaranteed. Photo description generation uses the selected AI provider mode.
