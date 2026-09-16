@@ -29,6 +29,7 @@
     galleryBusy: false,
     aiEditor: null,
     aiLastProvider: null,
+    aiLastModel: '',
     apiKey: null,
     // The one and only copy of a freshly minted key. Held in memory until the
     // section is left, then dropped: only its hash is stored, so once this is
@@ -1739,8 +1740,30 @@
         '<label class="switch"><input id="ai-enabled" type="checkbox"' + (editor.enabled !== false ? ' checked' : '') + '> Enable this provider</label>' +
         '<div class="row-actions"><button class="btn btn-sm btn-accent" type="button" data-action="ai-save">Save provider</button>' +
         (editor.id ? '<button class="btn btn-sm" type="button" data-action="ai-new">Add another provider</button>' : '') + '</div>') +
-      card('Free browser option', '<p class="hint">The free model runs on your device without API keys. It needs WebGPU and a first-use model download, and it picks the strongest model your GPU can hold — up to Qwen3.5 9B on a desktop graphics card — so that first download can be several GB. Small phones and laptops fall back to a smaller model that writes weaker copy; use your own API providers for the best results there. API mode uses only your enabled providers; switching modes is always your choice.</p>');
+      card('Free browser option',
+        '<p class="hint">The free model runs on your device without API keys. It needs WebGPU and a one-time model download that your browser then caches. Pick the size that suits the computer you edit on — saved in this browser only.</p>' +
+        '<div class="row-actions">' + FREE_SIZES.map(function (option) {
+          return '<button class="btn btn-sm' + (freeSize() === option.id ? ' btn-accent' : '') + '" type="button" data-action="ai-size" data-size="' + option.id + '" aria-pressed="' + (freeSize() === option.id) + '">' + esc(option.label) + '</button>';
+        }).join('') + '</div>' +
+        '<p class="hint">' + esc((FREE_SIZES.filter(function (option) { return option.id === freeSize(); })[0] || FREE_SIZES[1]).hint) + ' The strongest model that fits inside that size is loaded; if it will not fit, the next one down is tried.</p>' +
+        (state.aiLastModel ? '<p class="hint">Last run on this device: <strong>' + esc(state.aiLastModel) + '</strong></p>' : '') +
+        '<p class="hint">API mode uses only your enabled providers; switching modes is always your choice.</p>');
   }
+
+  // Which free model to load. Kept in this browser only: it describes the
+  // machine sitting in front of the panel, not the site.
+  var FREE_SIZES = [
+    { id: 'fast', label: 'Fast', hint: 'About 2 GB. Older laptops and small GPUs.' },
+    { id: 'balanced', label: 'Balanced', hint: 'About 4 GB. The default, and fine on most laptops.' },
+    { id: 'best', label: 'Best', hint: 'Up to 6 GB. Desktop graphics card, slow to download.' }
+  ];
+  function freeSize() {
+    try {
+      var saved = localStorage.getItem('taylosite.freeAiSize');
+      return FREE_SIZES.some(function (option) { return option.id === saved; }) ? saved : 'balanced';
+    } catch (_) { return 'balanced'; }
+  }
+  function setFreeSize(value) { try { localStorage.setItem('taylosite.freeAiSize', value); } catch (_) {} }
 
   function generateAI(options) {
     if (state.flyer && state.flyer.mode === 'hosted') {
@@ -1753,7 +1776,12 @@
         return result;
       });
     }
-    return import('/assets/js/free-ai.js').then(function (ai) { return ai.generate(options); });
+    return import('/assets/js/free-ai.js').then(function (ai) {
+      return ai.generate(Object.assign({}, options, {
+        size: freeSize(),
+        onModel: function (model) { state.aiLastModel = model; }
+      }));
+    });
   }
 
   function apiKeyCard() {
@@ -2523,6 +2551,11 @@
     if (action === 'ai-edit' || action === 'ai-new') {
       state.aiEditor = action === 'ai-edit' ? Object.assign({ preset: 'custom' }, (state.flyer.providers || []).find(function (p) { return p.id === trigger.dataset.provider; })) : null;
       return render({ preserveFocus: false });
+    }
+    if (action === 'ai-size') {
+      setFreeSize(trigger.dataset.size);
+      render({ preserveFocus: false });
+      return toast('Saved. The new model loads on the next generation.', 'ok');
     }
     if (action === 'ai-mode' || action === 'ai-move' || action === 'ai-save' || action === 'ai-remove') {
       var body = {}, method = 'PATCH';

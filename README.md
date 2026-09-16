@@ -714,13 +714,18 @@ stop at the first usable version. Newer edits made while a request runs are
 preserved. Review and Save to publish.
 
 Free mode uses WebLLM 0.2.85 in a browser worker and loads the strongest text
-model the device can hold, newest generation first: Qwen3.5 9B, Qwen3 8B, Llama
-3.1 8B, Hermes 3 8B, Qwen2.5 7B, Qwen3.5 4B, Phi 4 mini, Qwen3 4B, Qwen2.5 3B,
-Qwen3.5 2B, Llama 3.2 3B, and Qwen2.5 1.5B only on a small GPU. Small models
-write unusable SEO copy, so the tier is taken from the WebGPU buffer limits
-(held back on a device reporting 4 GB of RAM or less) against each model's
-published VRAM requirement, and a model that is missing from the build or fails
-to load falls through to the next — nearest size first, never more than 1.5×
+model that fits the chosen size, newest generation first: Qwen3.5 9B, Qwen3 8B,
+Llama 3.1 8B, Hermes 3 8B, Qwen2.5 7B, Qwen3.5 4B, Phi 4 mini, Qwen3 4B,
+Qwen2.5 3B, Qwen3.5 2B, Llama 3.2 3B, and Qwen2.5 1.5B only on a small GPU.
+**AI providers → Free browser option** offers Fast (about 2 GB), Balanced
+(about 4 GB, the default and the right choice on a laptop) and Best (up to
+6 GB, for a desktop graphics card). The choice lives in that browser's
+localStorage, because it describes the machine at the keyboard rather than the
+site, and the panel shows which model actually ran. Within the chosen size the
+tier is taken from the WebGPU buffer limits (held back on a device reporting
+4 GB of RAM or less) against each model's published VRAM requirement, and a
+model that is missing from the build or fails to load falls through to the
+next — nearest size first, never more than 1.5×
 the estimated budget. Every id is checked against the runtime catalog, so an
 unavailable model is skipped rather than thrown. Devices without `shader-f16`
 get the float32 builds. Qwen3 and Qwen3.5 reasoning blocks are disabled because

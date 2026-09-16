@@ -34,6 +34,18 @@ export function budgetFromLimits(limits, deviceMemoryGB) {
   return budget;
 }
 
+// What the machine reports and what is pleasant to use on it are different
+// questions. A laptop can hold an 8B model and will still spend ten minutes
+// downloading it and generate at a crawl, so the default stays in laptop
+// territory and the largest models are an explicit choice.
+export const SIZES = { fast: 2600, balanced: 4200, best: Infinity };
+export const DEFAULT_SIZE = 'balanced';
+
+export function budgetFor(limits, deviceMemoryGB, size) {
+  const ceiling = Object.hasOwn(SIZES, size) ? SIZES[size] : SIZES[DEFAULT_SIZE];
+  return Math.min(budgetFromLimits(limits, deviceMemoryGB), ceiling);
+}
+
 export function chooseModels(available, { vision = false, supportsF16 = true, budgetMB = 2048 } = {}) {
   const entries = new Map((available || []).map((entry) => [entry.model_id, entry]));
   const variant = (id) => (supportsF16 ? id : id.replace('q4f16', 'q4f32'));
@@ -58,7 +70,7 @@ function describe(id, available) {
   return size ? `${id} (~${Math.round(size / 1024 * 10) / 10} GB)` : id;
 }
 
-async function browserEngine(vision, onProgress, signal) {
+async function browserEngine(vision, onProgress, signal, size) {
   if (!globalThis.navigator?.gpu) throw new Error('Free AI needs a browser with WebGPU. Try current Chrome on a computer, or edit this field manually. Your content is unchanged.');
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) throw new Error('No compatible GPU is available. Try Chrome on a computer, or edit manually.');
@@ -67,7 +79,7 @@ async function browserEngine(vision, onProgress, signal) {
   const available = webllm.prebuiltAppConfig?.model_list || [];
   const models = chooseModels(available, {
     vision, supportsF16: adapter.features.has('shader-f16'),
-    budgetMB: budgetFromLimits(adapter.limits, navigator.deviceMemory)
+    budgetMB: budgetFor(adapter.limits, navigator.deviceMemory, size)
   });
   let lastError;
   for (const model of models) {
@@ -123,23 +135,26 @@ async function visionMessages(messages) {
 export function createGenerator(loadEngine = browserEngine) {
   let current;
   let currentVision;
+  let currentSize;
   let busy = false;
-  return async function ({ messages, schema, vision = false, onProgress = () => {}, temperature = 0.2, maxTokens }) {
+  return async function ({ messages, schema, vision = false, onProgress = () => {}, temperature = 0.2, maxTokens, size = DEFAULT_SIZE, onModel }) {
     if (busy) throw new Error('Free AI is already working. Wait for the current request to finish.');
     busy = true;
     const controller = new AbortController();
     let timer;
     let expired = false;
     const operation = async () => {
-      if (!current || currentVision !== vision) {
+      if (!current || currentVision !== vision || (!vision && currentSize !== size)) {
         current?.dispose();
         current = null;
         onProgress(vision ? 'Loading free image AI (large first-use download)…' : 'Loading free writing AI (first-use download)…');
-        const loaded = await loadEngine(vision, onProgress, controller.signal);
+        const loaded = await loadEngine(vision, onProgress, controller.signal, size);
         if (expired) { loaded.dispose(); throw new Error('Loading timed out.'); }
         current = loaded;
         currentVision = vision;
+        currentSize = size;
       }
+      if (current.model && onModel) onModel(current.model);
       onProgress('Generating on your device…');
       const response = await current.engine.chat.completions.create({
         messages,

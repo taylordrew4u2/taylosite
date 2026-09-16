@@ -104,3 +104,37 @@ test('the VRAM budget is derived from WebGPU limits and stays within sane bounds
   assert.equal(budgetFromLimits({ maxBufferSize: 2 * 1024 * 1024 * 1024 }, 2), 2048);
   assert.equal(budgetFromLimits({ maxBufferSize: 2 * 1024 * 1024 * 1024 }, 8), 8192);
 });
+
+test('the size choice caps the model tier and an unknown value falls back to balanced', async () => {
+  const { budgetFor, SIZES, DEFAULT_SIZE } = await modulePromise;
+  const roomy = { maxBufferSize: 4 * 1024 * 1024 * 1024 };
+  assert.equal(DEFAULT_SIZE, 'balanced');
+  assert.equal(budgetFor(roomy, undefined, 'fast'), SIZES.fast);
+  assert.equal(budgetFor(roomy, undefined, 'balanced'), SIZES.balanced);
+  assert.equal(budgetFor(roomy, undefined, 'best'), 16384);
+  assert.equal(budgetFor(roomy, undefined, undefined), SIZES.balanced);
+  assert.equal(budgetFor(roomy, undefined, 'enormous'), SIZES.balanced);
+  // A small machine still wins over a large choice.
+  assert.equal(budgetFor(roomy, 2, 'best'), 2048);
+});
+
+test('a laptop-sized budget lands on a 4B model, and Fast drops to a 3B', async () => {
+  const { chooseModels, budgetFor } = await modulePromise;
+  const laptop = { maxBufferSize: 1024 * 1024 * 1024 };
+  assert.equal(chooseModels(catalog, { budgetMB: budgetFor(laptop, undefined, 'balanced') })[0], 'Qwen3.5-4B-q4f16_1-MLC');
+  assert.equal(chooseModels(catalog, { budgetMB: budgetFor(laptop, undefined, 'fast') })[0], 'Qwen2.5-3B-Instruct-q4f16_1-MLC');
+});
+
+test('changing the size reloads the engine, and the model id is reported back', async () => {
+  const { createGenerator } = await modulePromise;
+  const sizes = []; const seen = [];
+  const generate = createGenerator(async (vision, onProgress, signal, size) => {
+    sizes.push(size);
+    return { engine: { chat: { completions: { create: async () => answer() } } }, dispose: () => {}, model: 'Model-' + size };
+  });
+  await generate({ ...options, size: 'balanced', onModel: (model) => seen.push(model) });
+  await generate({ ...options, size: 'balanced', onModel: (model) => seen.push(model) });
+  await generate({ ...options, size: 'best', onModel: (model) => seen.push(model) });
+  assert.deepEqual(sizes, ['balanced', 'best']);
+  assert.deepEqual(seen, ['Model-balanced', 'Model-balanced', 'Model-best']);
+});
