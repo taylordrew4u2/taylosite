@@ -142,6 +142,39 @@ test('the admin explains every missing setup item and marks its field', async ()
   });
 });
 
+test('the panel is usable on a phone: one column, touch-sized controls, a live Preview', async () => {
+  await withServer({}, async (server) => {
+    const css = (await server.call('/assets/css/admin-desktop.css')).text;
+    const narrow = css.slice(css.indexOf('@media (max-width: 860px)'));
+    assert.ok(narrow, 'the sheet has a narrow section');
+
+    // This sheet loads after admin.css, so its two-column grid outranks
+    // admin.css's own drawer breakpoint whatever that file says. Left
+    // unrestated, the panel is squeezed into the width of a sidebar that is
+    // not even in the flow.
+    assert.match(narrow, /grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    // A clipping ancestor is what stops a sticky toolbar sticking.
+    assert.match(narrow, /overflow:\s*visible/);
+    assert.match(narrow, /\.topbar\s*\{[^}]*position:\s*sticky/);
+    // Safari zooms the page in on any field under 16px.
+    assert.match(css, /@media \(max-width: 860px\), \(pointer: coarse\)/);
+    const touch = css.slice(css.indexOf('@media (max-width: 860px), (pointer: coarse)'));
+    assert.match(touch, /\.select\s*\{[^}]*font-size:\s*16px/);
+    assert.match(touch, /\.btn\s*\{[^}]*min-height:\s*44px/);
+    assert.match(touch, /\.icon-btn\s*\{[^}]*width:\s*44px/);
+    // The drawer is the whole navigation on a phone; a 32px row is the
+    // hardest thing in the panel to hit.
+    assert.match(narrow, /\.sidebar-link\s*\{[^}]*min-height:\s*44px/);
+    // admin.css hides the preview pane below 1100px, which left the toolbar's
+    // Preview button doing nothing at all on a phone.
+    assert.match(narrow, /\.workspace-body\.with-preview \.preview\s*\{[^}]*display:\s*flex/);
+    assert.match(narrow, /\.workspace-body\.with-preview \.panel\s*\{[^}]*display:\s*none/);
+
+    const html = (await server.call('/admin')).text;
+    assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1">/);
+  });
+});
+
 test('the homepage includes the progressive-enhancement desktop assistant', async () => {
   await withServer({}, async (server) => {
     const home = await server.call('/');

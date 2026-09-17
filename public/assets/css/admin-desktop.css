@@ -502,10 +502,207 @@ body {
 
 /* ------------------------------------------------------------------ narrow */
 
-/* One column, and the window gives up its margin to the screen. */
+/* One column, and the window gives up its margin to the screen.
+ *
+ * This sheet loads after admin.css, so the two-column grid above outranks the
+ * one-column rule in admin.css's own drawer breakpoint whatever the media
+ * query says. Left alone it keeps a 216px column for a sidebar that is no
+ * longer in the flow, and the panel is squeezed into it with the rest of the
+ * screen left empty — so the column count is restated here. */
 @media (max-width: 860px) {
   .app {
+    grid-template-columns: minmax(0, 1fr);
     margin: 4px;
     min-height: calc(100vh - 8px);
+    /* The window clips its own contents so the frame holds its shape on a
+       desktop. Here the page itself scrolls, and a clipping ancestor is
+       exactly what stops the toolbar below from ever sticking. */
+    overflow: visible;
+  }
+
+  /* Save and Discard are the point of the panel, and a phone form is long
+     enough to lose them off the top. The toolbar becomes two rows: what you
+     are editing, then what you can do about it, spread across the width
+     rather than crushed against the right edge. */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    padding: 8px 10px;
+    gap: 10px;
+    background: linear-gradient(180deg, #fdfeff, #e8eef7);
+    border-bottom: 1px solid var(--xp-line);
+  }
+
+  .topbar-title {
+    min-width: 0;
+    flex: 1;
+  }
+
+  /* One line: a sticky header that takes a fifth of the screen is not a
+     header, it is a wall between the editor and the form. */
+  .topbar-hint {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-actions {
+    gap: 6px;
+  }
+
+  /* Share the row rather than letting Save wrap onto a third line — but keep
+     a floor, so a longer label (Preview becomes Hide preview) wraps the row
+     instead of clipping a button's text against the edge. */
+  .topbar-actions .btn {
+    flex: 1 1 auto;
+    min-width: 80px;
+    padding: 10px 6px;
+    font-size: 13px;
+  }
+
+  /* "Saved 5 minutes ago" is the one thing the buttons cannot say, so it keeps
+     its place — on a thin line of its own, which leaves the three buttons a
+     full row and stops Save being pushed onto a third. */
+  .save-state {
+    order: -1;
+    flex: 0 0 100%;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  /* The drawer is the whole navigation on a phone, and a 32px row is the
+     hardest thing in the panel to hit. */
+  .side-item,
+  .sidebar-link {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+  }
+
+  .side-item {
+    gap: 8px;
+  }
+}
+
+/*
+ * A window drawn for a mouse gives its controls XP proportions: 12px text in a
+ * 5px well. A thumb needs a target it can hit, and Safari zooms the page in on
+ * any field it has to focus below 16px — which is every field here. Both are
+ * undone for touch, without touching the desktop window.
+ */
+@media (max-width: 860px), (pointer: coarse) {
+  .input,
+  .textarea,
+  .select {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 16px;
+  }
+
+  .textarea {
+    min-height: 120px;
+  }
+
+  .input-sm,
+  .cell .input,
+  .mini-field .input {
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  .btn {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  .btn:active:not(:disabled) {
+    padding: 11px 15px 9px 17px;
+  }
+
+  .btn-sm {
+    min-height: 40px;
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+
+  .chip {
+    min-height: 40px;
+    padding: 8px 14px;
+  }
+
+  .seo-generate {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .search-generators.is-compact .seo-generate {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  /* The toggle is already a wide target; what a thumb needs is the row it
+     sits in, so the label takes the height rather than the control. */
+  .switch {
+    min-height: 44px;
+  }
+
+  .preview-tab {
+    min-height: 40px;
+  }
+
+  /* An XP dialog button sits at its natural width. On a phone the one button
+     on the sign-in screen may as well be the width of the thumb reaching it. */
+  .login-card > .btn-block {
+    width: 100%;
+  }
+
+  /* A 22px square is a mouse handle. Fingers get a larger grab area without
+     the frame corner appearing to move. */
+  .crop-handle {
+    width: 30px;
+    height: 30px;
+  }
+
+  .crop-handle[data-crop-handle='nw'] { top: -15px; left: -15px; }
+  .crop-handle[data-crop-handle='ne'] { top: -15px; right: -15px; }
+  .crop-handle[data-crop-handle='sw'] { bottom: -15px; left: -15px; }
+  .crop-handle[data-crop-handle='se'] { bottom: -15px; right: -15px; }
+}
+
+/*
+ * Preview, on a screen with no room beside the form. admin.css hides the pane
+ * below 1100px, which left the toolbar's Preview button doing nothing at all
+ * on a phone. Here it swaps the form for the preview instead of sitting next
+ * to it, so the button means something and the toolbar is still there to
+ * switch back.
+ */
+@media (max-width: 860px) {
+  .workspace-body.with-preview .panel {
+    display: none;
+  }
+
+  .workspace-body.with-preview .preview {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: calc(100vh - 140px);
+    border-left: 0;
+  }
+
+  .workspace-body.with-preview .preview-frame {
+    flex: 1;
+    width: 100%;
   }
 }
