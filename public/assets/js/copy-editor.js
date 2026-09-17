@@ -13,6 +13,8 @@
     if (/^about\.faqs\.\d+\.question$/.test(path)) return { maxLength: 200, instruction: 'Rewrite this visitor question clearly. Keep the same subject and question form; do not answer it.', example: 'Good: "Where can I see Taylor Drew perform live?" Bad: any sentence that answers the question.' };
     if (/^links\.items\.\d+\.sublabel$/.test(path)) return { maxLength: 160, instruction: 'Write a short description of this specific link and what the visitor will find there. Use its label and destination; do not describe the person in general.', example: 'Good: "Short clips from recent sets, posted between shows." Bad: "Taylor Drew is a stand-up comedian in New York City."' };
     if (/^shows\.\d+\.note$/.test(path)) return { maxLength: 240, instruction: 'Rewrite only this event note. Preserve this event details and do not borrow facts from other shows or the biography. Never invent ticket availability, performers or promises.', example: 'Good: "Late show. Ages 18 and up." Bad: "Tickets are selling fast" when the original never says so.' };
+    if (/^photos\.items\.\d+\.title$/.test(path)) return { maxLength: 120, instruction: 'Write a short descriptive title for this one photograph, using only what the supplied description, caption and credit say is in it. Name the person, setting or event when they are supplied. This is not the gallery page heading, and it is not a place to invent a venue, date or occasion.', example: 'Good: "Taylor Drew mid-set at a Brooklyn club". Bad: "Photos", or "Taylor Drew — New York City Stand-Up Comedian".' };
+    if (/^photos\.items\.\d+\.caption$/.test(path)) return { maxLength: 300, instruction: 'Rewrite the caption printed under this one photograph. Keep it about this photograph, adding the context a visitor would want from the supplied title and image description. Do not repeat the image description word for word, describe anything the supplied text does not mention, or turn it into a general biography.', example: 'Good: "Closing a late set at the Bell House." Bad: "Taylor Drew is a stand-up comedian based in New York City."' };
     if (/^reels\.items\.\d+\.caption$/.test(path)) return { maxLength: 500, instruction: 'Rewrite this clip caption about this particular clip. Preserve its topic and tone. Do not guess visual details or replace it with a general biography.', example: 'Keep the subject of the clip. Do not describe anything you cannot see in the supplied caption.' };
     if (/\.intro$/.test(path)) return { maxLength: 240, instruction: 'Write a brief introduction to this page. Explain what visitors can do here using the supplied page context. Avoid a generic biography or copying another page introduction.', example: 'Good: "Every upcoming date, with venue details and ticket links." Bad: a paragraph about the performer.' };
     if (/\.placeholder$|\.emptyText$/.test(path)) return { maxLength: 80, instruction: 'Write a short helpful interface message with the same purpose. No personal biography, marketing claims or keyword stuffing.', example: 'Good: "No dates announced yet — check back soon." Bad: a marketing sentence.' };
@@ -45,10 +47,10 @@
   }
   function pick(object, keys) { var out = {}; keys.forEach(function (key) { if (typeof object?.[key] === 'string') out[key] = object[key].slice(0, 800); }); return out; }
   function contextFor(site, path) {
-    var row = /^(about\.faqs|links\.items|shows|reels\.items)\.(\d+)\./.exec(path);
+    var row = /^(about\.faqs|links\.items|shows|reels\.items|photos\.items)\.(\d+)\./.exec(path);
     if (row) {
       var list = row[1].split('.').reduce(function (value, key) { return value?.[key]; }, site);
-      var keys = row[1] === 'about.faqs' ? ['question', 'answer'] : row[1] === 'links.items' ? ['label', 'sublabel', 'url'] : row[1] === 'shows' ? ['date', 'time', 'venue', 'city', 'note', 'url'] : ['caption', 'url'];
+      var keys = row[1] === 'about.faqs' ? ['question', 'answer'] : row[1] === 'links.items' ? ['label', 'sublabel', 'url'] : row[1] === 'shows' ? ['date', 'time', 'venue', 'city', 'note', 'url'] : row[1] === 'photos.items' ? ['title', 'photoAlt', 'caption', 'credit'] : ['caption', 'url'];
       return { page: row[1], item: pick(list?.[Number(row[2])], keys) };
     }
     var section = path.split('.')[0];

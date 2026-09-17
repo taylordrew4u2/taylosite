@@ -26,6 +26,10 @@ function exampleSite() {
       { label: 'Instagram', sublabel: 'Short performance clips', url: 'https://instagram.com/taylor', id: 'link-one' },
       { label: 'OTHER_LINK_ROW', sublabel: 'OTHER_LINK_DESCRIPTION', url: 'https://other.example/secret-row' }
     ] },
+    photos: { title: 'Photos', kicker: 'Photos', intro: 'A few shots from recent sets.', items: [
+      { id: 'photo-one', title: 'Closing the late set', photoAlt: 'Taylor Drew holding a microphone on a small club stage', caption: 'The last five minutes of a late set.', credit: 'EXACT_PHOTOGRAPHER_NAME' },
+      { id: 'photo-two', title: 'OTHER_PHOTO_TITLE', photoAlt: 'OTHER_PHOTO_ALT', caption: 'OTHER_PHOTO_CAPTION', credit: 'OTHER_PHOTOGRAPHER' }
+    ] },
     shows: [
       { venue: 'First Room', city: 'New York City', date: '2026-09-24', note: 'Late show. Ages 18 and older.', url: 'https://tickets.example/first' },
       { venue: 'OTHER_EVENT_VENUE', city: 'OTHER_EVENT_CITY', date: '2099-12-31', note: 'OTHER_EVENT_NOTE', url: 'https://tickets.example/other' }
@@ -46,16 +50,34 @@ test('copy generation excludes exact facts, quotations and image descriptions', 
     'home.photoAlt', 'about.photoAlt', 'seo.ogImageAlt',
     'shows.0.flyerAlt', 'reels.items.0.posterAlt',
     'shows.0.venue', 'shows.0.city', 'shows.0.date',
-    'links.items.0.url', 'links.items.0.id', 'nav.0.href'
+    'links.items.0.url', 'links.items.0.id', 'nav.0.href',
+    'photos.items.0.photoAlt', 'photos.items.0.photo', 'photos.items.0.credit'
   ]) {
     assert.equal(fieldPolicy(path), null, path);
   }
-  for (const path of ['seo.title', 'seo.description', 'about.body.0', 'about.faqs.0.answer', 'links.items.0.sublabel', 'shows.0.note']) {
+  for (const path of ['seo.title', 'seo.description', 'about.body.0', 'about.faqs.0.answer', 'links.items.0.sublabel', 'shows.0.note',
+    'photos.items.0.title', 'photos.items.0.caption', 'photos.title', 'photos.kicker', 'photos.intro']) {
     const policy = fieldPolicy(path);
     assert.ok(policy && policy.instruction, path);
   }
   assert.equal(fieldPolicy('seo.title').maxLength, 60);
   assert.equal(fieldPolicy('seo.description').maxLength, 160);
+  // A photo title is a sentence about one picture, not the gallery heading, so
+  // it must not fall through to the 40-character heading rule.
+  assert.equal(fieldPolicy('photos.items.0.title').maxLength, 120);
+  assert.equal(fieldPolicy('photos.items.0.caption').maxLength, 300);
+  assert.equal(fieldPolicy('photos.title').maxLength, 40);
+});
+
+test('gallery photo context stays with its own photo', () => {
+  const site = exampleSite();
+  const photo = json(contextFor(site, 'photos.items.0.caption'));
+  assert.ok(photo.includes('Closing the late set'));
+  assert.ok(photo.includes('Taylor Drew holding a microphone on a small club stage'));
+  assert.ok(!photo.includes('OTHER_PHOTO_TITLE'));
+  assert.ok(!photo.includes('OTHER_PHOTO_CAPTION'));
+  assert.ok(!photo.includes('Taylor Drew performs stand-up comedy in New York City.'));
+  assert.doesNotMatch(photo, /AUTH_HASH_MUST_STAY_OUT|AI_SECRET_MUST_STAY_OUT/);
 });
 
 test('FAQ context carries only its question and answer without unrelated biography or private data', () => {

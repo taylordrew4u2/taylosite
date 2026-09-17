@@ -767,7 +767,11 @@ For normal admin use, select the desired mode in **AI providers**.
 
 Open **Admin → Photos** to upload several photos at once or choose existing
 media. Add a title, an accurate image description, an optional caption and
-photographer credit. Reorder photos or hide individual items, then **Save
+photographer credit. **Generate photo SEO + GEO** writes the image description
+from the picture itself, and the title, caption, page title, kicker and
+introduction each have a **Generate SEO + GEO** button like the rest of the
+panel. The image description and the photographer credit are never rewritten:
+one comes from looking at the photo, the other is somebody's name. Reorder photos or hide individual items, then **Save
 changes** to publish them at `/photos`. The Media library also has an **Add to
 Photos** button. Gallery uploads use the existing image resizing and storage.
 
