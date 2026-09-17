@@ -8,6 +8,38 @@ document.addEventListener('click', function (event) {
   setTimeout(function () { link.setAttribute('href', destination); }, 0);
 });
 
+/* Keyboard scrolling, for a page that does not scroll.
+
+   The content lives in a desktop window, so the box that moves is <main> and
+   the document never scrolls at all. That leaves the scroll keys with nothing
+   to act on: pressing End or Page Down anywhere on this site did nothing
+   whatsoever unless something had already put focus inside that box. The keys
+   are forwarded to it, but only while focus is on the page itself — anything
+   typed into a field, or aimed at a control, is left alone. */
+(function () {
+  'use strict';
+
+  var STEP = { PageDown: 1, PageUp: -1, Home: 0, End: 0, ' ': 1 };
+
+  document.addEventListener('keydown', function (event) {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (!(event.key in STEP)) return;
+
+    var target = event.target;
+    if (target && target !== document.body && target !== document.documentElement) {
+      if (target.closest('input, textarea, select, button, a, [contenteditable], [tabindex]')) return;
+    }
+
+    var main = document.getElementById('main');
+    if (!main || main.scrollHeight <= main.clientHeight + 4) return;
+
+    if (event.key === 'Home') main.scrollTop = 0;
+    else if (event.key === 'End') main.scrollTop = main.scrollHeight;
+    else main.scrollTop += STEP[event.key] * Math.max(120, main.clientHeight - 60);
+    event.preventDefault();
+  });
+})();
+
 /* The reel wall: play only what is on screen, and keep the wall growing.
 
    Twenty videos all decoding at once will stall a phone and burn its battery,
@@ -64,7 +96,26 @@ document.addEventListener('click', function (event) {
   // --- the endless part ---------------------------------------------------
 
   var more = document.querySelector('.page-reels .reel-more');
-  if (!more || !hasObserver || typeof fetch !== 'function') return;
+  if (!more || typeof fetch !== 'function') return;
+
+  /* The wall scrolls inside <main>, not the page — the document itself never
+     scrolls at all. That matters twice over. An observer left on the default
+     root measures against the viewport, so its 800px of lead time is spent
+     long before the sentinel is anywhere near the container's scroll end, and
+     the wall only grows once you are already at the very bottom. And a
+     keyboard — End, Page Down — moves that container without the pointer ever
+     being over it, so nothing fires at the page level and the wall never grows
+     at all. Find the box that actually scrolls, and watch that. */
+  function scrollerOf(node) {
+    var el = node.parentElement;
+    while (el && el !== document.documentElement) {
+      var style = window.getComputedStyle(el);
+      if (/(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 4) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+  var scroller = scrollerOf(more);
 
   var link = more.querySelector('.reel-more-link');
   var label = link ? link.textContent : '';
@@ -75,14 +126,19 @@ document.addEventListener('click', function (event) {
     seen[tile.getAttribute('data-reel')] = true;
   });
 
+  // "Near the end" is measured against whatever is doing the scrolling, so the
+  // answer is the same whether that is the container or the page.
   function nearby() {
-    var top = more.getBoundingClientRect().top;
-    return top < (window.innerHeight || document.documentElement.clientHeight) + 800;
+    var edge = scroller
+      ? scroller.getBoundingClientRect().bottom
+      : (window.innerHeight || document.documentElement.clientHeight);
+    return more.getBoundingClientRect().top < edge + 800;
   }
 
   function finish() {
     next = '';
-    sentinel.disconnect();
+    if (sentinel) sentinel.disconnect();
+    (scroller || window).removeEventListener('scroll', onScroll);
     if (more.parentNode) more.parentNode.removeChild(more);
   }
 
@@ -130,20 +186,40 @@ document.addEventListener('click', function (event) {
         if (nearby()) load();
       })
       .catch(function () {
-        // Leave the link as it was: a tap tries again.
+        // A wall that stops silently is indistinguishable from a wall that has
+        // ended, so say which one this is. The link still works: a tap retries.
         busy = false;
         more.classList.remove('is-loading');
-        if (link) link.textContent = label;
+        if (link) link.textContent = 'More reels — tap to retry';
       });
   }
 
-  var sentinel = new IntersectionObserver(
-    function (entries) {
-      if (entries.some(function (entry) { return entry.isIntersecting; })) load();
-    },
-    { rootMargin: '800px 0px' }
-  );
-  sentinel.observe(more);
+  var sentinel = hasObserver
+    ? new IntersectionObserver(
+        function (entries) {
+          if (entries.some(function (entry) { return entry.isIntersecting; })) load();
+        },
+        // Rooted in the box that scrolls, so the 800px is real lead time and
+        // the next page is already arriving before the last one runs out.
+        { root: scroller || null, rootMargin: '800px 0px' }
+      )
+    : null;
+  if (sentinel) sentinel.observe(more);
+
+  // An observer only fires as the sentinel crosses in. A keyboard, a dragged
+  // scrollbar and a scroll-to-top all move the container without doing that,
+  // so its own scroll events are watched too. This is also the whole mechanism
+  // in a browser with no IntersectionObserver.
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    (window.requestAnimationFrame || function (fn) { setTimeout(fn, 60); })(function () {
+      ticking = false;
+      if (nearby()) load();
+    });
+  }
+  (scroller || window).addEventListener('scroll', onScroll, { passive: true });
 
   if (link) {
     link.addEventListener('click', function (event) {
