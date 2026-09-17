@@ -132,11 +132,17 @@ test('the admin explains every missing setup item and marks its field', async ()
     assert.match(js.text, /Verify Bing Webmaster Tools/);
     assert.match(js.text, /Connect the Wikidata identity/);
     assert.match(js.text, /Generate photo SEO \+ GEO/);
+    // The panel has to show a corrupted identity field, and offer the value
+    // back in one click, or nobody finds out until a crawler reads it.
+    assert.match(js.text, /identityNote\(/);
+    assert.match(js.text, /data-action="identity-fix"/);
+    assert.match(js.text, /reads like a sentence/);
     assert.match(js.text, /class="field' \+ \(setup \? ' is-needs-setup'/);
     assert.match(js.text, /setupCounts\[item\.section\]/);
 
     const css = await server.call('/assets/css/admin.css');
     assert.match(css.text, /\.field\.is-needs-setup/);
+    assert.match(css.text, /\.field-warn/);
     assert.match(css.text, /\.setup-item\.is-required/);
     assert.match(css.text, /\.side-needs/);
   });

@@ -297,6 +297,22 @@
     return missingSetupItems().filter(function (item) { return (item.paths || []).indexOf(path) !== -1; })[0] || null;
   }
 
+  // A field that holds an exact fact but currently reads like a sentence. This
+  // is what a generator, an import or a stray paste leaves behind, and it is
+  // published verbatim into the structured data that tells search engines and
+  // AI assistants who this is — so it is shown on the field, not buried.
+  function identityNote(path, value) {
+    var issue = window.CopyEditor.identityIssue(path || '', value);
+    if (!issue) return '';
+    return '<span class="field-warn"><strong>Check this:</strong> your structured data publishes this as ' +
+      esc(issue.expects) + ', and it currently reads like a sentence. Search engines and AI assistants use it to work out who you are.' +
+      (issue.suggestion
+        ? ' <button class="btn btn-sm" type="button" data-action="identity-fix" data-target="' + esc(path) +
+          '" data-value="' + esc(issue.suggestion) + '">Set to \u201c' + esc(issue.suggestion) + '\u201d</button>'
+        : ' Shorten it by hand.') +
+      '</span>';
+  }
+
   function fieldSetupNote(path) {
     var item = setupForPath(path);
     return item
@@ -336,6 +352,7 @@
       (opts.attrs || '') +
       ' placeholder="' + esc(opts.placeholder || '') + '" value="' + esc(value) + '">' +
       seoButton(opts) +
+      identityNote(opts.path, value) +
       fieldSetupNote(opts.path) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</div>'
@@ -351,6 +368,7 @@
       (opts.rows ? ' rows="' + opts.rows + '"' : '') +
       ' placeholder="' + esc(opts.placeholder || '') + '">' + esc(opts.value || '') + '</textarea>' +
       seoButton(opts) +
+      identityNote(opts.path, opts.value) +
       fieldSetupNote(opts.path) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</div>'
@@ -2667,6 +2685,13 @@
           trigger.textContent = 'Generate photo SEO + GEO';
           toast(err.message || 'Could not analyze the photo.', 'error');
         });
+    }
+
+    if (action === 'identity-fix') {
+      setPath(state.site, trigger.dataset.target, trigger.dataset.value || '');
+      markDirty();
+      render({ preserveFocus: false });
+      return toast('Set. Review it, then save.', 'ok');
     }
 
     if (action === 'show-filter') {

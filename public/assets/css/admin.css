@@ -504,6 +504,25 @@ a {
   line-height: 1.45;
 }
 
+/* A field holding an exact fact that currently reads like a sentence. Red
+   rather than amber: the setup note says something is missing, this says
+   something published is wrong. */
+.field-warn {
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #d23b2d 55%, var(--line));
+  background: color-mix(in srgb, #d23b2d 10%, var(--surface));
+  color: var(--text);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.field-warn .btn {
+  margin-top: 6px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .setup-summary {
   display: flex;
   justify-content: space-between;

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { fieldPolicy, contextFor, buildMessages, assess, rewrite, repair, score } = require('../public/assets/js/copy-editor');
+const { fieldPolicy, identityIssue, contextFor, buildMessages, assess, rewrite, repair, score } = require('../public/assets/js/copy-editor');
 
 function exampleSite() {
   return {
@@ -240,4 +240,49 @@ test('a rewrite that only overruns its limit is repaired instead of discarded', 
   assert.ok(result.text.length <= 160);
   assert.ok(result.text.startsWith('Catch Taylor Drew live'));
   assert.doesNotMatch(result.text, /^"|"$/);
+});
+
+// These are the values the live site was publishing after generated prose
+// reached two fields that hold exact facts. Person.gender read
+// "Female — Taylor Drew, a New York City st" and addressRegion read
+// "additionally k". The panel flags exactly this shape now.
+test('an identity field holding a sentence is flagged, with the original value offered back', () => {
+  const location = identityIssue('brand.location', 'New York City — Taylor Drew is a New York City stand-up comedian who performs regularly at top NYC clubs');
+  assert.ok(location, 'a location that runs into a biography is flagged');
+  assert.equal(location.suggestion, 'New York City');
+
+  const gender = identityIssue('brand.gender', 'Female — Taylor Drew, a New York City');
+  assert.ok(gender);
+  assert.equal(gender.suggestion, 'Female');
+
+  // No confident original to offer back: warn, but never invent the fix.
+  const fact = identityIssue('about.facts.0.label', 'Based in New York City, Taylor Drew is a stand-up comedian w');
+  assert.ok(fact, 'a fact label that became prose is flagged');
+  assert.equal(fact.suggestion, '');
+
+  assert.ok(identityIssue('shows.0.venue', 'The Bell House. Taylor Drew performs there often.'), 'a sentence boundary is prose');
+});
+
+test('real identity values and ordinary copy are never flagged', () => {
+  for (const [path, value] of [
+    ['brand.name', 'Taylor Drew'],
+    ['brand.location', 'New York City'],
+    ['brand.location', 'Brooklyn, New York'],
+    ['brand.gender', 'Female'],
+    ['brand.gender', 'Non-binary'],
+    ['brand.logoText', 'TAYLOR DREW'],
+    ['brand.accentLabel', 'Stand-up comedian'],
+    ['about.facts.0.label', 'Based in'],
+    ['about.facts.0.label', 'Booking'],
+    ['shows.0.venue', 'The Bell House'],
+    ['shows.0.city', 'Staten Island'],
+    ['brand.location', ''],
+    ['brand.gender', null]
+  ]) {
+    assert.equal(identityIssue(path, value), null, `${path} = ${JSON.stringify(value)}`);
+  }
+  // Fields that are supposed to hold sentences are not identity fields at all.
+  for (const path of ['seo.description', 'about.body.0', 'home.subhead', 'photos.items.0.caption']) {
+    assert.equal(identityIssue(path, 'Taylor Drew is a stand-up comedian. She performs in New York City.'), null, path);
+  }
 });

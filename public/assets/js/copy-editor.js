@@ -23,6 +23,43 @@
     if (/^footer\.(left|note)$/.test(path)) return { maxLength: 160, instruction: 'Write a concise footer line with the same purpose. No biography or added claims.', example: 'Keep it to one short line.' };
     return null;
   }
+  // Fields whose whole value is that they are exact, and that are published
+  // straight into structured data: Person.name, Person.gender, the
+  // PostalAddress, an Event's venue. A sentence in one of them is not bad copy,
+  // it is a wrong fact — and once the schema cuts it to the field's length the
+  // site publishes a fragment like an addressRegion reading "additionally k".
+  // fieldPolicy already refuses to generate them; this catches the ones a
+  // generator, an import or a paste already got into.
+  var IDENTITY_FIELDS = [
+    { test: /^brand\.name$/, label: 'a name', words: 6 },
+    { test: /^brand\.logoText$/, label: 'a logo wordmark', words: 6 },
+    { test: /^brand\.location$/, label: 'a place', words: 8 },
+    { test: /^brand\.gender$/, label: 'a gender', words: 3 },
+    { test: /^brand\.accentLabel$/, label: 'a job title', words: 8 },
+    { test: /^about\.facts\.\d+\.label$/, label: 'a short label', words: 6 },
+    { test: /^shows\.\d+\.venue$/, label: 'a venue name', words: 10 },
+    { test: /^shows\.\d+\.city$/, label: 'a city', words: 8 }
+  ];
+
+  function identityIssue(path, value) {
+    var rule = null;
+    for (var i = 0; i < IDENTITY_FIELDS.length; i++) {
+      if (IDENTITY_FIELDS[i].test.test(path || '')) { rule = IDENTITY_FIELDS[i]; break; }
+    }
+    if (!rule) return null;
+    var text = String(value == null ? '' : value).trim();
+    if (!text) return null;
+    var count = text.split(/\s+/).filter(Boolean).length;
+    // Any one of these means prose, not a fact: too many words for the field, a
+    // spaced dash joining a clause, or a sentence boundary inside the value.
+    if (count <= rule.words && !/\s[—–]\s/.test(text) && !/[.!?]\s+[A-Z]/.test(text)) return null;
+    // The original value is usually still there, in front of wherever the
+    // sentence started: "New York City — Taylor Drew is a ..." was "New York City".
+    var head = text.split(/\s[—–]\s/)[0].trim().replace(/[,;:]$/, '');
+    var suggestion = head && head !== text && head.split(/\s+/).filter(Boolean).length <= rule.words ? head : '';
+    return { expects: rule.label, suggestion: suggestion };
+  }
+
   // Small on-device models wrap answers in quotes, prefaces, markdown and
   // character counts, and run past the limit. Clean that off and trim on a
   // sentence or word boundary so a usable rewrite is not thrown away.
@@ -161,5 +198,5 @@
     });
     return { text: best, changed: true };
   }
-  return { fieldPolicy: fieldPolicy, contextFor: contextFor, buildMessages: buildMessages, assess: assess, rewrite: rewrite, tooSimilar: tooSimilar, repair: repair, score: score };
+  return { fieldPolicy: fieldPolicy, identityIssue: identityIssue, contextFor: contextFor, buildMessages: buildMessages, assess: assess, rewrite: rewrite, tooSimilar: tooSimilar, repair: repair, score: score };
 });
