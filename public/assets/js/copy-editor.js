@@ -37,6 +37,10 @@
     { test: /^brand\.gender$/, label: 'a gender', words: 3 },
     { test: /^brand\.accentLabel$/, label: 'a job title', words: 8 },
     { test: /^about\.facts\.\d+\.label$/, label: 'a short label', words: 6 },
+    // A fact's value is an answer, not a paragraph: "New York City", an email,
+    // a date. fieldPolicy already treats it as an exact fact; the allowance is
+    // generous so a short phrase passes and a run-on biography does not.
+    { test: /^about\.facts\.\d+\.value$/, label: 'a short factual answer', words: 10 },
     { test: /^shows\.\d+\.venue$/, label: 'a venue name', words: 10 },
     { test: /^shows\.\d+\.city$/, label: 'a city', words: 8 }
   ];

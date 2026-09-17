@@ -261,6 +261,9 @@ test('an identity field holding a sentence is flagged, with the original value o
   assert.equal(fact.suggestion, '');
 
   assert.ok(identityIssue('shows.0.venue', 'The Bell House. Taylor Drew performs there often.'), 'a sentence boundary is prose');
+
+  const value = identityIssue('about.facts.0.value', 'New York City, Taylor Drew is a stand-up comedian based in New York City. Known for performing regularly at top NYC clubs, Taylor draws audiences with her uniqu');
+  assert.ok(value, 'a fact answer that became a biography is flagged');
 });
 
 test('real identity values and ordinary copy are never flagged', () => {
@@ -274,6 +277,9 @@ test('real identity values and ordinary copy are never flagged', () => {
     ['brand.accentLabel', 'Stand-up comedian'],
     ['about.facts.0.label', 'Based in'],
     ['about.facts.0.label', 'Booking'],
+    ['about.facts.0.value', 'New York City'],
+    ['about.facts.0.value', 'taylordrew4u@gmail.com'],
+    ['about.facts.0.value', 'SAG-eligible performer and award-winning writer'],
     ['shows.0.venue', 'The Bell House'],
     ['shows.0.city', 'Staten Island'],
     ['brand.location', ''],
