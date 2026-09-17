@@ -228,6 +228,9 @@
     var credits = (about.credits || []).filter(function (item) { return item && item.visible !== false && present(item.title); });
     var quotes = (about.quotes || []).filter(function (item) { return item && present(item.text) && present(item.source); });
     var announcedShows = (site.shows || []).filter(function (item) { return item && item.visible !== false && present(item.date) && present(item.venue); });
+    var undescribedPhotos = ((site.photos && site.photos.items) || []).filter(function (item) {
+      return item && item.visible !== false && present(item.photo) && !present(item.photoAlt);
+    });
     var reelsReady = Boolean((state.instagram && state.instagram.connected) || ((site.reels && site.reels.items) || []).some(function (item) {
       return item && item.visible !== false && (present(item.url) || present(item.video));
     }));
@@ -280,7 +283,9 @@
       { id: 'shows', level: 'recommended', section: 'shows', title: 'List every announced performance', done: announcedShows.length > 0,
         how: 'Open Shows and choose Add show, or post a flyer. Confirm the date, venue, city and ticket link before saving.' },
       { id: 'reels', level: 'recommended', section: 'reels', title: 'Connect or add performance clips', done: reelsReady,
-        how: 'Open Reels. Connect the official Instagram account or add a visible reel with its permalink, cover image and factual description.' }
+        how: 'Open Reels. Connect the official Instagram account or add a visible reel with its permalink, cover image and factual description.' },
+      { id: 'gallery-alt', level: 'required', section: 'photos', title: 'Describe every published gallery photo', done: undescribedPhotos.length === 0,
+        how: 'Open Photos. For each published photo choose Generate photo SEO + GEO to write its image description, then add a title and caption. A photo with no description is left out of image search results and AI answers.' }
     ];
   }
 
@@ -290,6 +295,22 @@
 
   function setupForPath(path) {
     return missingSetupItems().filter(function (item) { return (item.paths || []).indexOf(path) !== -1; })[0] || null;
+  }
+
+  // A field that holds an exact fact but currently reads like a sentence. This
+  // is what a generator, an import or a stray paste leaves behind, and it is
+  // published verbatim into the structured data that tells search engines and
+  // AI assistants who this is — so it is shown on the field, not buried.
+  function identityNote(path, value) {
+    var issue = window.CopyEditor.identityIssue(path || '', value);
+    if (!issue) return '';
+    return '<span class="field-warn"><strong>Check this:</strong> your structured data publishes this as ' +
+      esc(issue.expects) + ', and it currently reads like a sentence. Search engines and AI assistants use it to work out who you are.' +
+      (issue.suggestion
+        ? ' <button class="btn btn-sm" type="button" data-action="identity-fix" data-target="' + esc(path) +
+          '" data-value="' + esc(issue.suggestion) + '">Set to \u201c' + esc(issue.suggestion) + '\u201d</button>'
+        : ' Shorten it by hand.') +
+      '</span>';
   }
 
   function fieldSetupNote(path) {
@@ -313,6 +334,12 @@
   // One request produces one version optimized for both search and AI answers.
   function seoButton(opts, compact) {
     if (!seoEligible(opts)) return '';
+    // Every generation is a chance to lose a good sentence. When the field is
+    // already doing its job there is nothing to offer, so nothing is offered.
+    var verdict = window.CopyEditor.quality(opts.path || '', opts.value, state.site);
+    if (verdict && verdict.level === 'good') {
+      return '<span class="already-strong' + (compact ? ' is-compact' : '') + '">Already strong</span>';
+    }
     return '<span class="search-generators' + (compact ? ' is-compact' : '') + '">' +
       '<button class="seo-generate" type="button" data-action="seo-generate" data-target="' + esc(opts.path) +
       '" data-label="' + esc(opts.label || 'Text') + '" title="Generate SEO + GEO" aria-label="Generate SEO + GEO for ' + esc(opts.label || 'this text') + '">' +
@@ -331,6 +358,7 @@
       (opts.attrs || '') +
       ' placeholder="' + esc(opts.placeholder || '') + '" value="' + esc(value) + '">' +
       seoButton(opts) +
+      identityNote(opts.path, value) +
       fieldSetupNote(opts.path) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</div>'
@@ -346,6 +374,7 @@
       (opts.rows ? ' rows="' + opts.rows + '"' : '') +
       ' placeholder="' + esc(opts.placeholder || '') + '">' + esc(opts.value || '') + '</textarea>' +
       seoButton(opts) +
+      identityNote(opts.path, opts.value) +
       fieldSetupNote(opts.path) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</div>'
@@ -363,6 +392,9 @@
   function imageField(opts) {
     var value = opts.value || '';
     var setup = setupForPath(opts.path);
+    // A photo that already carries a real description does not need another one.
+    var alt = opts.seoTarget ? window.CopyEditor.altQuality(getPath(state.site, opts.seoTarget), state.site) : null;
+    var altVerdict = alt ? alt.level : '';
     return (
       '<div class="field' + (setup ? ' is-needs-setup' : '') + '">' +
       '<span class="label">' + esc(opts.label) + '</span>' +
@@ -374,9 +406,15 @@
       '<input class="input" type="text" data-path="' + esc(opts.path) + '" data-image-input="1" placeholder="/uploads/photo.jpg" value="' + esc(value) + '">' +
       '<span class="image-buttons">' +
       '<button class="btn btn-sm" type="button" data-action="pick-image" data-target="' + esc(opts.path) + '">Choose or upload</button>' +
-      (value && opts.seoTarget ? '<button class="btn btn-sm" type="button" data-action="seo-photo" data-target="' + esc(opts.seoTarget) + '" data-image-path="' + esc(opts.path) + '">Generate photo SEO + GEO</button>' : '') +
+      (value && opts.seoTarget && altVerdict !== 'good'
+        ? '<button class="btn btn-sm" type="button" data-action="seo-photo" data-target="' + esc(opts.seoTarget) + '" data-image-path="' + esc(opts.path) + '">Generate photo SEO + GEO</button>'
+        : '') +
       (value ? '<button class="btn btn-sm btn-danger" type="button" data-action="clear-image" data-target="' + esc(opts.path) + '">Remove</button>' : '') +
       '</span>' +
+      (value && opts.seoTarget && altVerdict === 'good' ? '<span class="already-strong">Description already strong</span>' : '') +
+      (value && opts.seoTarget && alt && alt.level !== 'good' && alt.level !== 'missing'
+        ? '<span class="hint">Image description: ' + esc(alt.reason) + '.</span>'
+        : '') +
       fieldSetupNote(opts.path) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</span></div></div>'
@@ -1508,9 +1546,9 @@
       return repeatItem({ list: 'photos.items', index: i, title: photo.title || 'Photo ' + (i + 1),
         badges: photo.visible === false ? [{ text: 'Hidden' }] : [],
         body: imageField({ label: 'Photo', path: base + '.photo', value: photo.photo, seoTarget: base + '.photoAlt' }) +
-          field({ label: 'Photo title', path: base + '.title', value: photo.title, titleSource: true, seo: false, attrs: ' maxlength="120"', placeholder: 'Taylor Drew performing stand-up' }) +
+          field({ label: 'Photo title', path: base + '.title', value: photo.title, titleSource: true, attrs: ' maxlength="120"', placeholder: 'Taylor Drew performing stand-up' }) +
           textareaField({ label: 'Image description (alt text)', path: base + '.photoAlt', value: photo.photoAlt, rows: 2, seo: false, hint: 'Describe what is actually in this photo. Include your name when you are pictured, plus the setting or event when known.' }) +
-          textareaField({ label: 'Caption', path: base + '.caption', value: photo.caption, rows: 2, seo: false, hint: 'Shown below the photo. Add useful context rather than repeating keywords.' }) +
+          textareaField({ label: 'Caption', path: base + '.caption', value: photo.caption, rows: 2, hint: 'Shown below the photo. Add useful context rather than repeating keywords.' }) +
           field({ label: 'Photographer / credit', path: base + '.credit', value: photo.credit, seo: false, attrs: ' maxlength="160"', hint: 'Optional. Use the photographer’s requested credit.' }) +
           toggleField({ label: 'Show on the site', path: base + '.visible', checked: photo.visible !== false })
       });
@@ -1518,8 +1556,8 @@
     return card('Photo gallery',
       '<p class="hint">Publish photos on <a href="/photos" target="_blank" rel="noopener">your Photos page ↗</a>. Published photos are included in the image sitemap. Add accurate descriptions and captions, then save changes.</p>' +
       '<label class="upload-drop" data-gallery-drop="1"><input type="file" accept="image/*" multiple hidden data-gallery-input="1"' + (state.galleryBusy ? ' disabled' : '') + '><span>' + (state.galleryBusy ? 'Uploading photos…' : 'Drop photos here or click to upload several') + '</span><small>Photos are resized for fast loading. Up to 100 gallery photos.</small></label>' +
-      '<div class="grid-2">' + field({ label: 'Page title', path: 'photos.title', value: photos.title, seo: false }) + field({ label: 'Kicker', path: 'photos.kicker', value: photos.kicker, seo: false }) + '</div>' +
-      textareaField({ label: 'Introduction', path: 'photos.intro', value: photos.intro, rows: 2, seo: false })
+      '<div class="grid-2">' + field({ label: 'Page title', path: 'photos.title', value: photos.title }) + field({ label: 'Kicker', path: 'photos.kicker', value: photos.kicker }) + '</div>' +
+      textareaField({ label: 'Introduction', path: 'photos.intro', value: photos.intro, rows: 2 })
     ) + card('Photos', items ? '<div class="repeat-list" data-sortable="photos.items">' + items + '</div>' : emptyState('Upload photos above, or add one from your media library.'), {
       actions: '<button class="btn btn-sm btn-accent" type="button" data-action="list-add" data-list="photos.items">Add photo from library</button>'
     });
@@ -2588,7 +2626,7 @@
       var input = document.getElementById(target) || trigger.closest('.field, .cell, .mini-field');
       if (input && !('value' in input)) input = input.querySelector('[data-path]');
       var original = input ? input.value : String(getPath(state.site, target) || '');
-      var rowPath = /^(?:about\.faqs|links\.items|shows|reels\.items)\.\d+/.exec(target);
+      var rowPath = /^(?:about\.faqs|links\.items|shows|reels\.items|photos\.items)\.\d+/.exec(target);
       var originalRowId = rowPath ? getPath(state.site, rowPath[0] + '.id') : null;
       if (!original.trim()) return toast('Write something first, then generate SEO + GEO.', 'error');
       var idleLabel = trigger.textContent;
@@ -2652,7 +2690,7 @@
         .then(function (data) {
           if (!data || typeof data.text !== 'string' || !data.text.trim()) throw new Error('No usable description was generated. Your original was kept.');
           if ((photoRow && getPath(state.site, photoRow[0] + '.id') !== photoRowId) || String(getPath(state.site, photoTarget) || '') !== originalAlt || String(getPath(state.site, originalImagePath) || '') !== imageUrl) throw new Error('This photo or description changed while AI was running. Your edits were kept.');
-          setPath(state.site, photoTarget, data.text.trim().slice(0, 160));
+          setPath(state.site, photoTarget, data.text.trim().slice(0, /^photos\.items\.\d+\.photoAlt$/.test(photoTarget) ? 500 : 160));
           markDirty();
           render({ preserveFocus: false });
           toast('Photo SEO + GEO description added. Review it, then save.', 'ok');
@@ -2662,6 +2700,13 @@
           trigger.textContent = 'Generate photo SEO + GEO';
           toast(err.message || 'Could not analyze the photo.', 'error');
         });
+    }
+
+    if (action === 'identity-fix') {
+      setPath(state.site, trigger.dataset.target, trigger.dataset.value || '');
+      markDirty();
+      render({ preserveFocus: false });
+      return toast('Set. Review it, then save.', 'ok');
     }
 
     if (action === 'show-filter') {

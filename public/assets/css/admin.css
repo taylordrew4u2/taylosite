@@ -504,6 +504,52 @@ a {
   line-height: 1.45;
 }
 
+/* Said where the generate button would have been, so a strong field reads as
+   finished rather than as one that lost its controls. */
+.already-strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, #2f9e44 45%, var(--line));
+  background: color-mix(in srgb, #2f9e44 10%, var(--surface));
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+.already-strong::before {
+  content: "\2713";
+  color: #2f9e44;
+  font-weight: 700;
+}
+
+.already-strong.is-compact {
+  margin-top: 0;
+  padding: 2px 6px;
+  font-size: 0.65rem;
+}
+
+/* A field holding an exact fact that currently reads like a sentence. Red
+   rather than amber: the setup note says something is missing, this says
+   something published is wrong. */
+.field-warn {
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #d23b2d 55%, var(--line));
+  background: color-mix(in srgb, #d23b2d 10%, var(--surface));
+  color: var(--text);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.field-warn .btn {
+  margin-top: 6px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .setup-summary {
   display: flex;
   justify-content: space-between;

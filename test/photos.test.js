@@ -198,3 +198,34 @@ test('the photos route serves saved gallery order, survives partial saves and pu
     assert.equal(redirect.headers.get('location'), '/photos');
   } finally { await server.stop(); }
 });
+
+// The gallery had SEO + GEO switched off field by field, so the one page that
+// exists to be found in image search was the only page the panel would not
+// help write.
+test('the panel offers SEO + GEO on gallery copy and keeps it off exact facts', () => {
+  const admin = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'js', 'admin.js'), 'utf8');
+  const section = admin.slice(admin.indexOf('function sectionPhotos()'), admin.indexOf('function addGalleryPhoto('));
+  assert.ok(section, 'the photos section is in the panel');
+
+  const field = (name) => section.slice(section.indexOf(`label: '${name}'`)).split('})')[0];
+  for (const generated of ['Photo title', 'Caption', 'Page title', 'Kicker', 'Introduction']) {
+    assert.doesNotMatch(field(generated), /seo: false/, `${generated} offers SEO + GEO`);
+  }
+  // Alt text is written from the image itself, and a photographer's credit is
+  // their name — neither is a field for a rewrite.
+  for (const exact of ['Image description (alt text)', 'Photographer / credit']) {
+    assert.match(field(exact), /seo: false/, `${exact} is not rewritten`);
+  }
+  assert.match(section, /seoTarget: base \+ '\.photoAlt'/, 'the photo itself can be described');
+
+  const { fieldPolicy } = require('../public/assets/js/copy-editor');
+  assert.ok(fieldPolicy('photos.items.0.title'), 'a photo title has a policy to generate against');
+  assert.ok(fieldPolicy('photos.items.0.caption'), 'a photo caption has a policy to generate against');
+  assert.equal(fieldPolicy('photos.items.0.photoAlt'), null);
+  assert.equal(fieldPolicy('photos.items.0.credit'), null);
+
+  // A row can be dragged or deleted while the model is writing; the guard that
+  // catches that has to know about the gallery too.
+  assert.match(admin, /rowPath = \/\^\(\?:about\\\.faqs\|links\\\.items\|shows\|reels\\\.items\|photos\\\.items\)/);
+  assert.match(admin, /Describe every published gallery photo/);
+});

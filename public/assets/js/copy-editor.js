@@ -13,6 +13,8 @@
     if (/^about\.faqs\.\d+\.question$/.test(path)) return { maxLength: 200, instruction: 'Rewrite this visitor question clearly. Keep the same subject and question form; do not answer it.', example: 'Good: "Where can I see Taylor Drew perform live?" Bad: any sentence that answers the question.' };
     if (/^links\.items\.\d+\.sublabel$/.test(path)) return { maxLength: 160, instruction: 'Write a short description of this specific link and what the visitor will find there. Use its label and destination; do not describe the person in general.', example: 'Good: "Short clips from recent sets, posted between shows." Bad: "Taylor Drew is a stand-up comedian in New York City."' };
     if (/^shows\.\d+\.note$/.test(path)) return { maxLength: 240, instruction: 'Rewrite only this event note. Preserve this event details and do not borrow facts from other shows or the biography. Never invent ticket availability, performers or promises.', example: 'Good: "Late show. Ages 18 and up." Bad: "Tickets are selling fast" when the original never says so.' };
+    if (/^photos\.items\.\d+\.title$/.test(path)) return { maxLength: 120, instruction: 'Write a short descriptive title for this one photograph, using only what the supplied description, caption and credit say is in it. Name the person, setting or event when they are supplied. This is not the gallery page heading, and it is not a place to invent a venue, date or occasion.', example: 'Good: "Taylor Drew mid-set at a Brooklyn club". Bad: "Photos", or "Taylor Drew — New York City Stand-Up Comedian".' };
+    if (/^photos\.items\.\d+\.caption$/.test(path)) return { maxLength: 300, instruction: 'Rewrite the caption printed under this one photograph. Keep it about this photograph, adding the context a visitor would want from the supplied title and image description. Do not repeat the image description word for word, describe anything the supplied text does not mention, or turn it into a general biography.', example: 'Good: "Closing a late set at the Bell House." Bad: "Taylor Drew is a stand-up comedian based in New York City."' };
     if (/^reels\.items\.\d+\.caption$/.test(path)) return { maxLength: 500, instruction: 'Rewrite this clip caption about this particular clip. Preserve its topic and tone. Do not guess visual details or replace it with a general biography.', example: 'Keep the subject of the clip. Do not describe anything you cannot see in the supplied caption.' };
     if (/\.intro$/.test(path)) return { maxLength: 240, instruction: 'Write a brief introduction to this page. Explain what visitors can do here using the supplied page context. Avoid a generic biography or copying another page introduction.', example: 'Good: "Every upcoming date, with venue details and ticket links." Bad: a paragraph about the performer.' };
     if (/\.placeholder$|\.emptyText$/.test(path)) return { maxLength: 80, instruction: 'Write a short helpful interface message with the same purpose. No personal biography, marketing claims or keyword stuffing.', example: 'Good: "No dates announced yet — check back soon." Bad: a marketing sentence.' };
@@ -21,6 +23,101 @@
     if (/^footer\.(left|note)$/.test(path)) return { maxLength: 160, instruction: 'Write a concise footer line with the same purpose. No biography or added claims.', example: 'Keep it to one short line.' };
     return null;
   }
+  // Fields whose whole value is that they are exact, and that are published
+  // straight into structured data: Person.name, Person.gender, the
+  // PostalAddress, an Event's venue. A sentence in one of them is not bad copy,
+  // it is a wrong fact — and once the schema cuts it to the field's length the
+  // site publishes a fragment like an addressRegion reading "additionally k".
+  // fieldPolicy already refuses to generate them; this catches the ones a
+  // generator, an import or a paste already got into.
+  var IDENTITY_FIELDS = [
+    { test: /^brand\.name$/, label: 'a name', words: 6 },
+    { test: /^brand\.logoText$/, label: 'a logo wordmark', words: 6 },
+    { test: /^brand\.location$/, label: 'a place', words: 8 },
+    { test: /^brand\.gender$/, label: 'a gender', words: 3 },
+    { test: /^brand\.accentLabel$/, label: 'a job title', words: 8 },
+    { test: /^about\.facts\.\d+\.label$/, label: 'a short label', words: 6 },
+    // A fact's value is an answer, not a paragraph: "New York City", an email,
+    // a date. fieldPolicy already treats it as an exact fact; the allowance is
+    // generous so a short phrase passes and a run-on biography does not.
+    { test: /^about\.facts\.\d+\.value$/, label: 'a short factual answer', words: 10 },
+    { test: /^shows\.\d+\.venue$/, label: 'a venue name', words: 10 },
+    { test: /^shows\.\d+\.city$/, label: 'a city', words: 8 }
+  ];
+
+  function identityIssue(path, value) {
+    var rule = null;
+    for (var i = 0; i < IDENTITY_FIELDS.length; i++) {
+      if (IDENTITY_FIELDS[i].test.test(path || '')) { rule = IDENTITY_FIELDS[i]; break; }
+    }
+    if (!rule) return null;
+    var text = String(value == null ? '' : value).trim();
+    if (!text) return null;
+    var count = text.split(/\s+/).filter(Boolean).length;
+    // Any one of these means prose, not a fact: too many words for the field, a
+    // spaced dash joining a clause, or a sentence boundary inside the value.
+    if (count <= rule.words && !/\s[—–]\s/.test(text) && !/[.!?]\s+[A-Z]/.test(text)) return null;
+    // The original value is usually still there, in front of wherever the
+    // sentence started: "New York City — Taylor Drew is a ..." was "New York City".
+    var head = text.split(/\s[—–]\s/)[0].trim().replace(/[,;:]$/, '');
+    var suggestion = head && head !== text && head.split(/\s+/).filter(Boolean).length <= rule.words ? head : '';
+    return { expects: rule.label, suggestion: suggestion };
+  }
+
+  // Copy that is already doing its job should not be offered a rewrite. Every
+  // generation is a chance to lose a good sentence, and this site has already
+  // lost several that way. The verdict is deliberately strict about what counts
+  // as a problem: a field is only "weak" for a reason that can be named.
+  function quality(path, value, site) {
+    var policy = fieldPolicy(path || '');
+    if (!policy) return null;
+    var text = String(value == null ? '' : value).trim();
+    if (!text) return { level: 'missing', reason: 'nothing written yet' };
+
+    var limit = policy.maxLength;
+    var count = words(text).length;
+
+    if (text.length > limit) return { level: 'weak', reason: 'longer than the ' + limit + ' characters this field publishes' };
+    // Only the two fields a search result is built from are worth filling: they
+    // get a fixed amount of space and a short one wastes it. Everywhere else
+    // short is usually right — a good caption is not a long caption.
+    var fill = { 'seo.title': 0.5, 'seo.description': 0.5 }[path];
+    if (fill && text.length < Math.round(limit * fill)) return { level: 'weak', reason: 'too short to use the space a search result gives it' };
+    // A heading or a title is allowed to be two words. A paragraph is not.
+    if (limit > 120 && count < 3) return { level: 'weak', reason: 'too short to say anything' };
+    // A value that was cut to fit: the last word is not a word.
+    if (/[\s,;:–—-]$/.test(text)) return { level: 'weak', reason: 'it stops mid-thought' };
+    if (count > 12 && !/[.!?…"”’)]$/.test(text)) return { level: 'weak', reason: 'it stops mid-thought' };
+
+    var counts = {};
+    words(text).forEach(function (word) { if (word.length > 3) counts[word] = (counts[word] || 0) + 1; });
+    if (Object.keys(counts).some(function (word) { return counts[word] > 2; })) {
+      return { level: 'weak', reason: 'the same word is repeated enough to read as keyword stuffing' };
+    }
+    // The two fields a search result is actually built from should name the
+    // person. Nothing else is required to.
+    var name = String((site && site.brand && site.brand.name) || '').trim();
+    if (name && (path === 'seo.title' || path === 'seo.description') && text.indexOf(name) === -1) {
+      return { level: 'weak', reason: 'it never names ' + name };
+    }
+    return { level: 'good', reason: '' };
+  }
+
+  // Alt text is written by looking at the image, so it has no copy policy — but
+  // whether it is already doing its job is still answerable, and a photo with
+  // good alt text should not be offered a fresh description either.
+  function altQuality(value, site) {
+    var text = String(value == null ? '' : value).trim();
+    if (!text) return { level: 'missing', reason: 'this image has no description' };
+    var name = String((site && site.brand && site.brand.name) || '').trim();
+    if (name && text === name) return { level: 'weak', reason: 'a name alone does not describe the picture' };
+    if (/^(?:an?\s+)?(?:image|photo|picture|photograph)\b/i.test(text)) return { level: 'weak', reason: 'it starts by saying it is an image' };
+    if (/\.(?:jpe?g|png|webp|gif|avif)$/i.test(text)) return { level: 'weak', reason: 'it is a file name, not a description' };
+    if (/[\s,;:–—-]$/.test(text)) return { level: 'weak', reason: 'it stops mid-thought' };
+    if (words(text).length < 5) return { level: 'weak', reason: 'too short to describe the picture' };
+    return { level: 'good', reason: '' };
+  }
+
   // Small on-device models wrap answers in quotes, prefaces, markdown and
   // character counts, and run past the limit. Clean that off and trim on a
   // sentence or word boundary so a usable rewrite is not thrown away.
@@ -45,10 +142,10 @@
   }
   function pick(object, keys) { var out = {}; keys.forEach(function (key) { if (typeof object?.[key] === 'string') out[key] = object[key].slice(0, 800); }); return out; }
   function contextFor(site, path) {
-    var row = /^(about\.faqs|links\.items|shows|reels\.items)\.(\d+)\./.exec(path);
+    var row = /^(about\.faqs|links\.items|shows|reels\.items|photos\.items)\.(\d+)\./.exec(path);
     if (row) {
       var list = row[1].split('.').reduce(function (value, key) { return value?.[key]; }, site);
-      var keys = row[1] === 'about.faqs' ? ['question', 'answer'] : row[1] === 'links.items' ? ['label', 'sublabel', 'url'] : row[1] === 'shows' ? ['date', 'time', 'venue', 'city', 'note', 'url'] : ['caption', 'url'];
+      var keys = row[1] === 'about.faqs' ? ['question', 'answer'] : row[1] === 'links.items' ? ['label', 'sublabel', 'url'] : row[1] === 'shows' ? ['date', 'time', 'venue', 'city', 'note', 'url'] : row[1] === 'photos.items' ? ['title', 'photoAlt', 'caption', 'credit'] : ['caption', 'url'];
       return { page: row[1], item: pick(list?.[Number(row[2])], keys) };
     }
     var section = path.split('.')[0];
@@ -159,5 +256,5 @@
     });
     return { text: best, changed: true };
   }
-  return { fieldPolicy: fieldPolicy, contextFor: contextFor, buildMessages: buildMessages, assess: assess, rewrite: rewrite, tooSimilar: tooSimilar, repair: repair, score: score };
+  return { fieldPolicy: fieldPolicy, identityIssue: identityIssue, quality: quality, altQuality: altQuality, contextFor: contextFor, buildMessages: buildMessages, assess: assess, rewrite: rewrite, tooSimilar: tooSimilar, repair: repair, score: score };
 });

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { fieldPolicy, contextFor, buildMessages, assess, rewrite, repair, score } = require('../public/assets/js/copy-editor');
+const { fieldPolicy, identityIssue, quality, altQuality, contextFor, buildMessages, assess, rewrite, repair, score } = require('../public/assets/js/copy-editor');
 
 function exampleSite() {
   return {
@@ -26,6 +26,10 @@ function exampleSite() {
       { label: 'Instagram', sublabel: 'Short performance clips', url: 'https://instagram.com/taylor', id: 'link-one' },
       { label: 'OTHER_LINK_ROW', sublabel: 'OTHER_LINK_DESCRIPTION', url: 'https://other.example/secret-row' }
     ] },
+    photos: { title: 'Photos', kicker: 'Photos', intro: 'A few shots from recent sets.', items: [
+      { id: 'photo-one', title: 'Closing the late set', photoAlt: 'Taylor Drew holding a microphone on a small club stage', caption: 'The last five minutes of a late set.', credit: 'EXACT_PHOTOGRAPHER_NAME' },
+      { id: 'photo-two', title: 'OTHER_PHOTO_TITLE', photoAlt: 'OTHER_PHOTO_ALT', caption: 'OTHER_PHOTO_CAPTION', credit: 'OTHER_PHOTOGRAPHER' }
+    ] },
     shows: [
       { venue: 'First Room', city: 'New York City', date: '2026-09-24', note: 'Late show. Ages 18 and older.', url: 'https://tickets.example/first' },
       { venue: 'OTHER_EVENT_VENUE', city: 'OTHER_EVENT_CITY', date: '2099-12-31', note: 'OTHER_EVENT_NOTE', url: 'https://tickets.example/other' }
@@ -46,16 +50,34 @@ test('copy generation excludes exact facts, quotations and image descriptions', 
     'home.photoAlt', 'about.photoAlt', 'seo.ogImageAlt',
     'shows.0.flyerAlt', 'reels.items.0.posterAlt',
     'shows.0.venue', 'shows.0.city', 'shows.0.date',
-    'links.items.0.url', 'links.items.0.id', 'nav.0.href'
+    'links.items.0.url', 'links.items.0.id', 'nav.0.href',
+    'photos.items.0.photoAlt', 'photos.items.0.photo', 'photos.items.0.credit'
   ]) {
     assert.equal(fieldPolicy(path), null, path);
   }
-  for (const path of ['seo.title', 'seo.description', 'about.body.0', 'about.faqs.0.answer', 'links.items.0.sublabel', 'shows.0.note']) {
+  for (const path of ['seo.title', 'seo.description', 'about.body.0', 'about.faqs.0.answer', 'links.items.0.sublabel', 'shows.0.note',
+    'photos.items.0.title', 'photos.items.0.caption', 'photos.title', 'photos.kicker', 'photos.intro']) {
     const policy = fieldPolicy(path);
     assert.ok(policy && policy.instruction, path);
   }
   assert.equal(fieldPolicy('seo.title').maxLength, 60);
   assert.equal(fieldPolicy('seo.description').maxLength, 160);
+  // A photo title is a sentence about one picture, not the gallery heading, so
+  // it must not fall through to the 40-character heading rule.
+  assert.equal(fieldPolicy('photos.items.0.title').maxLength, 120);
+  assert.equal(fieldPolicy('photos.items.0.caption').maxLength, 300);
+  assert.equal(fieldPolicy('photos.title').maxLength, 40);
+});
+
+test('gallery photo context stays with its own photo', () => {
+  const site = exampleSite();
+  const photo = json(contextFor(site, 'photos.items.0.caption'));
+  assert.ok(photo.includes('Closing the late set'));
+  assert.ok(photo.includes('Taylor Drew holding a microphone on a small club stage'));
+  assert.ok(!photo.includes('OTHER_PHOTO_TITLE'));
+  assert.ok(!photo.includes('OTHER_PHOTO_CAPTION'));
+  assert.ok(!photo.includes('Taylor Drew performs stand-up comedy in New York City.'));
+  assert.doesNotMatch(photo, /AUTH_HASH_MUST_STAY_OUT|AI_SECRET_MUST_STAY_OUT/);
 });
 
 test('FAQ context carries only its question and answer without unrelated biography or private data', () => {
@@ -218,4 +240,114 @@ test('a rewrite that only overruns its limit is repaired instead of discarded', 
   assert.ok(result.text.length <= 160);
   assert.ok(result.text.startsWith('Catch Taylor Drew live'));
   assert.doesNotMatch(result.text, /^"|"$/);
+});
+
+// These are the values the live site was publishing after generated prose
+// reached two fields that hold exact facts. Person.gender read
+// "Female — Taylor Drew, a New York City st" and addressRegion read
+// "additionally k". The panel flags exactly this shape now.
+test('an identity field holding a sentence is flagged, with the original value offered back', () => {
+  const location = identityIssue('brand.location', 'New York City — Taylor Drew is a New York City stand-up comedian who performs regularly at top NYC clubs');
+  assert.ok(location, 'a location that runs into a biography is flagged');
+  assert.equal(location.suggestion, 'New York City');
+
+  const gender = identityIssue('brand.gender', 'Female — Taylor Drew, a New York City');
+  assert.ok(gender);
+  assert.equal(gender.suggestion, 'Female');
+
+  // No confident original to offer back: warn, but never invent the fix.
+  const fact = identityIssue('about.facts.0.label', 'Based in New York City, Taylor Drew is a stand-up comedian w');
+  assert.ok(fact, 'a fact label that became prose is flagged');
+  assert.equal(fact.suggestion, '');
+
+  assert.ok(identityIssue('shows.0.venue', 'The Bell House. Taylor Drew performs there often.'), 'a sentence boundary is prose');
+
+  const value = identityIssue('about.facts.0.value', 'New York City, Taylor Drew is a stand-up comedian based in New York City. Known for performing regularly at top NYC clubs, Taylor draws audiences with her uniqu');
+  assert.ok(value, 'a fact answer that became a biography is flagged');
+});
+
+test('real identity values and ordinary copy are never flagged', () => {
+  for (const [path, value] of [
+    ['brand.name', 'Taylor Drew'],
+    ['brand.location', 'New York City'],
+    ['brand.location', 'Brooklyn, New York'],
+    ['brand.gender', 'Female'],
+    ['brand.gender', 'Non-binary'],
+    ['brand.logoText', 'TAYLOR DREW'],
+    ['brand.accentLabel', 'Stand-up comedian'],
+    ['about.facts.0.label', 'Based in'],
+    ['about.facts.0.label', 'Booking'],
+    ['about.facts.0.value', 'New York City'],
+    ['about.facts.0.value', 'taylordrew4u@gmail.com'],
+    ['about.facts.0.value', 'SAG-eligible performer and award-winning writer'],
+    ['shows.0.venue', 'The Bell House'],
+    ['shows.0.city', 'Staten Island'],
+    ['brand.location', ''],
+    ['brand.gender', null]
+  ]) {
+    assert.equal(identityIssue(path, value), null, `${path} = ${JSON.stringify(value)}`);
+  }
+  // Fields that are supposed to hold sentences are not identity fields at all.
+  for (const path of ['seo.description', 'about.body.0', 'home.subhead', 'photos.items.0.caption']) {
+    assert.equal(identityIssue(path, 'Taylor Drew is a stand-up comedian. She performs in New York City.'), null, path);
+  }
+});
+
+// Every generation is a chance to lose a good sentence, and this site has lost
+// several that way. Copy that is already doing its job is offered nothing.
+test('copy that is already doing its job is not offered a rewrite', () => {
+  const site = exampleSite();
+  const good = [
+    ['seo.title', 'Taylor Drew — NYC Stand-Up Comedian & Live Shows'],
+    ['seo.description', 'Taylor Drew is a New York City stand-up comedian, Skankfest Roast Battle winner and creator of Pins & Needles Comedy. Dates, clips and booking.'],
+    ['about.body.0', 'Taylor Drew is a stand-up comedian based in New York City. She performs regularly at clubs across the city and won the Skankfest Roast Battle in 2025.'],
+    ['links.items.0.sublabel', 'Short performance clips'],
+    // Short is usually right outside a search result. A good caption, title or
+    // page heading is not a long one, and must not be nagged for length.
+    ['photos.items.0.caption', 'Closing a late set at the Bell House, to a full room.'],
+    ['photos.items.0.caption', 'Backstage before the second show'],
+    ['photos.items.0.title', 'Stage portrait'],
+    ['photos.title', 'Photos'],
+    ['photos.intro', 'Performance photos and portraits from recent shows around New York City.']
+  ];
+  for (const [path, value] of good) {
+    assert.equal(quality(path, value, site).level, 'good', `${path}: ${value}`);
+  }
+});
+
+test('a field is only called weak for a reason that can be named', () => {
+  const site = exampleSite();
+  const weak = [
+    ['seo.title', 'Taylor Drew', /space a search result/],
+    ['seo.description', 'Find show dates.', /space a search result/],
+    ['seo.description', 'A stand-up comedian in New York City who performs at clubs across the city most nights of every week.', /never names Taylor Drew/],
+    ['photos.items.0.caption', 'Nice photo,', /too short/],
+    ['photos.items.0.caption', 'Taylor Drew closing a late set at the Bell House in Brooklyn on a Friday night in front of a', /stops mid-thought/],
+    ['about.body.0', 'Comedy comedy comedy is what comedy means when comedy is the comedy that a comedy comedian performs nightly.', /keyword stuffing/]
+  ];
+  for (const [path, value, reason] of weak) {
+    const verdict = quality(path, value, site);
+    assert.equal(verdict.level, 'weak', `${path}: ${value}`);
+    assert.match(verdict.reason, reason);
+  }
+  assert.equal(quality('seo.description', '', site).level, 'missing');
+  // A field that holds an exact fact has no verdict at all — it is never copy.
+  assert.equal(quality('brand.name', 'Taylor Drew', site), null);
+});
+
+test('a photo that already carries a real description is offered nothing', () => {
+  const site = exampleSite();
+  assert.equal(altQuality('Taylor Drew holds a microphone mid-set on a small club stage.', site).level, 'good');
+  assert.equal(altQuality('', site).level, 'missing');
+  for (const [value, reason] of [
+    ['Taylor Drew', /name alone/],
+    ['photo of Taylor Drew on stage', /saying it is an image/],
+    ['stage.jpg', /file name/],
+    ['Taylor on stage', /too short/],
+    ['Taylor Drew on a stage holding a,', /stops mid-thought/]
+  ]) {
+    const verdict = altQuality(value, site);
+    assert.equal(verdict.level, 'weak', value);
+    assert.match(verdict.reason, reason);
+  }
 });
