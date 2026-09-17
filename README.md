@@ -168,8 +168,22 @@ The panel at `/admin` is a window on that same desktop —
 already builds everything from, and adds the chrome: a title bar, group boxes
 with captions, fields that sink and buttons that rise. Signing in is a dialog
 on the wallpaper. Above 860px the frame takes the screen and the panel scrolls
-inside it; below that, the sidebar is still the drawer `admin.css` makes it,
-untouched.
+inside it; below that, the sidebar is still the drawer `admin.css` makes it.
+
+On a phone the window gives up its desktop proportions. That sheet loads after
+`admin.css`, so its two-column grid outranks `admin.css`'s own drawer
+breakpoint whatever the media query says — left unrestated it kept a 216px
+column for a sidebar no longer in the flow and squeezed the whole panel into
+it, so the narrow section restates the column count. The toolbar becomes
+sticky, which needs the window to stop clipping its contents, and carries the
+time since the last save on a thin line above three buttons that share a row
+down to 320px. Below 860px, or on any coarse pointer, the controls leave XP
+proportions behind: fields are 16px in a 44px well (Safari zooms the page in on
+anything smaller), buttons, icon buttons and drawer rows are 44px, crop handles
+30px. Preview has nowhere to sit beside a phone-width form, so instead of the
+button doing nothing it swaps the form for the live site and the toolbar stays
+put to swap back. None of it touches the desktop window: the panel renders
+pixel-for-pixel as before at 1280px.
 
 The shortcuts are drawn too, not set in a font: a CRT, a dog-eared document, a
 strip of film, a manila folder, a joystick, an envelope and a cog. Each is 32
