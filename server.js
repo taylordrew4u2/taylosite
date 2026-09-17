@@ -14,6 +14,7 @@ const instagram = require('./lib/instagram');
 const indexnow = require('./lib/indexnow');
 const flyer = require('./lib/flyer');
 const seoCopy = require('./lib/seo-copy');
+const repair = require('./lib/repair');
 const aiProviders = require('./lib/ai-providers');
 
 const PORT = process.env.PORT === '0' ? 0 : Number(process.env.PORT) || 3000;
@@ -197,6 +198,9 @@ function ensureReady() {
     readyPromise = (async () => {
       store.ensureDirs();
       await auth.ensurePassword();
+      // Identity fields that had prose written over them, repaired once. It
+      // never throws — a site that cannot be repaired must still be served.
+      await repair.run(store);
     })().catch((err) => {
       readyPromise = null; // let a later request retry once the config is fixed
       throw err;
