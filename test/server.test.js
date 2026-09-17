@@ -137,12 +137,17 @@ test('the admin explains every missing setup item and marks its field', async ()
     assert.match(js.text, /identityNote\(/);
     assert.match(js.text, /data-action="identity-fix"/);
     assert.match(js.text, /reads like a sentence/);
+    // A field that is already doing its job offers no rewrite at all.
+    assert.match(js.text, /verdict\.level === 'good'/);
+    assert.match(js.text, /Already strong/);
+    assert.match(js.text, /altVerdict !== 'good'/);
     assert.match(js.text, /class="field' \+ \(setup \? ' is-needs-setup'/);
     assert.match(js.text, /setupCounts\[item\.section\]/);
 
     const css = await server.call('/assets/css/admin.css');
     assert.match(css.text, /\.field\.is-needs-setup/);
     assert.match(css.text, /\.field-warn/);
+    assert.match(css.text, /\.already-strong/);
     assert.match(css.text, /\.setup-item\.is-required/);
     assert.match(css.text, /\.side-needs/);
   });

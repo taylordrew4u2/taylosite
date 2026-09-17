@@ -334,6 +334,12 @@
   // One request produces one version optimized for both search and AI answers.
   function seoButton(opts, compact) {
     if (!seoEligible(opts)) return '';
+    // Every generation is a chance to lose a good sentence. When the field is
+    // already doing its job there is nothing to offer, so nothing is offered.
+    var verdict = window.CopyEditor.quality(opts.path || '', opts.value, state.site);
+    if (verdict && verdict.level === 'good') {
+      return '<span class="already-strong' + (compact ? ' is-compact' : '') + '">Already strong</span>';
+    }
     return '<span class="search-generators' + (compact ? ' is-compact' : '') + '">' +
       '<button class="seo-generate" type="button" data-action="seo-generate" data-target="' + esc(opts.path) +
       '" data-label="' + esc(opts.label || 'Text') + '" title="Generate SEO + GEO" aria-label="Generate SEO + GEO for ' + esc(opts.label || 'this text') + '">' +
@@ -386,6 +392,9 @@
   function imageField(opts) {
     var value = opts.value || '';
     var setup = setupForPath(opts.path);
+    // A photo that already carries a real description does not need another one.
+    var alt = opts.seoTarget ? window.CopyEditor.altQuality(getPath(state.site, opts.seoTarget), state.site) : null;
+    var altVerdict = alt ? alt.level : '';
     return (
       '<div class="field' + (setup ? ' is-needs-setup' : '') + '">' +
       '<span class="label">' + esc(opts.label) + '</span>' +
@@ -397,9 +406,15 @@
       '<input class="input" type="text" data-path="' + esc(opts.path) + '" data-image-input="1" placeholder="/uploads/photo.jpg" value="' + esc(value) + '">' +
       '<span class="image-buttons">' +
       '<button class="btn btn-sm" type="button" data-action="pick-image" data-target="' + esc(opts.path) + '">Choose or upload</button>' +
-      (value && opts.seoTarget ? '<button class="btn btn-sm" type="button" data-action="seo-photo" data-target="' + esc(opts.seoTarget) + '" data-image-path="' + esc(opts.path) + '">Generate photo SEO + GEO</button>' : '') +
+      (value && opts.seoTarget && altVerdict !== 'good'
+        ? '<button class="btn btn-sm" type="button" data-action="seo-photo" data-target="' + esc(opts.seoTarget) + '" data-image-path="' + esc(opts.path) + '">Generate photo SEO + GEO</button>'
+        : '') +
       (value ? '<button class="btn btn-sm btn-danger" type="button" data-action="clear-image" data-target="' + esc(opts.path) + '">Remove</button>' : '') +
       '</span>' +
+      (value && opts.seoTarget && altVerdict === 'good' ? '<span class="already-strong">Description already strong</span>' : '') +
+      (value && opts.seoTarget && alt && alt.level !== 'good' && alt.level !== 'missing'
+        ? '<span class="hint">Image description: ' + esc(alt.reason) + '.</span>'
+        : '') +
       fieldSetupNote(opts.path) +
       (opts.hint ? '<span class="hint">' + esc(opts.hint) + '</span>' : '') +
       '</span></div></div>'

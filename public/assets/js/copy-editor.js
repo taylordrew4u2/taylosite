@@ -64,6 +64,60 @@
     return { expects: rule.label, suggestion: suggestion };
   }
 
+  // Copy that is already doing its job should not be offered a rewrite. Every
+  // generation is a chance to lose a good sentence, and this site has already
+  // lost several that way. The verdict is deliberately strict about what counts
+  // as a problem: a field is only "weak" for a reason that can be named.
+  function quality(path, value, site) {
+    var policy = fieldPolicy(path || '');
+    if (!policy) return null;
+    var text = String(value == null ? '' : value).trim();
+    if (!text) return { level: 'missing', reason: 'nothing written yet' };
+
+    var limit = policy.maxLength;
+    var count = words(text).length;
+
+    if (text.length > limit) return { level: 'weak', reason: 'longer than the ' + limit + ' characters this field publishes' };
+    // Only the two fields a search result is built from are worth filling: they
+    // get a fixed amount of space and a short one wastes it. Everywhere else
+    // short is usually right — a good caption is not a long caption.
+    var fill = { 'seo.title': 0.5, 'seo.description': 0.5 }[path];
+    if (fill && text.length < Math.round(limit * fill)) return { level: 'weak', reason: 'too short to use the space a search result gives it' };
+    // A heading or a title is allowed to be two words. A paragraph is not.
+    if (limit > 120 && count < 3) return { level: 'weak', reason: 'too short to say anything' };
+    // A value that was cut to fit: the last word is not a word.
+    if (/[\s,;:–—-]$/.test(text)) return { level: 'weak', reason: 'it stops mid-thought' };
+    if (count > 12 && !/[.!?…"”’)]$/.test(text)) return { level: 'weak', reason: 'it stops mid-thought' };
+
+    var counts = {};
+    words(text).forEach(function (word) { if (word.length > 3) counts[word] = (counts[word] || 0) + 1; });
+    if (Object.keys(counts).some(function (word) { return counts[word] > 2; })) {
+      return { level: 'weak', reason: 'the same word is repeated enough to read as keyword stuffing' };
+    }
+    // The two fields a search result is actually built from should name the
+    // person. Nothing else is required to.
+    var name = String((site && site.brand && site.brand.name) || '').trim();
+    if (name && (path === 'seo.title' || path === 'seo.description') && text.indexOf(name) === -1) {
+      return { level: 'weak', reason: 'it never names ' + name };
+    }
+    return { level: 'good', reason: '' };
+  }
+
+  // Alt text is written by looking at the image, so it has no copy policy — but
+  // whether it is already doing its job is still answerable, and a photo with
+  // good alt text should not be offered a fresh description either.
+  function altQuality(value, site) {
+    var text = String(value == null ? '' : value).trim();
+    if (!text) return { level: 'missing', reason: 'this image has no description' };
+    var name = String((site && site.brand && site.brand.name) || '').trim();
+    if (name && text === name) return { level: 'weak', reason: 'a name alone does not describe the picture' };
+    if (/^(?:an?\s+)?(?:image|photo|picture|photograph)\b/i.test(text)) return { level: 'weak', reason: 'it starts by saying it is an image' };
+    if (/\.(?:jpe?g|png|webp|gif|avif)$/i.test(text)) return { level: 'weak', reason: 'it is a file name, not a description' };
+    if (/[\s,;:–—-]$/.test(text)) return { level: 'weak', reason: 'it stops mid-thought' };
+    if (words(text).length < 5) return { level: 'weak', reason: 'too short to describe the picture' };
+    return { level: 'good', reason: '' };
+  }
+
   // Small on-device models wrap answers in quotes, prefaces, markdown and
   // character counts, and run past the limit. Clean that off and trim on a
   // sentence or word boundary so a usable rewrite is not thrown away.
@@ -202,5 +256,5 @@
     });
     return { text: best, changed: true };
   }
-  return { fieldPolicy: fieldPolicy, identityIssue: identityIssue, contextFor: contextFor, buildMessages: buildMessages, assess: assess, rewrite: rewrite, tooSimilar: tooSimilar, repair: repair, score: score };
+  return { fieldPolicy: fieldPolicy, identityIssue: identityIssue, quality: quality, altQuality: altQuality, contextFor: contextFor, buildMessages: buildMessages, assess: assess, rewrite: rewrite, tooSimilar: tooSimilar, repair: repair, score: score };
 });

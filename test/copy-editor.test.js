@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { fieldPolicy, identityIssue, contextFor, buildMessages, assess, rewrite, repair, score } = require('../public/assets/js/copy-editor');
+const { fieldPolicy, identityIssue, quality, altQuality, contextFor, buildMessages, assess, rewrite, repair, score } = require('../public/assets/js/copy-editor');
 
 function exampleSite() {
   return {
@@ -290,5 +290,64 @@ test('real identity values and ordinary copy are never flagged', () => {
   // Fields that are supposed to hold sentences are not identity fields at all.
   for (const path of ['seo.description', 'about.body.0', 'home.subhead', 'photos.items.0.caption']) {
     assert.equal(identityIssue(path, 'Taylor Drew is a stand-up comedian. She performs in New York City.'), null, path);
+  }
+});
+
+// Every generation is a chance to lose a good sentence, and this site has lost
+// several that way. Copy that is already doing its job is offered nothing.
+test('copy that is already doing its job is not offered a rewrite', () => {
+  const site = exampleSite();
+  const good = [
+    ['seo.title', 'Taylor Drew — NYC Stand-Up Comedian & Live Shows'],
+    ['seo.description', 'Taylor Drew is a New York City stand-up comedian, Skankfest Roast Battle winner and creator of Pins & Needles Comedy. Dates, clips and booking.'],
+    ['about.body.0', 'Taylor Drew is a stand-up comedian based in New York City. She performs regularly at clubs across the city and won the Skankfest Roast Battle in 2025.'],
+    ['links.items.0.sublabel', 'Short performance clips'],
+    // Short is usually right outside a search result. A good caption, title or
+    // page heading is not a long one, and must not be nagged for length.
+    ['photos.items.0.caption', 'Closing a late set at the Bell House, to a full room.'],
+    ['photos.items.0.caption', 'Backstage before the second show'],
+    ['photos.items.0.title', 'Stage portrait'],
+    ['photos.title', 'Photos'],
+    ['photos.intro', 'Performance photos and portraits from recent shows around New York City.']
+  ];
+  for (const [path, value] of good) {
+    assert.equal(quality(path, value, site).level, 'good', `${path}: ${value}`);
+  }
+});
+
+test('a field is only called weak for a reason that can be named', () => {
+  const site = exampleSite();
+  const weak = [
+    ['seo.title', 'Taylor Drew', /space a search result/],
+    ['seo.description', 'Find show dates.', /space a search result/],
+    ['seo.description', 'A stand-up comedian in New York City who performs at clubs across the city most nights of every week.', /never names Taylor Drew/],
+    ['photos.items.0.caption', 'Nice photo,', /too short/],
+    ['photos.items.0.caption', 'Taylor Drew closing a late set at the Bell House in Brooklyn on a Friday night in front of a', /stops mid-thought/],
+    ['about.body.0', 'Comedy comedy comedy is what comedy means when comedy is the comedy that a comedy comedian performs nightly.', /keyword stuffing/]
+  ];
+  for (const [path, value, reason] of weak) {
+    const verdict = quality(path, value, site);
+    assert.equal(verdict.level, 'weak', `${path}: ${value}`);
+    assert.match(verdict.reason, reason);
+  }
+  assert.equal(quality('seo.description', '', site).level, 'missing');
+  // A field that holds an exact fact has no verdict at all — it is never copy.
+  assert.equal(quality('brand.name', 'Taylor Drew', site), null);
+});
+
+test('a photo that already carries a real description is offered nothing', () => {
+  const site = exampleSite();
+  assert.equal(altQuality('Taylor Drew holds a microphone mid-set on a small club stage.', site).level, 'good');
+  assert.equal(altQuality('', site).level, 'missing');
+  for (const [value, reason] of [
+    ['Taylor Drew', /name alone/],
+    ['photo of Taylor Drew on stage', /saying it is an image/],
+    ['stage.jpg', /file name/],
+    ['Taylor on stage', /too short/],
+    ['Taylor Drew on a stage holding a,', /stops mid-thought/]
+  ]) {
+    const verdict = altQuality(value, site);
+    assert.equal(verdict.level, 'weak', value);
+    assert.match(verdict.reason, reason);
   }
 });
