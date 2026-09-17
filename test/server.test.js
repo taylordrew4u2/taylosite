@@ -1931,6 +1931,23 @@ test('public copy can be rewritten for SEO without changing it before Save', asy
         method: 'POST', body: { text: '', path: 'about.body.0', label: 'Text' }
       });
       assert.strictEqual(empty.status, 400);
+
+      // The panel hides the generator on fields that hold exact facts, but the
+      // panel is not the only caller. A rewritten location or gender is
+      // published straight into the Person node, and the schema then cuts it to
+      // the field's length mid-word: an addressRegion reading "additionally k"
+      // is how a site stops being recognisable as a person at all.
+      const callsBefore = ai.calls.length;
+      for (const path of ['brand.name', 'brand.location', 'brand.gender', 'brand.email', 'about.facts.0.label',
+        'about.facts.0.value', 'seo.wikidata', 'seo.googleVerification', 'shows.0.venue', 'shows.0.date',
+        'about.quotes.0.text', 'links.items.0.url', 'home.photoAlt', '']) {
+        const refused = await server.call('/api/admin/seo-copy', {
+          method: 'POST', body: { text: 'Taylor does comedy.', path, label: 'Text' }
+        });
+        assert.strictEqual(refused.status, 422, `${path || '(no path)'} is an exact fact`);
+        assert.match(refused.json.error, /exact fact/);
+      }
+      assert.strictEqual(ai.calls.length, callsBefore, 'a refused field never reaches a model');
     });
   } finally {
     await ai.stop();

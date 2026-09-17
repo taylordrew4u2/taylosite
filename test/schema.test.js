@@ -183,3 +183,26 @@ test('a show keeps its flyer only when it is an upload or an https URL', () => {
   );
   assert.deepStrictEqual(site.shows.map((s) => s.flyer), ['/uploads/flyer-1a2b3c4d.png', 'https://cdn.example.com/b.jpg', '', '']);
 });
+
+// The live site published `addressRegion: "additionally k"` and
+// `gender: "Female — Taylor Drew, a New York City st"` after generated prose
+// reached two fields that hold exact facts. The generator is guarded now; this
+// is the second line, so that overlong text can only ever shorten a truth.
+test('identity facts are trimmed on a word boundary, never mid-word', () => {
+  const sentence = 'New York City — Taylor Drew is a New York City stand-up comedian who performs regularly at top NYC clubs, additionally known for roast battles';
+  const saved = normalizeSite({ brand: { location: sentence, gender: 'Female — Taylor Drew, a New York City stand-up comedian' } }, defaultSite()).brand;
+
+  assert.ok(saved.location.length <= 120);
+  assert.ok(saved.gender.length <= 40);
+  assert.ok(sentence.startsWith(saved.location), 'a trimmed location is still a prefix of what was sent');
+  assert.doesNotMatch(saved.location, /[\s,;:–—-]$/, 'never ends on a dangling separator');
+  // The cut lands between words: what follows the kept prefix is whitespace.
+  assert.match(sentence.slice(saved.location.length), /^\s/, 'the last word is whole');
+  assert.equal(saved.location.endsWith('additionally'), true);
+  assert.equal(saved.gender, 'Female — Taylor Drew, a New York City');
+
+  // A real value is untouched.
+  const normal = normalizeSite({ brand: { location: 'New York City', gender: 'Female' } }, defaultSite()).brand;
+  assert.equal(normal.location, 'New York City');
+  assert.equal(normal.gender, 'Female');
+});
