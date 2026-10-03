@@ -804,38 +804,192 @@ body {
   color: #e8f0fb;
 }
 
-/* The game is the one thing on the machine that is not a document. */
-.page-play .main {
-  background: #0b1220;
-}
-
-.page-play .display,
+/*
+ * The game is one of the games that came with the machine: a raised grey-blue
+ * board with red LCD counters across the top, the crowd as a grid of raised
+ * buttons, and a High Scores box beside it like the one that pops up after a
+ * good round of Minesweeper.
+ */
 .page-play .play-line,
-.page-play .play-stat strong {
-  color: #6ef3a5;
+.page-play .play-stat-label {
+  text-transform: none;
+  letter-spacing: 0;
 }
 
-.page-play .eyebrow,
-.page-play .subhead,
-.page-play .play-stat-label {
-  color: #7d93b5;
+.game,
+.hiscores {
+  border: 1px solid var(--xp-edge);
+  border-radius: 4px;
+  background: #dfe8f5;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #9fb4d2, 2px 2px 0 rgba(8, 49, 111, 0.12);
+}
+
+.game {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+
+/* The counter strip and the crowd sit sunk into the board, as in the original. */
+.page-play .play-bar {
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 1px solid;
+  border-color: #8aa0c0 #fff #fff #8aa0c0;
+  background: #cfdcee;
 }
 
 .page-play .play-stat {
-  border-color: #2c4160;
-  background: linear-gradient(180deg, #25385a, #16243c);
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 0;
+  background: none;
   box-shadow: none;
 }
 
-.page-play .seat {
-  border: 1px solid #2c4160;
-  background: repeating-linear-gradient(45deg, #111d31 0 8px, #16243c 8px 16px);
+.page-play .play-stat-label {
+  font: 11px var(--xp-font);
+  color: var(--xp-deep);
 }
 
-.page-play .btn {
-  border-color: #2c4160;
-  background: linear-gradient(180deg, #25385a, #16243c);
-  color: #9fd8ff;
+.lcd {
+  display: inline-block;
+  min-width: 3ch;
+  padding: 2px 5px 1px;
+  border: 1px solid;
+  border-color: #6d7f99 #fff #fff #6d7f99;
+  background: #1a0000;
+  color: #ff2a12;
+  font: 700 26px/1 var(--xp-mono);
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-shadow: 0 0 6px rgba(255, 42, 18, 0.55);
+}
+
+.page-play .play-grid {
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid;
+  border-color: #8aa0c0 #fff #fff #8aa0c0;
+  background: #c4d3ea;
+}
+
+.page-play .seat {
+  border: 1px solid #7d95b9;
+  border-radius: 3px;
+  background: var(--xp-gloss);
+  box-shadow: inset 1px 1px 0 #fff;
+  color: var(--xp-deep);
+  font: 700 clamp(10px, 1.9vw, 13px)/1.2 var(--xp-font);
+  letter-spacing: 0;
+  text-transform: none;
+  transition: none;
+}
+
+/* Between sets the crowd is greyed out, like a disabled control. */
+.page-play .play-grid:not(.is-live) .seat {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.page-play .play-grid.is-live .seat {
+  border-color: #7d95b9;
+}
+
+.page-play .seat.is-up {
+  border-color: #8f1d0a;
+  background: linear-gradient(180deg, #ffb59a, #f0592e 48%, #c8350f);
+  box-shadow: inset 1px 1px 0 #ffd6c4;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.page-play .seat.is-shushed {
+  border-color: #2c6b1d;
+  background: linear-gradient(180deg, #c9f1a8, #6cc04a 48%, #3e8e25);
+  box-shadow: inset 1px 1px 0 #e4f8d4;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.page-play .seat:active {
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.page-play .play-line {
+  font: 12px/1.4 var(--xp-font);
+  color: var(--xp-ink);
+}
+
+.hiscores {
+  overflow: hidden;
+}
+
+.hiscores-title {
+  margin: 0;
+  padding: 4px 8px;
+  background: var(--xp-title);
+  color: #fff;
+  font: 700 12px var(--xp-font);
+  text-shadow: 1px 1px 0 #0a246a;
+}
+
+.hiscore-list {
+  margin: 8px;
+  padding: 4px 6px;
+  border: 1px solid;
+  border-color: #8aa0c0 #fff #fff #8aa0c0;
+  background: #fff;
+  font: 12px/1.7 var(--xp-mono);
+  color: var(--xp-ink);
+}
+
+.hiscore-rank {
+  color: var(--xp-mute);
+}
+
+.hiscore-name {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.hiscore-score {
+  text-align: right;
+}
+
+.hiscore-row.is-empty {
+  color: #a7b4c7;
+}
+
+.hiscore-row.is-empty .hiscore-rank {
+  color: #a7b4c7;
+}
+
+.hiscore-row.is-new {
+  background: #316ac5;
+  color: #fff;
+}
+
+.hiscore-row.is-new .hiscore-rank {
+  color: #dbe6f7;
+}
+
+.hiscore-entry {
+  margin: 0 8px 8px;
+  font: 11px var(--xp-font);
+  color: var(--xp-ink);
+}
+
+.hiscore-entry input {
+  padding: 2px 4px;
+  border: 1px solid #7f9db9;
+  background: #fff;
+  color: var(--xp-ink);
+  font: 700 13px var(--xp-mono);
+  letter-spacing: 0.15em;
 }
 
 /* ------------------------------------------------------- the message */

@@ -1602,6 +1602,51 @@ a.show-cta:active {
   padding: 6px;
 }
 
+.game-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 16px;
+  align-items: start;
+}
+
+.game-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hiscore-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hiscore-row {
+  display: grid;
+  grid-template-columns: 2.2em 1fr auto;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hiscore-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hiscore-entry-row {
+  display: flex;
+  gap: 6px;
+}
+
+.hiscore-entry input {
+  width: 4.5em;
+  text-transform: uppercase;
+  font: inherit;
+}
+
 .play-line {
   margin: 0;
   min-height: 1.6em;
@@ -1624,5 +1669,11 @@ a.show-cta:active {
 
   .play-bar {
     gap: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .game-wrap {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

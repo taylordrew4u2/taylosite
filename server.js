@@ -280,6 +280,8 @@ async function requireSession(req, res, adminRoute) {
 
 // ------------------------------------------------------------------ routes
 
+const scoreSubmits = new Map(); // ip -> last submission time
+
 async function handleApi(req, res, url) {
   const route = url.pathname.replace(/^\/api/, '');
 
@@ -300,6 +302,30 @@ async function handleApi(req, res, url) {
       { html: render.renderReelTiles(site, page.reels), next: page.next || '', count: page.reels.length },
       { 'Cache-Control': 'public, max-age=300' }
     );
+  }
+
+  // The game's high-score board, shared by everyone who plays.
+  if (route === '/scores' && req.method === 'GET') {
+    return sendJson(res, 200, { scores: await store.readScores() }, { 'Cache-Control': 'no-store' });
+  }
+
+  if (route === '/scores' && req.method === 'POST') {
+    const ip = clientIp(req);
+    const last = scoreSubmits.get(ip) || 0;
+    // One set takes thirty seconds; nobody honest posts faster than that.
+    if (Date.now() - last < 20000) {
+      return sendJson(res, 429, { error: 'One score per set. Play another.' });
+    }
+    const body = await readJson(req);
+    const score = Number(body.score);
+    const name = store.cleanInitials(body.name);
+    if (!Number.isInteger(score) || score < 1 || score > store.MAX_SCORE) {
+      return sendJson(res, 400, { error: 'That is not a score this game can produce.' });
+    }
+    if (!name) return sendJson(res, 400, { error: 'Enter up to three letters.' });
+    scoreSubmits.set(ip, Date.now());
+    if (scoreSubmits.size > 5000) scoreSubmits.clear();
+    return sendJson(res, 200, await store.submitScore(name, score));
   }
 
   if (route === '/session' && req.method === 'GET') {
@@ -1127,7 +1153,7 @@ async function handle(req, res) {
 
   // Not in PAGES on purpose: the game is noindex and stays out of the sitemap.
   if (pathname === '/play') {
-    return sendHtml(res, 200, render.renderPlay(await store.readSite(), { origin }));
+    return sendHtml(res, 200, render.renderPlay(await store.readSite(), { origin, scores: await store.readScores() }));
   }
 
   const page = PAGES[pathname];

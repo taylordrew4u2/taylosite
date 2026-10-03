@@ -2073,6 +2073,39 @@ test('the game page renders, is in the menu, and stays out of the index', async 
   });
 });
 
+test('the game keeps a shared high-score board', async () => {
+  await withServer({}, async (server) => {
+    const post = (ip, body) =>
+      server.call('/api/scores', { method: 'POST', body, headers: { 'x-forwarded-for': ip } });
+
+    assert.deepStrictEqual((await server.call('/api/scores')).json.scores, [], 'an empty board to start');
+    assert.match((await server.call('/play')).text, /<ol class="hiscore-list" id="hiscore-list">/);
+
+    const first = await post('10.0.0.1', { name: 'tay', score: 21 });
+    assert.strictEqual(first.status, 200);
+    assert.strictEqual(first.json.rank, 0);
+    assert.deepStrictEqual(first.json.scores.map((r) => [r.name, r.score]), [['TAY', 21]], 'initials are upper-cased');
+
+    assert.strictEqual((await post('10.0.0.1', { name: 'TAY', score: 30 })).status, 429, 'one score per set per player');
+    assert.strictEqual((await post('10.0.0.2', { name: 'BOB', score: 9999 })).status, 400, 'no impossible scores');
+    assert.strictEqual((await post('10.0.0.3', { name: '!!', score: 5 })).status, 400, 'initials required');
+
+    const second = await post('10.0.0.4', { name: 'ann', score: 33 });
+    assert.strictEqual(second.json.rank, 0, 'a better set goes to the top');
+
+    for (let i = 0; i < 10; i++) await post(`10.0.1.${i}`, { name: 'zz', score: 40 + i });
+    const low = await post('10.0.2.1', { name: 'low', score: 2 });
+    assert.strictEqual(low.json.rank, -1, 'a set that misses the top ten is not written');
+
+    const board = (await server.call('/api/scores')).json.scores;
+    assert.strictEqual(board.length, 10, 'the board holds ten');
+    assert.strictEqual(board[0].score, 49);
+
+    const page = await server.call('/play');
+    assert.match(page.text, /<span class="hiscore-name">ZZ<\/span><span class="hiscore-score">49<\/span>/, 'the page draws the board without script');
+  });
+});
+
 // ------------------------------------------------------------- api keys
 
 /** A client with no cookie and no CSRF token — only the key. */
